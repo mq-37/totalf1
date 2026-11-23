@@ -754,6 +754,7 @@
         spinAngle: car.spinAngle || 0,
         wingDamaged: !!car.wingDamaged,
         inPit,
+        refuelling: !!(fs.eraRule && fs.eraRule.refuelling),
         zoom: fs.cam.zoom,
         teamName: (car.card && car.card.hero_team) || "",
         livery: carLiv,
@@ -1906,7 +1907,12 @@
 
     const cirSel = getEl("fsim-circuit-sel");
     if (cirSel && CIRCUITS.length) {
-      cirSel.innerHTML = CIRCUITS.map((c) => `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.country)} · ${c.length_km}km${c.is_night ? " 🌙" : ""})</option>`).join("");
+      const modern = CIRCUITS.filter((c) => c.category !== "classic");
+      const classic = CIRCUITS.filter((c) => c.category === "classic");
+      const optHtml = (c) => `<option value="${esc(c.id)}">${esc(c.name)} (${esc(c.country)} · ${c.length_km}km${c.era_years ? " · " + esc(c.era_years) : ""}${c.is_night ? " 🌙" : ""})</option>`;
+      cirSel.innerHTML = classic.length
+        ? `<optgroup label="2026 FIA Calendar (${modern.length})">${modern.map(optHtml).join("")}</optgroup><optgroup label="Classic &amp; Historic F1 Circuits (${classic.length})">${classic.map(optHtml).join("")}</optgroup>`
+        : CIRCUITS.map(optHtml).join("");
     }
 
     getEl("fsim-start-btn")?.addEventListener("click", startNewBroadcast);

@@ -633,17 +633,96 @@
       ctx.fillRect(cxI + 1, gsY + 1, 2, 1.8);
     }
     ctx.globalAlpha = 1;
-    // Team Pit Garages (inside pit lane) with 10 individual garage bays & roof canopies
+    // Team Pit Garages (inside pit lane) — Per-Track Architectural Pit Building Style!
     const garY = geom.pitSide * 30;
-    ctx.fillStyle = "rgba(13, 20, 34, 0.95)";
-    ctx.strokeStyle = "rgba(250, 204, 21, 0.38)";
-    ctx.fillRect(-38, garY - 4.5, 76, 9);
-    ctx.strokeRect(-38, garY - 4.5, 76, 9);
-    for (let b = 0; b < 10; b++) {
-      const bx = -36 + b * 7.4;
-      ctx.fillStyle = b % 2 === 0 ? "rgba(255,255,255,0.08)" : "rgba(56,189,248,0.09)";
-      ctx.fillRect(bx, garY - 3.2, 6, 6.4);
+    const pStyle = (circuit && circuit.pit_building) || (circuit && circuit.biome === "street" ? "street_canopy" : "modern_glass");
+    const teamBayCols = ["#e10600", "#ff8700", "#00d2be", "#1e41ff", "#006f62", "#0090ff", "#6692ff", "#b6babd", "#52e252", "#ffffff"];
+    if (pStyle === "vintage_wood") {
+      // 1950s/60s timber pit stalls, corrugated roof & straw bales
+      ctx.fillStyle = "#4b3621";
+      ctx.strokeStyle = "#a16207";
+      ctx.lineWidth = 1.1;
+      ctx.fillRect(-40, garY - 4.8, 80, 9.6);
+      ctx.strokeRect(-40, garY - 4.8, 80, 9.6);
+      for (let b = 0; b < 10; b++) {
+        const bx = -38 + b * 7.6;
+        ctx.fillStyle = b % 2 === 0 ? "rgba(254, 243, 199, 0.16)" : "rgba(180, 83, 9, 0.25)";
+        ctx.fillRect(bx, garY - 3.4, 6.2, 6.8);
+      }
+      // Hay bales along pit edge
+      ctx.fillStyle = "#d97706";
+      for (let hb = -36; hb <= 36; hb += 9) ctx.fillRect(hb, garY - geom.pitSide * 6.4, 4.5, 1.8);
+    } else if (pStyle === "classic_brick") {
+      // Iconic European heritage brick/concrete garages with striped pit awnings
+      ctx.fillStyle = "#2b1d1d";
+      ctx.strokeStyle = "rgba(248, 113, 113, 0.55)";
+      ctx.lineWidth = 1.1;
+      ctx.fillRect(-42, garY - 5.2, 84, 10.4);
+      ctx.strokeRect(-42, garY - 5.2, 84, 10.4);
+      for (let b = 0; b < 10; b++) {
+        const bx = -39.5 + b * 7.9;
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillRect(bx, garY - 3.6, 6.5, 7.2);
+        ctx.fillStyle = teamBayCols[b % teamBayCols.length];
+        ctx.fillRect(bx, garY - geom.pitSide * 4.5, 6.5, 1.5);
+      }
+      // Heritage Timing Tower block
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(43, garY - 4.5, 7, 9);
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(44.5, garY - 3, 4, 2);
+    } else if (pStyle === "desert_wing") {
+      // Sweeping cantilevered white desert paddock wing canopy + warm floodlit bays
+      ctx.fillStyle = "rgba(241, 245, 249, 0.92)";
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.72)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(-45, garY - 5.5, 90, 11, 4) : ctx.rect(-45, garY - 5.5, 90, 11);
+      ctx.fill();
+      ctx.stroke();
+      for (let b = 0; b < 10; b++) {
+        const bx = -40 + b * 8.0;
+        ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
+        ctx.fillRect(bx, garY - 3.2, 6.6, 6.4);
+        ctx.fillStyle = teamBayCols[b % teamBayCols.length];
+        ctx.fillRect(bx, garY - geom.pitSide * 4.4, 6.6, 1.4);
+      }
+    } else if (pStyle === "street_canopy") {
+      // Modular aluminum street-circuit temporary paddocks with overhead light trusses
+      ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.55)";
+      ctx.lineWidth = 1.0;
+      ctx.fillRect(-40, garY - 4.6, 80, 9.2);
+      ctx.strokeRect(-40, garY - 4.6, 80, 9.2);
+      for (let b = 0; b < 10; b++) {
+        const bx = -38 + b * 7.6;
+        ctx.fillStyle = "rgba(30, 41, 59, 0.92)";
+        ctx.fillRect(bx, garY - 3.3, 6.4, 6.6);
+        ctx.fillStyle = teamBayCols[b % teamBayCols.length];
+        ctx.fillRect(bx, garY - geom.pitSide * 4.0, 6.4, 1.3);
+      }
+    } else {
+      // Modern Glass F1 Paddock Club & Illuminated Team Garages
+      ctx.fillStyle = "rgba(13, 20, 34, 0.96)";
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.65)";
+      ctx.lineWidth = 1.1;
+      ctx.fillRect(-44, garY - 5.4, 88, 10.8);
+      ctx.strokeRect(-44, garY - 5.4, 88, 10.8);
+      // Skylight glass ribbon
+      ctx.fillStyle = "rgba(56, 189, 248, 0.16)";
+      ctx.fillRect(-42, garY - 1.2, 84, 2.4);
+      for (let b = 0; b < 10; b++) {
+        const bx = -40 + b * 8.0;
+        ctx.fillStyle = b % 2 === 0 ? "rgba(255,255,255,0.1)" : "rgba(56,189,248,0.12)";
+        ctx.fillRect(bx, garY - 3.8, 6.6, 7.6);
+        ctx.fillStyle = teamBayCols[b % teamBayCols.length];
+        ctx.fillRect(bx, garY - geom.pitSide * 4.6, 6.6, 1.5);
+      }
     }
+    // Pit Speed Limit Board ("80" / "60")
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath(); ctx.arc(-44, geom.pitSide * 18, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#dc2626"; ctx.lineWidth = 0.9; ctx.stroke();
     ctx.restore();
 
     // 5. Inner Pit Lane Bypass + Painted Pit-Box Stalls
@@ -1294,34 +1373,65 @@
       ctx.setLineDash([]);
     }
 
-    // Animated Pit Box Crew & Jack Bay when stopped in Pit Lane!
-    if (o.inPit && o.pitProgress != null && o.pitProgress >= 0.30 && o.pitProgress <= 0.70) {
-      const boxW = carW * 1.42;
-      const boxH = carH * 1.72;
-      ctx.strokeStyle = "rgba(250, 204, 21, 0.72)";
+    // Animated Pit Box Crew, Wheel-Gun Sparks, Overhead Gantry Light & Refuelling Rig!
+    if (o.inPit && o.pitProgress != null && o.pitProgress >= 0.25 && o.pitProgress <= 0.75) {
+      const boxW = carW * 1.48;
+      const boxH = carH * 1.82;
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.8)";
       ctx.lineWidth = 1.0 * invStroke;
       ctx.setLineDash([2.4 * invStroke, 1.8 * invStroke]);
       ctx.strokeRect(-boxW * 0.5, -boxH * 0.5, boxW, boxH);
       ctx.setLineDash([]);
-      // 4 Wheel-Gun Mechanics + Front/Rear Jack Crew pulsing around the car!
-      const jitter = Math.sin(performance.now() * 0.032) * carH * 0.045;
+      // Overhead pit gantry arm & traffic light (Red -> Amber -> Green release!)
+      const relReady = o.pitProgress >= 0.66;
+      const midWork = o.pitProgress >= 0.34 && o.pitProgress < 0.66;
+      const lightCol = relReady ? "#22c55e" : (midWork ? "#f59e0b" : "#ef4444");
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.lineWidth = 0.8 * invStroke;
+      ctx.beginPath(); ctx.moveTo(0, -boxH * 0.56); ctx.lineTo(0, boxH * 0.56); ctx.stroke();
+      ctx.fillStyle = lightCol;
+      ctx.beginPath(); ctx.arc(carW * 0.52, 0, Math.max(1.2 * invStroke, carH * 0.14), 0, Math.PI * 2); ctx.fill();
+
+      // 10-person Pit Crew (4 wheel gunners, 4 tyre carriers, front & rear jack men)
+      const tNow = performance.now();
+      const jitter = midWork ? Math.sin(tNow * 0.045) * carH * 0.06 : 0;
       const crewPts = [
-        [ carW * 0.25, -carH * 0.62 - jitter],
-        [ carW * 0.25,  carH * 0.62 + jitter],
-        [-carW * 0.28, -carH * 0.64 - jitter],
-        [-carW * 0.28,  carH * 0.64 + jitter],
-        [ carW * 0.62,  0],
-        [-carW * 0.62,  0],
+        [ carW * 0.26, -carH * 0.64 - jitter, 0],
+        [ carW * 0.26,  carH * 0.64 + jitter, 0],
+        [-carW * 0.28, -carH * 0.66 - jitter, 0],
+        [-carW * 0.28,  carH * 0.66 + jitter, 0],
+        [ carW * 0.10, -carH * 0.78, 1],
+        [ carW * 0.10,  carH * 0.78, 1],
+        [-carW * 0.12, -carH * 0.78, 1],
+        [-carW * 0.12,  carH * 0.78, 1],
+        [ carW * 0.68,  0, 2],
+        [-carW * 0.68,  0, 2],
       ];
-      crewPts.forEach(([cx, cy], ci) => {
-        ctx.fillStyle = ci < 4 ? (color || "#facc15") : "#f8fafc";
+      crewPts.forEach(([cx, cy, role]) => {
+        ctx.fillStyle = role === 0 ? (color || "#facc15") : (role === 2 ? "#f8fafc" : "#94a3b8");
         ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(0.95 * invStroke, carH * 0.13), 0, Math.PI * 2);
+        ctx.arc(cx, cy, Math.max(0.85 * invStroke, carH * (role === 1 ? 0.10 : 0.13)), 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "#090e1a";
-        ctx.lineWidth = 0.5 * invStroke;
+        ctx.lineWidth = 0.45 * invStroke;
         ctx.stroke();
       });
+      // Wheel-gun pneumatic flashes at all 4 corners during active tyre swap!
+      if (midWork && Math.sin(tNow * 0.06) > 0.2) {
+        ctx.fillStyle = "rgba(56, 189, 248, 0.85)";
+        [[carW * 0.26, -carH * 0.46], [carW * 0.26, carH * 0.46], [-carW * 0.28, -carH * 0.48], [-carW * 0.28, carH * 0.48]].forEach(([sx, sy]) => {
+          ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.7 * invStroke, carH * 0.09), 0, Math.PI * 2); ctx.fill();
+        });
+      }
+      // Refuelling rig hose in refuelling eras (1990s / 2000s / 1950s)
+      if (o.refuelling) {
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = 1.1 * invStroke;
+        ctx.beginPath();
+        ctx.moveTo(-carW * 0.08, -boxH * 0.62);
+        ctx.quadraticCurveTo(-carW * 0.14, -carH * 0.35, -carW * 0.04, -carH * 0.22);
+        ctx.stroke();
+      }
     }
 
     // Rain spray rooster-tail wake when track is wet!
