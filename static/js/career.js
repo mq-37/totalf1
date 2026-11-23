@@ -3078,19 +3078,47 @@
       const foc = getFocusedCar();
       const insp = cr.inspectedDriverId ? cr.cars.find((x) => x.driverId === cr.inspectedDriverId && !x.dnf) : null;
       const targetCar = insp || foc || cr.cars[0];
+      const sorted3d = ENG.sortRaceStandings(cr.cars, cr.finished);
       cr.b3d.updateAndRender({
         circuit: cr.circuit,
         cars: cr.cars.map((c) => ({
           idx: c.idx, code3: c.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.color,
-          liveKph: c.liveKph, liveGear: c.liveGear,
+          liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+          compound: c.compound, drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf && !c.finishedRace),
+          finishedRace: !!c.finishedRace,
         })),
+        raceState: {
+          lap: Math.min(cr.totalLaps, Math.max(1, (sorted3d[0]?.lap || 0) + 1)),
+          totalLaps: cr.totalLaps,
+          wetness: cr.wetness,
+          scActive: cr.safetyCarLaps > 0,
+          vscActive: cr.vscLaps > 0,
+          yellowSector: cr.yellowSector,
+          chequered: cr.chequeredFlag || cr.finished,
+          top3: sorted3d.slice(0, 3).map((x) => ({ code3: x.code3, color: x.color || "#e10600" })),
+        },
         focusIdx: targetCar ? targetCar.idx : 0,
         dt,
         paused: cr.paused,
       });
     } else {
       drawCrCanvas();
+    }
+    if (window.F1Sfx && window.F1Sfx.updateTelemetry) {
+      const fCar = getFocusedCar() || cr.cars[0];
+      window.F1Sfx.updateTelemetry({
+        active: cr.running && !cr.finished,
+        paused: cr.paused,
+        speedMult: cr.speedMult,
+        speedKph: fCar ? (fCar.livePhysKph || fCar.liveKph || 215) : 210,
+        wetness: cr.wetness,
+        eraKey: (DATA && DATA.state && DATA.state.era === "legends") ? "1990s" : "2026",
+        camMode: (cr.b3d && cr.b3d.isActive()) ? "tv" : "2d",
+        inPit: fCar ? fCar.inPit > 0 : false,
+        chequered: cr.chequeredFlag,
+        battleClose: !!(fCar && fCar.intervalS > 0 && fCar.intervalS < 0.8),
+      });
     }
   }
 

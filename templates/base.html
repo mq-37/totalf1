@@ -69,6 +69,9 @@
             <a href="/dev/car-liveries" class="nav-sublink{% if path == '/dev/car-liveries' %} active{% endif %}"><i class="fas fa-images"></i> 201 Car Liveries</a>
           </div>
         </div>
+        <button type="button" class="nav-link nav-audio-btn" id="site-audio-btn" title="Broadcast Audio Studio & Calm Music">
+          <i class="fas fa-volume-up"></i><span>Audio</span>
+        </button>
       </nav>
     </div>
     {% block header_extra %}{% endblock %}
@@ -139,6 +142,7 @@
       document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(null); });
     })();
   </script>
+  <script src="/static/js/f1_sfx.js?v=20261123c"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

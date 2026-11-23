@@ -1993,20 +1993,48 @@
       stepSimulation(dt);
     }
     if (fs.b3d && fs.b3d.isActive()) {
+      const sorted3d = ENG.sortRaceStandings(fs.cars, fs.finished);
       fs.b3d.updateAndRender({
         circuit: fs.circuit,
         cars: fs.cars.map((c) => ({
           idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
-          liveKph: c.liveKph, liveGear: c.liveGear,
+          liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+          compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
+          finishedRace: !!c.finishedRace,
           palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
         })),
+        raceState: {
+          lap: Math.min(fs.totalLaps, Math.max(1, (sorted3d[0]?.lap || 0) + 1)),
+          totalLaps: fs.totalLaps,
+          wetness: fs.wetness,
+          scActive: fs.safetyCarLaps > 0,
+          vscActive: fs.vscLaps > 0,
+          yellowSector: fs.yellowSector,
+          chequered: fs.chequeredFlag || fs.finished,
+          top3: sorted3d.slice(0, 3).map((x) => ({ code3: x.card.code3, color: x.card.hero_color || "#e10600" })),
+        },
         focusIdx: fs.focusIdx,
         dt,
         paused: fs.paused,
       });
     } else {
       drawCanvas();
+    }
+    if (window.F1Sfx && window.F1Sfx.updateTelemetry) {
+      const fCar = fs.cars[fs.focusIdx] || fs.cars[0];
+      window.F1Sfx.updateTelemetry({
+        active: fs.running && !fs.finished,
+        paused: fs.paused,
+        speedMult: fs.speedMult,
+        speedKph: fCar ? (fCar.livePhysKph || fCar.liveKph || 215) : 210,
+        wetness: fs.wetness,
+        eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
+        camMode: (fs.b3d && fs.b3d.isActive()) ? fs.b3dMode : "2d",
+        inPit: fCar ? fCar.inPit > 0 : false,
+        chequered: fs.chequeredFlag,
+        battleClose: !!(fCar && fCar.intervalS > 0 && fCar.intervalS < 0.8),
+      });
     }
   }
 
