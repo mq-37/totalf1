@@ -94,8 +94,7 @@ def list_seasons(base_dir: Path) -> list[dict[str, Any]]:
 
 def save_season(base_dir: Path, raw: dict[str, Any], season_id: str | None = None) -> dict[str, Any]:
     cfg = normalize_custom_season(raw)
-    sid = cdb.save_custom_season(base_dir, cfg["name"], cfg, season_id=season_id)
-    return {"season_id": sid, "name": cfg["name"], "config": cfg}
+    return cdb.save_custom_season(base_dir, cfg["name"], cfg["era_key"], cfg, season_id=season_id)
 
 
 def get_season(base_dir: Path, season_id: str) -> dict[str, Any] | None:

@@ -2039,7 +2039,7 @@
     }
     function setBroadcast3DMode(mode) {
       fs.b3dMode = mode || "off";
-      document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.dataset.fsim3d === fs.b3dMode));
+      document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === fs.b3dMode));
       if (!fs.b3d) return;
       if (fs.b3dMode === "off") {
         fs.b3d.setActive(false);
@@ -2050,7 +2050,7 @@
       }
     }
     document.querySelectorAll("[data-fsim-3d]").forEach((btn) => {
-      btn.addEventListener("click", () => setBroadcast3DMode(btn.dataset.fsim3d));
+      btn.addEventListener("click", () => setBroadcast3DMode(btn.getAttribute("data-fsim-3d")));
     });
     getEl("fsim-tower-wide")?.addEventListener("click", () => {
       fs.towerWide = !fs.towerWide;

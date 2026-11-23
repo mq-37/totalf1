@@ -162,10 +162,11 @@ def recruit_feeder_driver(state: dict[str, Any], feeder_id: str) -> tuple[bool, 
         return False, "Player team not found."
 
     fee = 1.2 if target["series"] == "f2" else 0.7
-    if float(pt.get("cash_m") or 0) < fee:
+    avail_cash = float(state.get("cash_m") if state.get("cash_m") is not None else pt.get("cash_m") or 0)
+    if avail_cash < fee:
         return False, f"Need ${fee:.1f}M academy buyout to recruit {target['name']}."
 
-    pt["cash_m"] = round(float(pt["cash_m"]) - fee, 2)
+    state["cash_m"] = round(avail_cash - fee, 2)
     target["recruited"] = True
     target["academy"] = pt["name"]
 
@@ -233,8 +234,8 @@ def build_team_ops_board(state: dict[str, Any]) -> dict[str, Any]:
     pt = next((t for t in state["teams"] if t["id"] == state.get("player_team_id")), state["teams"][0])
     wcc = sorted(state["teams"], key=lambda t: (-t.get("points", 0), -t.get("wins", 0), -t.get("car_overall", 0)))
     wcc_pos = next((i + 1 for i, t in enumerate(wcc) if t["id"] == pt["id"]), len(wcc))
-    target_wcc = int(pt.get("board_target_wcc") or 5)
-    cash = float(pt.get("cash_m") or 0)
+    target_wcc = int(state.get("board_target_wcc") or pt.get("board_target_wcc") or 5)
+    cash = float(state.get("cash_m") if state.get("cash_m") is not None else pt.get("cash_m") or 0)
     rd_active = state.get("rd_projects") or []
     scouts_active = state.get("active_scouts") or []
     facs = pt.get("facilities") or {}
@@ -283,7 +284,7 @@ def build_team_ops_board(state: dict[str, Any]) -> dict[str, Any]:
     sc_action = {"label": "Junior & Feeders", "tab": "feeders"}
 
     # 5. Commercial & Board Liaison
-    board_conf = int(pt.get("board_confidence") or 75)
+    board_conf = int(state.get("board_confidence") if state.get("board_confidence") is not None else pt.get("board_confidence") or 75)
     on_track = wcc_pos <= target_wcc
     fin_status = "ok" if on_track and cash >= 10 else "warn"
     fin_msg = f"P{wcc_pos} in WCC (Board Target: P{target_wcc}) · Budget ${cash:.1f}M · Board Confidence {board_conf}%."

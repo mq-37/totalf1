@@ -406,6 +406,7 @@
     if (getEl("liv-style")) getEl("liv-style").value = cfg.style;
     if (getEl("liv-era")) getEl("liv-era").value = cfg.era;
   }
+  let hqCampus3D = null;
   function syncDash3DCar(previewOverride) {
     const cv = getEl("car-dash-3d-canvas");
     if (!cv || !window.THREE || !window.F1Car3D || !DATA.player_team) return;
@@ -414,8 +415,6 @@
       ? previewOverride
       : getTeamLiveryCfg(pt);
     const pal = cfg.palette, style = cfg.style, era = cfg.era;
-    const specEl = getEl("car-3d-spec-tag");
-    if (specEl) specEl.textContent = `${era} Spec · OVR ${pt.car_overall}`;
 
     const barsEl = getEl("car-dash-3d-bars");
     if (barsEl && pt.rd) {
@@ -431,6 +430,28 @@
         </div>
       `).join("");
     }
+
+    // Phase 6: Interactive 3D Team HQ Campus (Garage, Office, Wind Tunnel, Factory!)
+    if (window.CareerHQ3D && activeTab === "dashboard" && !cr.active) {
+      if (!hqCampus3D) {
+        hqCampus3D = window.CareerHQ3D.createHQ3DCampus(cv, getEl("car-3d-spec-tag"));
+      }
+      if (hqCampus3D) {
+        const dyn = (DATA.state && DATA.state.dynasty) || {};
+        hqCampus3D.sync({
+          palette: pal,
+          style,
+          era,
+          facilities: pt.facilities || {},
+          wins: dyn.wins || 0,
+          championships: (dyn.garage_seasons || []).filter((s) => s.wcc_pos === 1).length,
+          teamName: pt.name || "F1 Team",
+        });
+        return;
+      }
+    }
+    const specEl = getEl("car-3d-spec-tag");
+    if (specEl) specEl.textContent = `${era} Spec · OVR ${pt.car_overall}`;
 
     const carKey = `${pt.id}|${JSON.stringify(pal)}|${style}|${era}`;
     if (!dash3d.ok) {
@@ -3127,7 +3148,7 @@
       document.querySelectorAll(".car-tab-pane").forEach((p) => p.classList.toggle("active", p.id === `car-tab-${activeTab}`));
       if (activeTab === "standings") requestAnimationFrame(drawWccChart);
       if (activeTab === "dashboard") requestAnimationFrame(syncDash3DCar);
-      else stopDash3DLoop();
+      else { if (hqCampus3D) hqCampus3D.stop(); stopDash3DLoop(); }
     });
   });
 
@@ -3225,6 +3246,17 @@
     const opsAct = ev.target.closest("[data-ops-act]");
     if (opsAct && opsAct.dataset.opsAct === "race") {
       getEl("car-go-race-btn")?.click();
+      return;
+    }
+    const hqRm = ev.target.closest("[data-hq-room]");
+    if (hqRm) {
+      const rm = hqRm.dataset.hqRoom;
+      document.querySelectorAll("[data-hq-room]").forEach((b) => {
+        const on = b.dataset.hqRoom === rm;
+        b.classList.toggle("active", on);
+        b.classList.toggle("car-btn-red", on);
+      });
+      if (hqCampus3D) hqCampus3D.setRoom(rm);
       return;
     }
   });
@@ -3620,8 +3652,8 @@
   }
   document.querySelectorAll("[data-cr-3d]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      cr.b3dMode = btn.dataset.cr3d || "off";
-      document.querySelectorAll("[data-cr-3d]").forEach((b) => b.classList.toggle("active", b.dataset.cr3d === cr.b3dMode));
+      cr.b3dMode = btn.getAttribute("data-cr-3d") || "off";
+      document.querySelectorAll("[data-cr-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-cr-3d") === cr.b3dMode));
       if (!cr.b3d) return;
       if (cr.b3dMode === "off") { cr.b3d.setActive(false); drawCrCanvas(); }
       else { cr.b3d.setMode(cr.b3dMode); cr.b3d.setActive(true); }

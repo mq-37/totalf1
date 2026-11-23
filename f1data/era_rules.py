@@ -356,7 +356,9 @@ def list_era_rules() -> list[dict[str, Any]]:
     return [get_era_rules(k) for k in ERA_ORDER]
 
 
-def points_for_position(rules: dict[str, Any], pos: int, *, is_fastest_lap: bool = False, is_sprint: bool = False) -> int:
+def points_for_position(rules: dict[str, Any] | str, pos: int, *, is_fastest_lap: bool = False, is_sprint: bool = False) -> int:
+    if isinstance(rules, str):
+        rules = get_era_rules(rules)
     if pos < 1:
         return 0
     table = rules.get("sprint_points") if is_sprint else rules.get("points")
