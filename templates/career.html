@@ -489,6 +489,10 @@
             <button type="button" class="sim-speed-btn active" data-cr-speed="1">1×</button>
             <button type="button" class="sim-speed-btn" data-cr-speed="2">2×</button>
             <button type="button" class="sim-speed-btn" data-cr-speed="4">4×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="8">8×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="16">16×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="32">32×</button>
+            <button type="button" class="sim-speed-btn sim-speed-end" id="cr-sim-end-btn" title="Simulate rest of Grand Prix to Checkered Flag">⏭ End</button>
           </div>
           <button type="button" id="cr-focus-btn" class="sim-dir-btn sim-dir-icon" title="Focus Mode: hide site navbar for extra vertical space [F]"><i class="fas fa-expand"></i></button>
           <button type="button" id="cr-abort-btn" class="sim-dir-btn" title="Pause & save progress to HQ (resume anytime!)"><i class="fas fa-save"></i> <span class="sim-lbl-md">Save &amp; Exit</span></button>
@@ -502,16 +506,21 @@
           <button type="button" class="sim-dock-tab" data-dock-target="tower"><i class="fas fa-stopwatch"></i> Live Timing (Full Grid)</button>
         </div>
         <!-- Left: Live Broadcast Timing Tower (FULL GRID — ALL DRIVERS!) -->
-        <aside class="sim-tower-panel">
+        <aside class="sim-tower-panel" id="cr-tower-panel">
           <div class="sim-panel-head">
-            <span><i class="fas fa-stopwatch"></i> LIVE TIMING <small id="cr-grid-count" class="muted">(22)</small></span>
-            <div class="sim-gap-toggle">
-              <button type="button" class="sim-gap-btn active" data-cr-gap="int">INT</button>
-              <button type="button" class="sim-gap-btn" data-cr-gap="ldr">LDR</button>
-            </div>
+            <span><i class="fas fa-stopwatch"></i> TIMING <small id="cr-grid-count" class="muted">(22)</small></span>
+            <button type="button" id="cr-tower-wide" class="sim-tower-wide-btn" title="Expand / Compact Timing Tower Width"><i class="fas fa-arrows-alt-h"></i></button>
+          </div>
+          <div class="tt-mode-bar" role="group" aria-label="Timing tower view mode">
+            <button type="button" class="tt-mode-btn active" data-cr-gap="int" title="Interval to Car Ahead">INT</button>
+            <button type="button" class="tt-mode-btn" data-cr-gap="ldr" title="Gap to Leader">LDR</button>
+            <button type="button" class="tt-mode-btn" data-cr-gap="laps" title="Last & Best Lap Times">LAPS</button>
+            <button type="button" class="tt-mode-btn" data-cr-gap="sectors" title="Live S1 / S2 / S3 Splits">SEC</button>
+            <button type="button" class="tt-mode-btn" data-cr-gap="tyre" title="Tyre Wear, Stint Age & ERS %">TYRE</button>
+            <button type="button" class="tt-mode-btn" data-cr-gap="form" title="Confidence, Momentum & Positions Gained">CONF</button>
           </div>
           <div class="sim-timing-wrap">
-            <table class="sim-timing-table cr-full-tower">
+            <table id="cr-timing-table" class="sim-timing-table cr-full-tower">
               <thead><tr><th>P</th><th>DRV</th><th id="cr-gap-head">INT</th><th>TYRE</th><th>ST</th></tr></thead>
               <tbody id="cr-timing-body"></tbody>
             </table>
@@ -524,6 +533,13 @@
           <div id="cr-rival-pill" class="cr-rival-pill hidden"></div>
           <div id="cr-pit-banner" class="cr-pit-banner hidden"></div>
           <div id="cr-alert-toast" class="sim-alert-toast hidden"></div>
+          <div id="cr-simtoend-ovl" class="sim-simtoend-ovl hidden">
+            <div class="sim-ste-box">
+              <strong><i class="fas fa-forward"></i> SIMULATING TO CHECKERED FLAG…</strong>
+              <div class="sim-bar-track"><div id="cr-ste-bar" class="sim-bar-fill ers-fill" style="width:0%"></div></div>
+              <small id="cr-ste-sub">Lap 1 / 15</small>
+            </div>
+          </div>
           <div class="sim-map-toggles">
             <div class="sim-cam-group" role="group" aria-label="Broadcast Camera Zoom">
               <button type="button" class="sim-cam-chip active" data-cr-cam="full" title="Full Circuit View [Z]"><i class="fas fa-map"></i> Full</button>
@@ -586,6 +602,11 @@
               <span id="cr-p-sectors" class="sim-sector-dots"><i class="sd-none">S1</i><i class="sd-none">S2</i><i class="sd-none">S3</i></span>
               <span id="cr-p-rule" class="sim-rule-pill rule-warn">1-COMP</span>
             </div>
+            <div class="sim-conf-strip">
+              <span class="sim-psych-pill" id="cr-p-conf" title="Driver Confidence">CONF <b>65</b></span>
+              <span class="sim-psych-pill" id="cr-p-mom" title="Race Momentum">MOM <b>•</b></span>
+              <span class="sim-psych-pill" id="cr-p-aff" title="Historical Track Affinity">TRK <b>+0.0</b></span>
+            </div>
           </div>
 
           <div class="sim-card sim-telem-card">
@@ -617,6 +638,14 @@
                 <button type="button" class="sim-tac-btn" data-cr-ers="harvest">🔌 Harv</button>
                 <button type="button" class="sim-tac-btn active" data-cr-ers="auto">⚖️ Auto</button>
                 <button type="button" class="sim-tac-btn" data-cr-ers="overtake">⚡ Ovt</button>
+              </div>
+            </div>
+            <div class="sim-mode-block">
+              <div class="sim-mode-head"><span>DRIVING RISK</span><small id="cr-risk-note">Overtake &amp; Mistake Balance</small></div>
+              <div class="sim-seg-row">
+                <button type="button" class="sim-tac-btn" data-cr-risk="low" title="Low Risk: Fewer mistakes & tyre wear, cautious passing">🛡 Low</button>
+                <button type="button" class="sim-tac-btn active" data-cr-risk="standard" title="Standard Risk: Balanced attack & composure">⚖️ Std</button>
+                <button type="button" class="sim-tac-btn" data-cr-risk="high" title="High Risk: Bold late lunges & extra pace, higher lock-up risk">⚔️ High</button>
               </div>
             </div>
           </div>
@@ -887,6 +916,7 @@
 <script src="/static/js/f1_car_3d.js"></script>
 <script src="/static/js/f1_sfx.js"></script>
 <script src="/static/js/f1_race_engine.js"></script>
+<script src="/static/js/f1_timing_tower.js"></script>
 <script src="/static/js/f1_profile.js"></script>
 <script src="/static/js/f1_track_renderer.js"></script>
 <script src="/static/js/career.js"></script>

@@ -45,12 +45,54 @@ def api_game_circuits():
     return {"count": len(CIRCUITS), "circuits": CIRCUITS}
 
 
+@router.get("/api/game/circuits-meta")
+def api_game_circuits_meta():
+    from ..circuits import CIRCUITS_META
+    return {"count": len(CIRCUITS_META), "circuits": CIRCUITS_META}
+
+
+@router.get("/api/game/circuits/{circuit_id}")
+def api_game_circuit_detail(circuit_id: str):
+    from ..circuits import get_circuit
+    c = get_circuit(circuit_id)
+    if not c:
+        raise HTTPException(status_code=404, detail=f"Circuit '{circuit_id}' not found")
+    return c
+
+
+@router.get("/api/sim/eras")
+def api_sim_eras():
+    from ..era_rules import list_era_rules
+    return {"eras": list_era_rules()}
+
+
+@router.get("/api/sim/balance")
+def api_sim_balance(
+    circuit_id: str = Query("melbourne"),
+    era: str = Query("2026"),
+    era_key: Optional[str] = Query(None),
+    drivers: str = Query(""),
+):
+    """Return historical Track x Era x Team x Driver affinity & psychology bundle from f1.sqlite."""
+    from ..performance_balance import get_track_balance_bundle
+    drv_list: list[dict] = []
+    if drivers.strip():
+        for item in drivers.split("|"):
+            parts = item.split("::")
+            dname = parts[0].strip()
+            tname = parts[1].strip() if len(parts) > 1 else ""
+            if dname:
+                drv_list.append({"driver": dname, "team": tname})
+    return get_track_balance_bundle(srv.DATA_DB, circuit_id, era_key or era, drv_list or None)
+
+
 @router.get("/sim", response_class=HTMLResponse)
 async def full_sim_page(request: Request):
     db = srv.get_db()
     seasons = [r["year"] for r in db._conn.execute("SELECT year FROM seasons ORDER BY year DESC").fetchall()]
     decades = sorted({(y // 10) * 10 for y in seasons}, reverse=True)
     from ..circuits import CIRCUITS
+    from ..era_rules import list_era_rules
     return srv.templates.TemplateResponse(
         "full_sim.html",
         {
@@ -59,6 +101,8 @@ async def full_sim_page(request: Request):
             "decades": decades,
             "latest_year": seasons[0] if seasons else srv.CURRENT_SEASON,
             "circuits": CIRCUITS,
+            "default_circuit": CIRCUITS[0] if CIRCUITS else None,
+            "era_rules": list_era_rules(),
         },
     )
 

@@ -25,7 +25,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_CHECKPOINTS_PER_SLOT = 8
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
 
@@ -192,6 +192,30 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    if ver < 2:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS custom_seasons (
+                season_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                era_key TEXT NOT NULL DEFAULT '2026',
+                config_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS career_race_telemetry (
+                slot_id TEXT NOT NULL REFERENCES career_slots(slot_id) ON DELETE CASCADE,
+                season_num INTEGER NOT NULL,
+                round_num INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                telemetry_json TEXT NOT NULL,
+                interviews_json TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY (slot_id, season_num, round_num)
+            );
+            CREATE INDEX IF NOT EXISTS idx_telem_slot ON career_race_telemetry(slot_id, season_num DESC, round_num DESC);
+            """
+        )
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
@@ -972,3 +996,164 @@ def record_profile_event(base_dir: Path, event_type: str, payload: dict[str, Any
     prof = get_player_profile(base_dir)
     prof["newly_unlocked"] = newly_unlocked
     return prof
+
+
+# ---------------------------------------------------------------------------
+# Schema v2: Race Telemetry Buffers + Post-Race Interviews & Custom Seasons
+# ---------------------------------------------------------------------------
+def save_race_telemetry(
+    base_dir: Path,
+    season_num: int,
+    round_num: int,
+    telemetry: dict[str, Any],
+    interviews: list[dict[str, Any]] | None = None,
+    slot_id: str | None = None,
+) -> None:
+    """Persist scrubbable race telemetry buffer & post-race interviews outside state_json."""
+    ensure_db(base_dir)
+    now = int(time.time())
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            sid = slot_id
+            if not sid:
+                row = conn.execute("SELECT slot_id FROM career_slots WHERE is_active=1 LIMIT 1").fetchone()
+                if not row:
+                    return
+                sid = row["slot_id"]
+            conn.execute(
+                """
+                INSERT INTO career_race_telemetry(slot_id, season_num, round_num, created_at, telemetry_json, interviews_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(slot_id, season_num, round_num) DO UPDATE SET
+                    created_at=excluded.created_at,
+                    telemetry_json=excluded.telemetry_json,
+                    interviews_json=excluded.interviews_json
+                """,
+                (sid, int(season_num), int(round_num), now, json.dumps(telemetry or {}), json.dumps(interviews or [])),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def load_race_telemetry(
+    base_dir: Path,
+    season_num: int,
+    round_num: int,
+    slot_id: str | None = None,
+) -> dict[str, Any] | None:
+    ensure_db(base_dir)
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            sid = slot_id
+            if not sid:
+                row = conn.execute("SELECT slot_id FROM career_slots WHERE is_active=1 LIMIT 1").fetchone()
+                if not row:
+                    return None
+                sid = row["slot_id"]
+            r = conn.execute(
+                "SELECT telemetry_json, interviews_json, created_at FROM career_race_telemetry WHERE slot_id=? AND season_num=? AND round_num=?",
+                (sid, int(season_num), int(round_num)),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "telemetry": json.loads(r["telemetry_json"] or "{}"),
+                "interviews": json.loads(r["interviews_json"] or "[]"),
+                "created_at": int(r["created_at"]),
+            }
+        finally:
+            conn.close()
+
+
+def list_custom_seasons(base_dir: Path) -> list[dict[str, Any]]:
+    ensure_db(base_dir)
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            rows = conn.execute(
+                "SELECT season_id, name, era_key, config_json, created_at, updated_at FROM custom_seasons ORDER BY updated_at DESC"
+            ).fetchall()
+            out = []
+            for r in rows:
+                cfg = json.loads(r["config_json"] or "{}")
+                out.append({
+                    "season_id": r["season_id"],
+                    "name": r["name"],
+                    "era_key": r["era_key"],
+                    "config": cfg,
+                    "created_at": int(r["created_at"]),
+                    "updated_at": int(r["updated_at"]),
+                })
+            return out
+        finally:
+            conn.close()
+
+
+def save_custom_season(
+    base_dir: Path,
+    name: str,
+    era_key: str,
+    config: dict[str, Any],
+    season_id: str | None = None,
+) -> dict[str, Any]:
+    ensure_db(base_dir)
+    now = int(time.time())
+    sid = (season_id or "").strip() or f"cs_{uuid.uuid4().hex[:10]}"
+    clean_name = (name or "Custom F1 Season").strip()[:64]
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            conn.execute(
+                """
+                INSERT INTO custom_seasons(season_id, name, era_key, config_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(season_id) DO UPDATE SET
+                    name=excluded.name,
+                    era_key=excluded.era_key,
+                    config_json=excluded.config_json,
+                    updated_at=excluded.updated_at
+                """,
+                (sid, clean_name, str(era_key or "2026"), json.dumps(config or {}), now, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    return {"season_id": sid, "name": clean_name, "era_key": str(era_key or "2026"), "config": config, "updated_at": now}
+
+
+def get_custom_season(base_dir: Path, season_id: str) -> dict[str, Any] | None:
+    ensure_db(base_dir)
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            r = conn.execute(
+                "SELECT season_id, name, era_key, config_json, created_at, updated_at FROM custom_seasons WHERE season_id=?",
+                (season_id,),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "season_id": r["season_id"],
+                "name": r["name"],
+                "era_key": r["era_key"],
+                "config": json.loads(r["config_json"] or "{}"),
+                "created_at": int(r["created_at"]),
+                "updated_at": int(r["updated_at"]),
+            }
+        finally:
+            conn.close()
+
+
+def delete_custom_season(base_dir: Path, season_id: str) -> bool:
+    ensure_db(base_dir)
+    with _get_lock(base_dir):
+        conn = _connect(base_dir)
+        try:
+            cur = conn.execute("DELETE FROM custom_seasons WHERE season_id=?", (season_id,))
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()

@@ -477,10 +477,18 @@ def api_career_race_report(season_num: int, round_num: int):
     rep = _cdb.get_race_report(base, sid, season_num, round_num)
     if not rep:
         raise HTTPException(status_code=404, detail="Race report not found for that round")
-    return {"ok": True, "report": rep}
+    telem = _cdb.load_race_telemetry(base, season_num, round_num, slot_id=sid)
+    return {"ok": True, "report": rep, "telemetry": telem}
 
 
-def _finalize_race_commit_persistence(base: Path, state: dict, debrief: dict, *, expected_version: int | None = None) -> list[dict]:
+def _finalize_race_commit_persistence(
+    base: Path,
+    state: dict,
+    debrief: dict,
+    *,
+    expected_version: int | None = None,
+    telemetry_payload: dict | None = None,
+) -> list[dict]:
     from .. import career_db as _cdb
     ckpt_lbl = f"Post-Race · S{debrief['season_num']} R{debrief['round']} {debrief['gp'][:24]}"
     _save_career_checked(base, state, checkpoint_label=ckpt_lbl, expected_version=expected_version)
@@ -489,6 +497,8 @@ def _finalize_race_commit_persistence(base: Path, state: dict, debrief: dict, *,
         _cdb.clear_midrace_snapshot(base, sid)
         if debrief.get("race_report"):
             _cdb.save_race_report(base, sid, debrief["race_report"])
+        if telemetry_payload and isinstance(telemetry_payload, dict):
+            _cdb.save_race_telemetry(base, int(debrief["season_num"]), int(debrief["round"]), telemetry_payload, slot_id=sid)
 
     newly = []
     prof = _cdb.record_profile_event(
@@ -531,7 +541,14 @@ def api_career_commit_race(req: RaceCommitReq):
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        newly_unlocked = _finalize_race_commit_persistence(base, state, debrief, expected_version=req.expected_version)
+        rec_payload = (req.telemetry or {}).get("recorder_payload") if isinstance(req.telemetry, dict) else None
+        newly_unlocked = _finalize_race_commit_persistence(
+            base,
+            state,
+            debrief,
+            expected_version=req.expected_version,
+            telemetry_payload=rec_payload,
+        )
         return {"ok": True, "debrief": debrief, "newly_unlocked": newly_unlocked, **_career_payload(state)}
 
 
@@ -547,7 +564,13 @@ def api_career_quicksim(req: QuickSimReq):
             debrief = _career.quick_sim_race(state, weather_mode=req.weather_mode)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        newly_unlocked = _finalize_race_commit_persistence(base, state, debrief, expected_version=req.expected_version)
+        newly_unlocked = _finalize_race_commit_persistence(
+            base,
+            state,
+            debrief,
+            expected_version=req.expected_version,
+            telemetry_payload=None,
+        )
         return {"ok": True, "debrief": debrief, "newly_unlocked": newly_unlocked, **_career_payload(state)}
 
 

@@ -46,6 +46,9 @@
         <button type="button" class="sim-speed-btn" data-fsim-speed="2" title="2× Fast Broadcast [2]">2×</button>
         <button type="button" class="sim-speed-btn" data-fsim-speed="4" title="4× Sprint [3]">4×</button>
         <button type="button" class="sim-speed-btn" data-fsim-speed="8" title="8× Hyper-Sim [4]">8×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="16" title="16× Super-Sim [5]">16×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="32" title="32× Turbo-Sim [6]">32×</button>
+        <button type="button" class="sim-speed-btn sim-speed-end" id="fsim-sim-end-btn" title="Simulate straight to Checkered Flag with full telemetry">⏭ End</button>
       </div>
       <button type="button" id="fsim-sfx-btn" class="sim-dir-btn sim-dir-icon" title="Toggle Broadcast SFX"><i class="fas fa-volume-up"></i></button>
       <button type="button" id="fsim-focus-btn" class="sim-dir-btn sim-dir-icon" title="Full-Screen Broadcast Focus Mode [F]"><i class="fas fa-expand"></i></button>
@@ -123,6 +126,15 @@
           </select>
         </div>
         <div class="arena-control-group">
+          <label for="fsim-era-sel">Sporting &amp; Technical Era Rules</label>
+          <select id="fsim-era-sel">
+            <option value="auto" selected>Auto-Match Grid Era</option>
+            {% for er in era_rules %}
+            <option value="{{ er.key }}">{{ er.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="arena-control-group">
           <label for="fsim-grid-size">Grid Size</label>
           <select id="fsim-grid-size">
             <option value="20" selected>20 CPU Cars</option>
@@ -148,16 +160,21 @@
     </div>
 
     <!-- LEFT COLUMN: FULL 20-24 CAR LIVE TIMING TOWER -->
-    <aside class="sim-tower-panel">
+    <aside class="sim-tower-panel" id="fsim-tower-panel">
       <div class="sim-panel-head">
-        <span><i class="fas fa-stopwatch"></i> CPU GRID <small id="fsim-grid-count" class="muted">(20)</small></span>
-        <div class="sim-gap-toggle" role="group" aria-label="Gap mode">
-          <button type="button" class="sim-gap-btn active" data-fsim-gap="int">INT</button>
-          <button type="button" class="sim-gap-btn" data-fsim-gap="ldr">LDR</button>
-        </div>
+        <span><i class="fas fa-stopwatch"></i> GRID <small id="fsim-grid-count" class="muted">(20)</small></span>
+        <button type="button" id="fsim-tower-wide" class="sim-tower-wide-btn" title="Expand / Compact Timing Tower Width"><i class="fas fa-arrows-alt-h"></i></button>
+      </div>
+      <div class="tt-mode-bar" role="group" aria-label="Timing tower view mode">
+        <button type="button" class="tt-mode-btn active" data-fsim-gap="int" title="Interval to Car Ahead">INT</button>
+        <button type="button" class="tt-mode-btn" data-fsim-gap="ldr" title="Gap to Leader">LDR</button>
+        <button type="button" class="tt-mode-btn" data-fsim-gap="laps" title="Last & Best Lap Times">LAPS</button>
+        <button type="button" class="tt-mode-btn" data-fsim-gap="sectors" title="Live S1 / S2 / S3 Colour Splits">SEC</button>
+        <button type="button" class="tt-mode-btn" data-fsim-gap="tyre" title="Tyre Wear, Stint Age & ERS %">TYRE</button>
+        <button type="button" class="tt-mode-btn" data-fsim-gap="form" title="Confidence, Momentum & Positions Gained">CONF</button>
       </div>
       <div class="sim-timing-wrap">
-        <table class="sim-timing-table cr-full-tower">
+        <table id="fsim-timing-table" class="sim-timing-table cr-full-tower">
           <thead>
             <tr>
               <th>P</th>
@@ -171,9 +188,9 @@
         </table>
       </div>
       <div class="sim-tower-foot">
-        <span><i class="sim-dot dot-drs"></i>DRS</span>
+        <span><i class="sim-dot dot-drs"></i>DRS/OVD</span>
         <span><i class="sim-dot dot-fl"></i>FL</span>
-        <span>Click any car to follow</span>
+        <span>Click car to follow</span>
       </div>
     </aside>
 
@@ -189,6 +206,15 @@
 
       <!-- Floating Race Control Alert Toast -->
       <div id="fsim-alert-toast" class="sim-alert-toast hidden"></div>
+
+      <!-- Sim-to-End Fast-Forward Progress Overlay -->
+      <div id="fsim-simtoend-ovl" class="sim-simtoend-ovl hidden">
+        <div class="sim-ste-box">
+          <strong id="fsim-ste-title"><i class="fas fa-forward"></i> SIMULATING TO CHECKERED FLAG…</strong>
+          <div class="sim-bar-track"><div id="fsim-ste-bar" class="sim-bar-fill ers-fill" style="width:0%"></div></div>
+          <small id="fsim-ste-sub">Lap 1 / 15</small>
+        </div>
+      </div>
 
       <!-- Floating Checkered Flag / Championship Finish Overlay -->
       <div id="fsim-finish-banner" class="sim-finish-overlay hidden"></div>
@@ -242,6 +268,12 @@
           <span class="sim-gear-badge" id="fsim-f-gear">G7</span>
           <span class="sim-mini-sectors" id="fsim-f-sectors"><i class="sd-none">S1</i><i class="sd-none">S2</i><i class="sd-none">S3</i></span>
           <span class="fsim-ai-pill" id="fsim-f-ai">BALANCED</span>
+        </div>
+        <div class="sim-conf-strip" id="fsim-f-psych-strip">
+          <span class="sim-psych-pill" id="fsim-f-conf" title="Driver Race Confidence (affects pace, passing boldness & mistake risk)">CONF <b>60</b></span>
+          <span class="sim-psych-pill" id="fsim-f-mom" title="Live Race Momentum">MOM <b>•</b></span>
+          <span class="sim-psych-pill" id="fsim-f-aff" title="Historical Track × Era Affinity">TRK <b>+0.0</b></span>
+          <span class="sim-psych-pill" id="fsim-f-era" title="Active Technical Regulation Era">2026</span>
         </div>
         <div class="fsim-mini-meters">
           <div class="fsim-m-row">
@@ -328,13 +360,16 @@
 <script>
   window.F1_FULLSIM_BOOT = {
     latestYear: {{ latest_year }},
-    circuits: {{ circuits | tojson }}
+    circuits: {{ circuits | tojson }},
+    defaultCircuit: {{ default_circuit | tojson }},
+    eraRules: {{ era_rules | tojson }}
   };
 </script>
 <script src="/static/vendor/three.min.js"></script>
 <script src="/static/js/f1_car_3d.js"></script>
 <script src="/static/js/f1_sfx.js"></script>
 <script src="/static/js/f1_race_engine.js"></script>
+<script src="/static/js/f1_timing_tower.js"></script>
 <script src="/static/js/f1_track_renderer.js"></script>
 <script src="/static/js/full_sim.js"></script>
 {% endblock %}

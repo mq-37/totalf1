@@ -3,16 +3,59 @@
 (function () {
   "use strict";
 
-  const BOOT = window.F1_FULLSIM_BOOT || { latestYear: 2026, circuits: [] };
+  const BOOT = window.F1_FULLSIM_BOOT || { latestYear: 2026, circuits: [], defaultCircuit: null, eraRules: [] };
   const CIRCUITS = BOOT.circuits || [];
+  const ERA_RULES = BOOT.eraRules || [];
   const F1_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
   const ENG = window.F1RaceEngine;
   const COMPOUNDS = ENG.COMPOUNDS;
+  if (BOOT.defaultCircuit && ENG && ENG.registerCircuit) {
+    ENG.registerCircuit(BOOT.defaultCircuit);
+  }
+
+  function eraKeyFromDeckSpec(deckSpec) {
+    const parts = String(deckSpec || "").split(":");
+    const src = parts[0], val = parseInt(parts[1], 10);
+    if (src === "season" && Number.isFinite(val)) {
+      if (val <= 1959) return "1950s";
+      if (val <= 1969) return "1960s";
+      if (val <= 1979) return "1970s";
+      if (val <= 1989) return "1980s";
+      if (val <= 1999) return "1990s";
+      if (val <= 2009) return "2000s";
+      if (val <= 2021) return "2010s";
+      if (val <= 2025) return "2022_25";
+      return "2026";
+    }
+    if (src === "decade" && Number.isFinite(val)) {
+      if (val <= 1950) return "1950s";
+      if (val <= 1960) return "1960s";
+      if (val <= 1970) return "1970s";
+      if (val <= 1980) return "1980s";
+      if (val <= 1990) return "1990s";
+      if (val <= 2000) return "2000s";
+      if (val <= 2010) return "2010s";
+      return "2026";
+    }
+    return "2026";
+  }
+
+  function resolveEraRule(deckSpec) {
+    const selVal = getEl("fsim-era-sel")?.value || "auto";
+    const key = selVal === "auto" ? eraKeyFromDeckSpec(deckSpec) : selVal;
+    const found = ERA_RULES.find((e) => e.key === key);
+    return found || ENG.DEFAULT_ERA_RULES;
+  }
 
   const fs = {
     deckCache: {},
-    circuit: CIRCUITS[0] || null,
+    balanceCache: {},
+    circuit: BOOT.defaultCircuit || CIRCUITS[0] || null,
+    eraRule: ENG.DEFAULT_ERA_RULES,
+    telemetry: null,
+    simToEndActive: false,
+    towerWide: false,
     geom: null,
     staticCanvas: null,
     staticKey: "",
@@ -305,40 +348,49 @@
   }
 
   // =========================================================================
-  // AUTONOMOUS CPU LAP TIME & STRATEGY AI ENGINE
+  // AUTONOMOUS CPU LAP TIME & STRATEGY AI ENGINE (Era Rules + Psychology!)
   // =========================================================================
   function computeCarLapTime(car, circuit, wetness) {
     const st = car.card.game.stats;
-    const comp = COMPOUNDS[car.compound] || COMPOUNDS.medium;
+    const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
     const wPace = circuit.aero === "LOW" ? 0.42 : (circuit.aero === "HIGH" ? 0.28 : 0.35);
     const wRace = circuit.aero === "HIGH" ? 0.34 : 0.28;
     const skill = st.pace * wPace + st.racecraft * wRace + st.reliability * 0.16 + st.duels * 0.12 + st.clutch * 0.09;
 
-    const fuelFrac = Math.max(0, 1 - car.lap / Math.max(1, fs.totalLaps));
-    const fuelPenalty = fuelFrac * 1.85;
-    const gripBonus = ((fs.gripPct - 35) / 65) * 0.65;
-
-    let lapS = circuit.base_lap_s + fuelPenalty - gripBonus - ((skill - 75) * 0.052) + comp.pace;
-    lapS += (100 - car.tyreLife) * 0.018;
-    if (car.tyreLife < 22) lapS += (22 - car.tyreLife) * 0.16;
-    if (car.tyreTemp > 114) lapS += (car.tyreTemp - 114) * 0.08;
-    else if (car.tyreTemp < 84) lapS += (84 - car.tyreTemp) * 0.06;
+    let lapS = circuit.base_lap_s - ((skill - 75) * 0.052);
+    lapS += ENG.computeLapModifiers({
+      compound: car.compound,
+      eraRules: era,
+      fuelKg: car.fuelKg,
+      lap: car.lap,
+      totalLaps: fs.totalLaps,
+      gripPct: fs.gripPct,
+      tyreLife: car.tyreLife,
+      tyreTemp: car.tyreTemp,
+      wetness,
+      paceMode: car.paceMode,
+      wingDamaged: car.wingDamaged,
+      car,
+    });
 
     if (wetness >= 60) {
-      lapS += comp.wet === 0 ? 7.5 : (comp.wet === 1 ? 1.4 : -0.4);
       lapS -= ((st.racecraft + st.clutch) - 140) * 0.012;
-    } else if (wetness >= 22) {
-      lapS += comp.wet === 0 ? 3.2 : (comp.wet === 1 ? -0.6 : 1.6);
-    } else if (comp.wet > 0) {
-      lapS += comp.wet === 1 ? 2.6 : 4.8;
     }
 
-    if (car.paceMode === "push") lapS -= 0.72;
-    else if (car.paceMode === "conserve") lapS += 0.55;
-    if (car.ersMode === "overtake" && car.ers > 6) lapS -= 0.95;
-    else if (car.ersMode === "harvest") lapS += 0.35;
-    if (car.inDrsRange && fs.drsEnabled) lapS -= 0.32 * Math.min(3, circuit.drs_zones || 2) * 0.45;
-    if (car.wingDamaged) lapS += 0.55;
+    // Era-aware ERS / Override / DRS / Slipstream boost
+    if (era.ers_enabled) {
+      if (car.ersMode === "overtake" && car.ers > 6) lapS -= 0.95;
+      else if (car.ersMode === "harvest") lapS += 0.35;
+    }
+    if (car.inDrsRange && fs.drsEnabled) {
+      if (era.drs_enabled) {
+        lapS -= 0.32 * Math.min(3, circuit.drs_zones || 2) * 0.45;
+      } else if (era.override_mode && car.ers > 12) {
+        lapS -= 0.48; // 2026 Manual Override electrical deploy boost <1.0s!
+      } else {
+        lapS -= 0.16 * (era.slipstream_bonus || 1.0);
+      }
+    }
 
     const ab = car.card.game.ability && car.card.game.ability.key;
     if (ab === "drs_overtake" && circuit.drs_zones >= 3) lapS -= 0.25;
@@ -354,37 +406,55 @@
   }
 
   function updateCpuStrategy(car, sorted) {
+    const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
     const rankIdx = sorted.findIndex((x) => x.idx === car.idx);
     const ahead = rankIdx > 0 ? sorted[rankIdx - 1] : null;
     const behind = rankIdx >= 0 && rankIdx < sorted.length - 1 ? sorted[rankIdx + 1] : null;
     const gapAhead = ahead ? (ahead.totalProg - car.totalProg) * fs.circuit.base_lap_s : 99;
     const gapBehind = behind && !behind.dnf ? (car.totalProg - behind.totalProg) * fs.circuit.base_lap_s : 99;
     const lapsLeft = Math.max(0, fs.totalLaps - car.lap);
+    const beh = ENG.getDriverBehaviorModifiers(car, fs.wetness);
 
-    // Dynamic Pace AI
+    // Driver risk posture adapts to live confidence, momentum & battle gap
+    if (car.confidence >= 76 && (gapAhead < 1.2 || lapsLeft <= 4) && car.tyreLife > 38) {
+      car.riskMode = "high";
+    } else if (car.confidence < 36 || car.tyreLife < 26 || car.wingDamaged) {
+      car.riskMode = "low";
+    } else {
+      car.riskMode = "standard";
+    }
+
+    // Dynamic Pace AI (weighted by confidence/overtake boldness)
+    const atkThresh = 1.25 * Math.min(1.45, Math.max(0.75, beh.overtakeMult));
     if (fs.safetyCarLaps > 0 || fs.vscLaps > 0) {
       car.paceMode = "conserve";
       car.aiStatus = "SC DELTA";
     } else if (car.tyreLife < 26 || car.tyreTemp > 113) {
       car.paceMode = "conserve";
       car.aiStatus = car.tyreTemp > 113 ? "COOLING TYRES" : "SAVING TYRES";
-    } else if ((gapAhead < 1.35 || gapBehind < 0.9 || lapsLeft <= 3) && car.tyreLife > 34) {
+    } else if ((gapAhead < atkThresh || gapBehind < 0.9 || lapsLeft <= 3) && car.tyreLife > 34) {
       car.paceMode = "push";
-      car.aiStatus = gapAhead < 1.35 ? "ATTACKING" : (gapBehind < 0.9 ? "DEFENDING" : "FINAL PUSH");
+      car.aiStatus = era.turbo_boost
+        ? "🔥 TURBO BOOST"
+        : (gapAhead < atkThresh ? "ATTACKING" : (gapBehind < 0.9 ? "DEFENDING" : "FINAL PUSH"));
     } else if (car.aiPlan === "aggressive" && car.tyreLife > 50) {
       car.paceMode = "push";
-      car.aiStatus = "UNDERCUT PACE";
+      car.aiStatus = era.refuelling ? "LIGHT FUEL SPRINT" : "UNDERCUT PACE";
     } else {
       car.paceMode = "balanced";
       car.aiStatus = "MANAGING GAP";
     }
 
-    // Dynamic ERS AI
-    if (car.ers < 18) {
+    // Dynamic ERS / 2026 Manual Override AI (disabled in classic non-ERS eras!)
+    if (!era.ers_enabled) {
+      car.ersMode = "auto";
+    } else if (car.ers < 18) {
       car.ersMode = "harvest";
-    } else if ((gapAhead < 0.95 || gapBehind < 0.75) && car.ers > 28 && fs.safetyCarLaps === 0) {
+    } else if ((gapAhead < 0.98 || gapBehind < 0.75) && car.ers > 26 && fs.safetyCarLaps === 0) {
       car.ersMode = "overtake";
-      car.aiStatus = gapAhead < 0.95 ? "⚡ ERS OVERTAKE" : "🛡 ERS DEFEND";
+      car.aiStatus = era.override_mode
+        ? (gapAhead < 0.98 ? "⚡ MANUAL OVERRIDE" : "🛡 ERS DEFEND")
+        : (gapAhead < 0.98 ? "⚡ ERS OVERTAKE" : "🛡 ERS DEFEND");
     } else if (car.ers > 82 && car.pos > 1) {
       car.ersMode = "overtake";
     } else if (gapAhead > 2.6 && gapBehind > 2.2 && car.ers < 72) {
@@ -393,7 +463,7 @@
       car.ersMode = "auto";
     }
 
-    if (car.inPit > 0) car.aiStatus = "🔧 IN PIT LANE";
+    if (car.inPit > 0) car.aiStatus = era.refuelling ? "⛽ REFUELLING PIT" : "🔧 IN PIT LANE";
     else if (car.wingDamaged) car.aiStatus = "⚠️ WING DAMAGE";
   }
 
@@ -791,29 +861,46 @@
       getEl("fsim-wet-fill").style.width = `${wetPct}%`;
     }
 
-    // Timing Tower (All 20-24 CPU cars)
+    // Timing Tower (F1 Manager Multi-Mode: INT / LDR / LAPS / SEC / TYRE / CONF)
     const cntEl = getEl("fsim-grid-count");
     if (cntEl) cntEl.textContent = `(${sorted.length})`;
-    getEl("fsim-timing-body").innerHTML = sorted.map((c) => {
-      const comp = COMPOUNDS[c.compound] || COMPOUNDS.medium;
-      const gap = c.dnf ? "OUT" : (c.inPit > 0 ? "PIT" : (c === leader ? "LDR" : `+${(fs.gapMode === "int" ? c.intervalS : (leader.totalProg - c.totalProg) * fs.circuit.base_lap_s).toFixed(1)}`));
-      const life = Math.max(0, Math.round(c.tyreLife));
-      const wCol = life < 25 ? "#ef4444" : (life < 50 ? "#f59e0b" : "#22c55e");
-      const drsMark = (c.inDrsRange && fs.drsEnabled && !c.dnf) ? `<span class="sim-drs-pill">DRS</span>` : "";
-      const flMark = fs.fastestLap.driver === c.card.clean_name ? `<span class="sim-fl-pill">FL</span>` : "";
-      const penMark = (c.timePenaltyS && c.timePenaltyS > 0) ? `<span class="sim-pen-pill">+${c.timePenaltyS}s</span>` : "";
-      const dmgMark = c.wingDamaged ? `<span class="sim-pen-pill">WNG</span>` : "";
-      const isFoc = c.idx === fs.focusIdx;
-      return `
-        <tr data-fsim-idx="${c.idx}" class="${isFoc ? "is-player-row" : ""}${c.dnf ? " is-dnf-row" : ""}">
-          <td class="st-pos ${c.pos <= 3 ? "p" + c.pos : ""}">${c.pos}</td>
-          <td class="st-drv"><span class="st-bar" style="background:${esc(c.card.hero_color)}"></span><span class="st-code">${esc(c.card.code3)}</span>${flMark}${drsMark}${penMark}${dmgMark}</td>
-          <td class="st-gap${c.inDrsRange && fs.drsEnabled && fs.gapMode === "int" ? " is-drs-range" : ""}">${gap}</td>
-          <td><div class="st-tyre-cell"><span class="sim-tbadge t-${c.compound}">${comp.code}</span><div class="st-wear-col"><small>${life}%</small><span class="st-wear-bar"><i style="width:${life}%;background:${wCol}"></i></span></div></div></td>
-          <td class="st-stops">${c.stops}<div class="st-ers-sliver"><i style="width:${Math.round(c.ers)}%"></i></div></td>
-        </tr>
-      `;
-    }).join("");
+    const TT = window.F1TimingTower;
+    if (TT) {
+      TT.updateTableHeaders(getEl("fsim-timing-table"), fs.gapMode);
+      const towerRows = sorted.map((c) => ({
+        idx: c.idx,
+        code3: c.card.code3,
+        name: c.card.clean_name,
+        color: c.card.hero_color || "#e10600",
+        compound: c.compound,
+        tyreLife: c.tyreLife,
+        tyreAge: Math.max(0, c.lap - (c.lastPitLap || 0)),
+        ers: c.ers,
+        stops: c.stops,
+        lap: c.lap,
+        lastPitLap: c.lastPitLap || 0,
+        totalProg: c.totalProg,
+        inPit: c.inPit,
+        dnf: c.dnf,
+        drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf),
+        gridPos: c.gridPos || (c.idx + 1),
+        lastLapTime: c.lastLapTime || c.currentLapS,
+        bestLapS: c.bestLapS || c.currentLapS,
+        sectorTimes: c.sectorTimes || [0, 0, 0],
+        bestSectors: c.bestSectors || [999, 999, 999],
+        confidence: c.confidence ?? 60,
+        momentum: c.momentum ?? 0,
+      }));
+      getEl("fsim-timing-body").innerHTML = TT.renderTimingRows({
+        sorted: towerRows,
+        mode: fs.gapMode,
+        circuit: fs.circuit,
+        bestSectors: fs.bestSectors,
+        fastestLap: fs.fastestLap,
+        focusIdx: fs.focusIdx,
+        onRowClickAttr: "data-fsim-idx",
+      });
+    }
 
     // Focused Car Telemetry Card
     const foc = fs.cars[fs.focusIdx] || leader;
@@ -847,6 +934,25 @@
       getEl("fsim-f-gear").textContent = foc.dnf ? "N" : `G${foc.liveGear || 5}`;
       getEl("fsim-f-sectors").innerHTML = [0, 1, 2].map((s) => `<i class="sd-${foc.sectorColors[s] || "none"}">S${s + 1}</i>`).join("");
       getEl("fsim-f-ai").textContent = foc.aiStatus || "CPU AI";
+
+      // Confidence, Momentum, Track Affinity & Active Era Pills
+      const tier = ENG.confidenceTier(foc.confidence ?? 60);
+      const cPill = getEl("fsim-f-conf");
+      if (cPill) cPill.innerHTML = `CONF <b style="color:${tier.color}">${Math.round(foc.confidence ?? 60)} ${tier.label}</b>`;
+      const mVal = Math.round(foc.momentum ?? 0);
+      const mPill = getEl("fsim-f-mom");
+      if (mPill) {
+        const mCol = mVal >= 10 ? "#4ade80" : (mVal <= -10 ? "#f87171" : "#cbd5e1");
+        mPill.innerHTML = `MOM <b style="color:${mCol}">${mVal >= 0 ? "+" : ""}${mVal}</b>`;
+      }
+      const aff = Number(foc.trackAffinity || 0);
+      const aPill = getEl("fsim-f-aff");
+      if (aPill) {
+        const aCol = aff > 0.25 ? "#4ade80" : (aff < -0.25 ? "#f87171" : "#cbd5e1");
+        aPill.innerHTML = `TRK <b style="color:${aCol}">${aff >= 0 ? "+" : ""}${aff.toFixed(1)}</b>`;
+      }
+      const ePill = getEl("fsim-f-era");
+      if (ePill) ePill.textContent = (fs.eraRule && fs.eraRule.key ? fs.eraRule.key.toUpperCase() : "2026");
 
       getEl("fsim-f-tyre").innerHTML = `<span class="sim-tbadge t-${foc.compound}">${fComp.code}</span> ${life}%`;
       const tempEl = getEl("fsim-f-temp");
@@ -945,11 +1051,13 @@
   }
 
   // =========================================================================
-  // SIMULATION TICK (100% CPU RACING, PIT STOPS, WEATHER, COLLISIONS, SEASON)
+  // SIMULATION TICK (Fixed-Timestep Substepped: Era Rules + Psychology + Telemetry)
   // =========================================================================
-  function stepSimulation(dt) {
-    if (!fs.running || fs.paused || fs.finished) return;
-    const lapScale = (fs.circuit.base_lap_s / 22.0) * fs.speedMult;
+  function stepSimCore(effDt, fastMode) {
+    if (!fs.running || fs.finished) return false;
+    const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
+    const dt = effDt;
+    const lapScale = (fs.circuit.base_lap_s / 22.0);
     const simDt = dt * lapScale;
     fs.raceClock += simDt;
 
@@ -960,15 +1068,17 @@
       if (fs.yellowTimer <= 0) fs.yellowSector = 0;
     }
 
-    const shouldDrs = leaderLap >= 1 && fs.wetness < 20 && fs.safetyCarLaps === 0 && fs.vscLaps === 0;
+    const canOvertakeAid = Boolean(era.drs_enabled || era.override_mode);
+    const shouldDrs = canOvertakeAid && leaderLap >= 1 && fs.wetness < 20 && fs.safetyCarLaps === 0 && fs.vscLaps === 0;
     if (shouldDrs && !fs.drsEnabled && !fs.drsAnnounced && leaderLap >= 1) {
       fs.drsAnnounced = true;
-      showToast("🟢 RACE CONTROL: DRS ENABLED!", "win");
-      addCommentary(leaderLap + 1, "🟢 FIA Race Control: DRS is now ENABLED!", "win");
+      const aidLbl = era.override_mode ? "2026 MANUAL OVERRIDE MODE ENABLED!" : "DRS ENABLED!";
+      if (!fastMode) showToast(`🟢 RACE CONTROL: ${aidLbl}`, "win");
+      addCommentary(leaderLap + 1, `🟢 FIA Race Control: ${aidLbl}`, "win");
     }
     fs.drsEnabled = shouldDrs;
 
-    // Realistic Lap-Based Dynamic Weather Fronts (1-2 realistic storms per GP, NEVER rapid ping-pong!)
+    // Realistic Lap-Based Dynamic Weather Fronts
     if (fs.weatherMode === "dynamic" || fs.weatherMode === "showers") {
       const curLap = Math.max(1, leaderLap + 1);
       if (curLap >= fs.nextWeatherLap) {
@@ -978,16 +1088,19 @@
         if (Math.random() < chance && fs.targetWetness < 20) {
           fs.targetWetness = Math.random() < 0.35 ? 80 : 46;
           const msg = `🌧️ Weather Radar: ${fs.targetWetness >= 70 ? "Heavy storm" : "Rain shower"} rolling over ${fs.circuit.name}!`;
-          addCommentary(curLap, msg, "warn"); showToast(msg, "warn"); playSfx("radioAlert");
+          addCommentary(curLap, msg, "warn");
+          if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); }
+          if (fs.telemetry) fs.telemetry.addEvent(curLap, "rain", "Rain Front", msg, -1);
         } else if (fs.targetWetness >= 20) {
           fs.targetWetness = 0;
-          const msg = `☀️ Rain easing at ${fs.circuit.name} — dry racing line will emerge over the next few laps!`;
-          addCommentary(curLap, msg, "info"); showToast(msg, "win");
+          const msg = `☀️ Rain easing at ${fs.circuit.name} — dry racing line emerging!`;
+          addCommentary(curLap, msg, "info");
+          if (!fastMode) showToast(msg, "win");
         }
       }
       const prevW = fs.wetness;
       const lapFrac = simDt / fs.circuit.base_lap_s;
-      const maxDelta = lapFrac * (fs.targetWetness > fs.wetness ? 14 : 10); // ~10-14% wetness shift per lap
+      const maxDelta = lapFrac * (fs.targetWetness > fs.wetness ? 14 : 10);
       const diffW = fs.targetWetness - fs.wetness;
       fs.wetness += Math.sign(diffW) * Math.min(Math.abs(diffW), maxDelta);
       fs.drying = fs.wetness < prevW - 0.01;
@@ -995,10 +1108,9 @@
 
     const sortedNow = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
     const prevLeaderLap = leaderLap;
-    // Distance-scaled tyre wear: realistic 1-2 dry stops (or 2-3 wet stops) whether 15 laps OR full 71-lap GP!
     const baseWearPerLap = Math.min(9.2, 165 / Math.max(12, fs.totalLaps));
 
-    // Pre-step: update CPU strategies, pit lane timers & record pre-step lap/sector for crossings
+    // Pre-step: update CPU strategies, pit lane timers & record pre-step lap/sector
     fs.cars.forEach((car) => {
       if (car.dnf) return;
       updateCpuStrategy(car, sortedNow);
@@ -1011,21 +1123,34 @@
           car.compound = car.nextCompound;
           car.tyreLife = 100;
           car.tyreTemp = 84;
+          if (era.refuelling) {
+            const lapsRem = Math.max(2, fs.totalLaps - car.lap);
+            car.fuelKg = Math.min(era.start_fuel_kg || 65, lapsRem * (era.fuel_burn_per_lap_kg || 2.3) * 1.15);
+          }
           const fixedWing = !!car.wingDamaged;
           car.wingDamaged = false;
           car.stops += 1;
           car.lastPitLap = car.lap;
+          if (Array.isArray(car.stintHistory)) {
+            const lastSt = car.stintHistory[car.stintHistory.length - 1];
+            if (lastSt) lastSt.endLap = Math.max(lastSt.startLap, car.lap);
+            car.stintHistory.push({ compound: car.compound, startLap: car.lap + 1, endLap: fs.totalLaps });
+          }
           fs.stats.pits += 1;
           if (COMPOUNDS[car.compound].wet > 0) car.usedWet = true;
           else car.dryCompoundsUsed.add(car.compound);
           if (car.pos <= 8 || fixedWing) {
-            addCommentary(car.lap + 1, `🔧 ${car.card.clean_name} exits pits on fresh ${COMPOUNDS[car.compound].name}s${fixedWing ? " + new front wing" : ""}!`, "info");
+            addCommentary(car.lap + 1, `🔧 ${car.card.clean_name} exits pits on fresh ${COMPOUNDS[car.compound].name}s${era.refuelling ? " + fuel" : ""}${fixedWing ? " + new front wing" : ""}!`, "info");
           }
+          if (fs.telemetry) {
+            fs.telemetry.addEvent(car.lap + 1, "pit", `${car.card.code3} Pit Stop`, `Switched to ${COMPOUNDS[car.compound].name}${car.pitErrorReason ? " (" + car.pitErrorReason + ")" : ""}`, car.idx);
+          }
+          car.pitErrorReason = "";
         }
       }
     });
 
-    // Velocity-First Sub-Stepped Longitudinal Integration + Spatial AI + 2D Solid-Body Physics!
+    // Velocity-First Sub-Stepped Longitudinal Integration + Spatial AI + 2D Solid-Body Physics
     const R = window.F1TrackRenderer;
     let incidents = [];
     if (R && fs.geom) {
@@ -1034,7 +1159,7 @@
         dt,
         simDt,
         raceClock: fs.raceClock,
-        speedMult: fs.speedMult,
+        speedMult: fastMode ? 4 : Math.min(4, fs.speedMult),
         wetness: fs.wetness,
         leaderLap,
         totalLaps: fs.totalLaps,
@@ -1059,36 +1184,73 @@
 
       if (curSec !== prevSec && car.lap >= 1) {
         const sTime = (car.currentLapS / 3) * (0.97 + Math.random() * 0.06);
+        if (!car.sectorTimes) car.sectorTimes = [0, 0, 0];
+        car.sectorTimes[prevSec] = sTime;
         if (sTime < fs.bestSectors[prevSec] && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
           fs.bestSectors[prevSec] = sTime;
           car.bestSectors[prevSec] = sTime;
           car.sectorColors[prevSec] = "purple";
+          ENG.applyPsychologyEvent(car, "purple_sector");
         } else if (sTime < car.bestSectors[prevSec]) {
           car.bestSectors[prevSec] = sTime;
           car.sectorColors[prevSec] = "green";
+          ENG.applyPsychologyEvent(car, "pb_sector");
         } else {
           car.sectorColors[prevSec] = "yellow";
         }
       }
 
       const comp = COMPOUNDS[car.compound] || COMPOUNDS.medium;
+      const beh = ENG.getDriverBehaviorModifiers(car, fs.wetness);
+      const lapFrac = simDt / fs.circuit.base_lap_s;
       const targetTemp = fs.safetyCarLaps > 0 ? 78 : (comp.optTemp + (car.paceMode === "push" ? 16 : (car.paceMode === "conserve" ? -12 : 0)) - fs.wetness * 0.12);
       car.tyreTemp += (targetTemp - car.tyreTemp) * Math.min(1, dt * 0.22);
       const thermalWear = car.tyreTemp > 114 ? 1.25 : 1.0;
-      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * comp.wear * thermalWear * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
-      car.tyreLife = Math.max(5, car.tyreLife - (wearMult * (simDt / fs.circuit.base_lap_s) * baseWearPerLap));
+      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * comp.wear * thermalWear * beh.tyreWearMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
+      car.tyreLife = Math.max(5, car.tyreLife - (wearMult * lapFrac * baseWearPerLap));
 
-      if (car.ersMode === "overtake") car.ers = Math.max(0, car.ers - (simDt / fs.circuit.base_lap_s) * 34);
-      else if (car.ersMode === "harvest") car.ers = Math.min(100, car.ers + (simDt / fs.circuit.base_lap_s) * 28);
-      else car.ers = Math.min(100, car.ers + (simDt / fs.circuit.base_lap_s) * 6);
+      if (era.refuelling && Number.isFinite(car.fuelKg)) {
+        const burn = (era.fuel_burn_per_lap_kg || 2.3) * (car.paceMode === "push" ? 1.12 : (car.paceMode === "conserve" ? 0.90 : 1.0));
+        car.fuelKg = Math.max(0.5, car.fuelKg - burn * lapFrac);
+      }
+
+      if (era.ers_enabled) {
+        if (car.ersMode === "overtake") car.ers = Math.max(0, car.ers - lapFrac * 34);
+        else if (car.ersMode === "harvest") car.ers = Math.min(100, car.ers + lapFrac * 28);
+        else car.ers = Math.min(100, car.ers + lapFrac * 6);
+      }
 
       if (car.lap > prevLap) {
+        car.lastLapTime = car.currentLapS;
+        if (car.lap >= 2 && car.currentLapS < (car.bestLapS || 999) && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
+          car.bestLapS = car.currentLapS;
+        }
         if (car.currentLapS < fs.fastestLap.time && fs.safetyCarLaps === 0 && fs.vscLaps === 0 && car.lap >= 2) {
           fs.fastestLap = { time: car.currentLapS, driver: car.card.clean_name, code3: car.card.code3 };
         }
 
+        // Psychology: Clean lap vs Dirty Air vs Driver Lock-Up / Mistake
+        if (car.inDrsRange && fs.safetyCarLaps === 0) {
+          car.dirtyAirLaps = (car.dirtyAirLaps || 0) + 1;
+          if (car.dirtyAirLaps >= 3) ENG.applyPsychologyEvent(car, "dirty_air");
+        } else {
+          car.dirtyAirLaps = 0;
+          ENG.applyPsychologyEvent(car, "clean_lap");
+        }
+        const mistakeProb = 0.011 * beh.mistakeMult * (fs.wetness >= 30 ? 1.4 : 1.0);
+        if (car.lap >= 2 && fs.safetyCarLaps === 0 && Math.random() < mistakeProb) {
+          const lossS = 0.9 + Math.random() * 1.4;
+          car.totalProg -= lossS / fs.circuit.base_lap_s;
+          ENG.applyPsychologyEvent(car, "mistake");
+          if (car.pos <= 8) {
+            const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "a heavy braking zone";
+            addCommentary(car.lap + 1, `💨 LOCK-UP! ${car.card.clean_name} runs wide at ${corner} (-${lossS.toFixed(1)}s, confidence rattled)!`, "warn");
+          }
+          if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "mistake", `${car.card.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
+        }
+
         if (car.lap >= fs.totalLaps) {
-          if (!hasSatisfiedTwoCompoundRule(car)) {
+          if (!hasSatisfiedTwoCompoundRule(car, era)) {
             car.timePenaltyS = (car.timePenaltyS || 0) + 20;
             car.totalProg -= 20 / fs.circuit.base_lap_s;
           }
@@ -1098,43 +1260,43 @@
           return;
         }
 
-        // Realistic Mechanical DNF (~1.5-2.5 mechanical DNFs across a full 20-car Grand Prix!)
-        const raceMechChance = Math.min(0.16, (car.card.game.stats.dnf_rate / 100) * 0.42) * Math.sqrt(fs.chaosMult);
+        // Era-Scaled Mechanical DNF
+        const raceMechChance = Math.min(0.28, (car.card.game.stats.dnf_rate / 100) * 0.42 * (era.reliability_dnf_mult || 1.0)) * Math.sqrt(fs.chaosMult);
         const perLapDnf = raceMechChance / Math.max(10, fs.totalLaps);
         const pushRisk = car.paceMode === "push" ? 1.25 : 0.85;
-        if (car.lap >= 2 && fs.stats.dnfs < 6 && Math.random() < perLapDnf * pushRisk) {
+        if (car.lap >= 2 && fs.stats.dnfs < 8 && Math.random() < perLapDnf * pushRisk) {
           car.dnf = true;
+          car.dnfReason = "Mechanical";
           fs.stats.dnfs += 1;
           fs.stats.incidents += 1;
           const secNum = Math.floor((((car.totalProg % 1) + 1) % 1) * 3) + 1;
           fs.yellowSector = secNum; fs.yellowTimer = 5.5;
           const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || `Sector ${secNum}`;
           addCommentary(car.lap + 1, `💥 MECHANICAL DNF! ${car.card.clean_name} parks it at ${corner}!`, "warn");
+          if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "dnf", `${car.card.code3} DNF`, `Mechanical retirement at ${corner}`, car.idx);
           if (fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
             const roll = Math.random();
-            if (roll < 0.34) {
+            if (roll < 0.34 * (era.sc_chance_mult || 1.0)) {
               fs.safetyCarLaps = 2; fs.stats.scs += 1;
-              showToast("⚠️ SAFETY CAR DEPLOYED!", "warn");
+              if (!fastMode) { showToast("⚠️ SAFETY CAR DEPLOYED!", "warn"); playSfx("radioAlert"); }
               addCommentary(car.lap + 1, "⚠️ SAFETY CAR DEPLOYED! Pack bunching up & cheap pit window open!", "warn");
-              playSfx("radioAlert");
-            } else if (roll < 0.65) {
+              if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "sc", "Safety Car", `Deployed after ${car.card.code3} retirement`, -1);
+            } else if (era.vsc_enabled && roll < 0.65) {
               fs.vscLaps = 1;
-              showToast("⚠️ VIRTUAL SAFETY CAR (VSC)!", "warn");
+              if (!fastMode) { showToast("⚠️ VIRTUAL SAFETY CAR (VSC)!", "warn"); playSfx("radioAlert"); }
               addCommentary(car.lap + 1, "⚠️ VIRTUAL SAFETY CAR (VSC) deployed!", "warn");
-              playSfx("radioAlert");
             }
           }
           return;
         }
 
-        // Realistic CPU Pit Strategy with Weather Hysteresis & Stint Cooldown (1-3 stops per car!)
+        // Era-Aware CPU Pit Strategy (Refuelling, Weather Hysteresis, 2-Compound Rule, Pit Errors!)
         const scFactor = fs.safetyCarLaps > 0 ? 0.58 : (fs.vscLaps > 0 ? 0.68 : 1.0);
-        const effPit = fs.circuit.pit_loss_s * scFactor;
+        const effPit = (fs.circuit.pit_loss_s + Math.max(0, (era.pit_base_s || 2.3) - 2.3)) * scFactor;
         const lapsLeft = fs.totalLaps - car.lap;
         const lapsSincePit = car.lap - (car.lastPitLap == null ? -99 : car.lastPitLap);
         const minStint = Math.max(3, Math.round(fs.totalLaps * 0.12));
 
-        // Weather crossover with generous hysteresis so cars NEVER ping-pong Inter <-> Wet!
         let weatherTarget = null;
         if (comp.wet === 0 && fs.wetness >= 28 && lapsLeft >= 3) {
           weatherTarget = fs.wetness >= 72 ? "wet" : "inter";
@@ -1146,13 +1308,28 @@
           weatherTarget = "slick";
         }
 
-        const mustFulfillRule = !car.usedWet && car.dryCompoundsUsed.size < 2 && lapsLeft <= Math.max(3, Math.round(fs.totalLaps * 0.14)) && lapsLeft >= 2;
+        const mustFulfillRule = era.two_compound_rule !== false && !car.usedWet && car.dryCompoundsUsed.size < 2 && lapsLeft <= Math.max(3, Math.round(fs.totalLaps * 0.14)) && lapsLeft >= 2;
+        const fuelPit = era.refuelling && Number.isFinite(car.fuelKg) && car.fuelKg <= (era.fuel_burn_per_lap_kg || 2.3) * 1.8 && lapsLeft >= 2;
         const scOpportunistic = (fs.safetyCarLaps > 0 || fs.vscLaps > 0) && car.tyreLife < 56 && lapsSincePit >= minStint && lapsLeft >= 4;
         const cliffPit = car.tyreLife < (car.aiPlan === "aggressive" ? 26 : 21) && lapsLeft >= 3 && lapsSincePit >= minStint;
         const wingPit = car.wingDamaged && lapsLeft >= 4 && lapsSincePit >= 2;
 
-        if (weatherTarget || mustFulfillRule || scOpportunistic || cliffPit || wingPit) {
-          car.inPit = effPit + (car.wingDamaged ? 4.5 : 0);
+        if (weatherTarget || mustFulfillRule || fuelPit || scOpportunistic || cliffPit || wingPit) {
+          let extraPit = car.wingDamaged ? 4.5 : 0;
+          if (era.refuelling) {
+            const needKg = Math.min(era.start_fuel_kg || 65, Math.max(8, lapsLeft * (era.fuel_burn_per_lap_kg || 2.3)));
+            extraPit += needKg * (era.refuel_sec_per_kg || 0.14);
+          }
+          if (Math.random() < (era.pit_error_chance || 0.035)) {
+            const errS = 1.6 + Math.random() * 2.8;
+            extraPit += errS;
+            car.totalPitDelayS = (car.totalPitDelayS || 0) + errS;
+            car.pitErrorReason = `Slow stop +${errS.toFixed(1)}s`;
+            ENG.applyPsychologyEvent(car, "slow_pit");
+          } else {
+            ENG.applyPsychologyEvent(car, "fast_pit");
+          }
+          car.inPit = effPit + extraPit;
           car.pitDuration = car.inPit;
           if (weatherTarget === "wet" || weatherTarget === "inter") {
             car.nextCompound = weatherTarget;
@@ -1161,7 +1338,7 @@
           } else {
             const remFrac = lapsLeft / Math.max(1, fs.totalLaps);
             let pref = remFrac <= 0.24 ? "soft" : (remFrac <= 0.44 ? "medium" : "hard");
-            if (!car.usedWet && car.dryCompoundsUsed.size === 1 && car.dryCompoundsUsed.has(pref)) {
+            if (era.two_compound_rule !== false && !car.usedWet && car.dryCompoundsUsed.size === 1 && car.dryCompoundsUsed.has(pref)) {
               pref = pref === "medium" ? (remFrac > 0.32 ? "hard" : "soft") : "medium";
             }
             car.nextCompound = pref;
@@ -1172,7 +1349,7 @@
       }
     });
 
-    // Process FIA Stewards & Incident Events returned by Physics v2 + Record Replay Ring Buffer
+    // Process FIA Stewards & Incident Events
     if (R && fs.geom) {
       incidents.forEach((ev) => {
         const aName = ev.chaser.card.clean_name, bName = ev.target.card.clean_name;
@@ -1180,83 +1357,52 @@
         const clipTitle = ev.type === "fia_breach"
           ? `FIA STEWARDS · ${ev.culprit.card.code3} MOVING UNDER BRAKING AT ${corner.toUpperCase()}`
           : `${ev.type.toUpperCase()} AT ${corner.toUpperCase()} · ${ev.chaser.card.code3} & ${ev.target.card.code3}`;
-        const clipId = saveReplayClip(clipTitle, (ev.culprit || ev.target).idx);
+        const clipId = fastMode ? null : saveReplayClip(clipTitle, (ev.culprit || ev.target).idx);
 
         if (ev.type === "fia_breach") {
-          showStewardsBanner(
-            `⚖️ FIA RACE CONTROL · ${ev.article || "APP. L CH. IV"}`,
-            `${ev.culprit.card.clean_name} — ${ev.fiaRule} (${ev.verdict})`,
-            ev.penaltyS ? "penalty" : "info"
-          );
-          emitBroadcastCall("fia_mub", {
-            lap: leaderLap + 1,
-            culprit: ev.culprit.card.clean_name,
-            victim: ev.chaser.card.clean_name,
-            article: ev.article,
-            verdict: ev.verdict,
-            clipId,
-          });
-          playSfx("radioAlert");
-          if (fs.autoReplay && performance.now() - fs.lastAutoReplayTs > 26000) {
-            fs.lastAutoReplayTs = performance.now();
-            setTimeout(() => {
-              const clip = fs.replayClips.find((c) => c.id === clipId);
-              if (clip && fs.running && !fs.replay.active) startInstantReplay({ frames: clip.frames, focusIdx: clip.focusIdx, title: clip.title });
-            }, 900);
+          if (!fastMode) {
+            showStewardsBanner(`⚖️ FIA RACE CONTROL · ${ev.article || "APP. L CH. IV"}`, `${ev.culprit.card.clean_name} — ${ev.fiaRule} (${ev.verdict})`, ev.penaltyS ? "penalty" : "info");
+            playSfx("radioAlert");
           }
+          emitBroadcastCall("fia_mub", { lap: leaderLap + 1, culprit: ev.culprit.card.clean_name, victim: ev.chaser.card.clean_name, article: ev.article, verdict: ev.verdict, clipId });
           return;
         }
 
         fs.stats.incidents += 1;
+        ENG.applyPsychologyEvent(ev.chaser, "mistake");
+        ENG.applyPsychologyEvent(ev.target, "mistake");
         if (ev.type === "contact") {
-          const msg = `💥 WHEEL-TO-WHEEL! ${aName} & ${bName} bang wheels at ${corner} — ${ev.verdict}!`;
-          addCommentary(leaderLap + 1, msg, "warn", clipId);
-          if (ev.penaltyS || ev.blackWhiteFlag) {
-            showStewardsBanner("⚖️ FIA STEWARDS VERDICT", `${(ev.culprit || ev.chaser).card.clean_name} — ${ev.fiaRule} (${ev.verdict})`, ev.penaltyS ? "penalty" : "info");
-          }
-          runAutoTvDirector(sortedNow, ev.chaser.idx, `💥 CONTACT · ${ev.chaser.card.code3} & ${ev.target.card.code3}`);
+          addCommentary(leaderLap + 1, `💥 WHEEL-TO-WHEEL! ${aName} & ${bName} bang wheels at ${corner} — ${ev.verdict}!`, "warn", clipId);
+          if (!fastMode) runAutoTvDirector(sortedNow, ev.chaser.idx, `💥 CONTACT · ${ev.chaser.card.code3} & ${ev.target.card.code3}`);
         } else if (ev.type === "spin") {
           fs.yellowSector = ev.sector; fs.yellowTimer = 5.5;
           const penTxt = ev.penaltyS ? ` (${ev.fiaRule}: +${ev.penaltyS}s)` : ` (${ev.verdict})`;
           const msg = `🎙 CROFTY: SPIN AT ${corner.toUpperCase()}! ${aName} & ${bName} make contact${penTxt}!`;
-          addCommentary(leaderLap + 1, msg, "warn", clipId); showToast(msg, "warn"); playSfx("radioAlert");
-          showStewardsBanner("⚖️ FIA STEWARDS INVESTIGATION", `${ev.culprit ? ev.culprit.card.clean_name + " — " : ""}${ev.fiaRule}: ${ev.verdict}`, ev.penaltyS ? "penalty" : "info");
-          runAutoTvDirector(sortedNow, ev.target.idx, `🌀 SPIN AT ${corner.toUpperCase()}!`);
-          if (fs.autoReplay && performance.now() - fs.lastAutoReplayTs > 26000) {
-            fs.lastAutoReplayTs = performance.now();
-            setTimeout(() => {
-              const clip = fs.replayClips.find((c) => c.id === clipId);
-              if (clip && fs.running && !fs.replay.active) startInstantReplay({ frames: clip.frames, focusIdx: clip.focusIdx, title: clip.title });
-            }, 1100);
-          }
+          addCommentary(leaderLap + 1, msg, "warn", clipId);
+          if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.target.idx, `🌀 SPIN AT ${corner.toUpperCase()}!`); }
+          if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "incident", `Spin at ${corner}`, `${ev.chaser.card.code3} & ${ev.target.card.code3}`, ev.target.idx);
         } else if (ev.type === "crash") {
           fs.yellowSector = ev.sector; fs.yellowTimer = 7.5;
-          if (ev.target.dnf) fs.stats.dnfs += 1;
-          if (ev.chaser.dnf) fs.stats.dnfs += 1;
+          if (ev.target.dnf) { fs.stats.dnfs += 1; ev.target.dnfReason = "Collision"; }
+          if (ev.chaser.dnf) { fs.stats.dnfs += 1; ev.chaser.dnfReason = "Collision"; }
           const msg = `🚨 CROFTY: HUGE INCIDENT AT ${corner.toUpperCase()}! ${aName} & ${bName} tangle — SAFETY CAR DEPLOYED!`;
           if (fs.safetyCarLaps === 0) { fs.safetyCarLaps = 2; fs.stats.scs += 1; }
-          addCommentary(leaderLap + 1, msg, "warn", clipId); showToast(msg, "warn"); playSfx("radioAlert");
-          showStewardsBanner("⚖️ FIA RACE CONTROL · SAFETY CAR", `${ev.fiaRule} (${ev.verdict}) — No Overtaking!`, "penalty");
-          runAutoTvDirector(sortedNow, ev.chaser.idx, `🚨 CRASH AT ${corner.toUpperCase()}!`);
-          if (fs.autoReplay && performance.now() - fs.lastAutoReplayTs > 20000) {
-            fs.lastAutoReplayTs = performance.now();
-            setTimeout(() => {
-              const clip = fs.replayClips.find((c) => c.id === clipId);
-              if (clip && fs.running && !fs.replay.active) startInstantReplay({ frames: clip.frames, focusIdx: clip.focusIdx, title: clip.title });
-            }, 1200);
-          }
+          addCommentary(leaderLap + 1, msg, "warn", clipId);
+          if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.chaser.idx, `🚨 CRASH AT ${corner.toUpperCase()}!`); }
+          if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "sc", `Crash & SC at ${corner}`, `${aName} & ${bName}`, ev.chaser.idx);
         }
       });
 
-      // Record live 20 Hz Replay Ring Buffer + decay Stewards Banner
-      fs.replayRecAccum += dt;
-      if (fs.replayRecAccum >= 0.05) {
-        fs.replayRecAccum = 0;
-        recordReplayFrame();
-      }
-      if (fs.stewardsTimer > 0) {
-        fs.stewardsTimer = Math.max(0, fs.stewardsTimer - dt);
-        if (fs.stewardsTimer <= 0) fs.stewardsBanner = null;
+      if (!fastMode) {
+        fs.replayRecAccum += dt;
+        if (fs.replayRecAccum >= 0.05) {
+          fs.replayRecAccum = 0;
+          recordReplayFrame();
+        }
+        if (fs.stewardsTimer > 0) {
+          fs.stewardsTimer = Math.max(0, fs.stewardsTimer - dt);
+          if (fs.stewardsTimer <= 0) fs.stewardsBanner = null;
+        }
       }
     }
 
@@ -1266,96 +1412,119 @@
         fs.safetyCarLaps -= 1;
         if (fs.safetyCarLaps === 0) {
           addCommentary(newLeaderLap + 1, "🟢 SAFETY CAR IN THIS LAP — GREEN FLAG RESTART!", "win");
-          showToast("🟢 SAFETY CAR IN — RACING RESUMES!", "win");
+          if (!fastMode) showToast("🟢 SAFETY CAR IN — RACING RESUMES!", "win");
         }
       }
       if (fs.vscLaps > 0) {
         fs.vscLaps -= 1;
         if (fs.vscLaps === 0) {
           addCommentary(newLeaderLap + 1, "🟢 VSC ENDING — GREEN FLAG!", "win");
-          showToast("🟢 VSC ENDING — GREEN FLAG!", "win");
+          if (!fastMode) showToast("🟢 VSC ENDING — GREEN FLAG!", "win");
         }
+      }
+      // Record scrubbable full-grid lap telemetry frame!
+      if (fs.telemetry) {
+        const snapSorted = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+        fs.telemetry.recordLapSnapshot(newLeaderLap, snapSorted, {
+          wetness: fs.wetness,
+          scActive: fs.safetyCarLaps > 0,
+          vscActive: fs.vscLaps > 0,
+        });
       }
     }
 
-    const now = performance.now();
-    if (now - fs.lastUiSync > 160) {
-      fs.lastUiSync = now;
-      renderHud();
-      const sortedAfter = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
-
-      // Count ONLY genuine on-track overtakes (neither car in pits/DNF, green flag, debounced per pair!)
-      const onTrack = sortedAfter.filter((c) => !c.dnf && c.inPit === 0).map((c) => c.idx);
-      if (fs.prevOnTrackOrder.length && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
-        const prevIdxMap = new Map();
-        fs.prevOnTrackOrder.forEach((id, r) => prevIdxMap.set(id, r));
-        for (let r = 0; r < onTrack.length; r++) {
-          const passerId = onTrack[r];
-          const prevR = prevIdxMap.get(passerId);
-          if (prevR == null || r >= prevR) continue;
-          // Check who was immediately passed on track
-          const victimId = onTrack[r + 1];
-          const victimPrevR = victimId != null ? prevIdxMap.get(victimId) : null;
-          if (victimId != null && victimPrevR != null && victimPrevR < prevR) {
-            const pk = passerId < victimId ? `${passerId}_${victimId}` : `${victimId}_${passerId}`;
-            if (!fs.overtakeCooldown[pk] || fs.raceClock >= fs.overtakeCooldown[pk]) {
-              fs.overtakeCooldown[pk] = fs.raceClock + 18;
-              fs.stats.overtakes += 1;
-              const passer = fs.cars[passerId];
-              const victim = fs.cars[victimId];
-              if (passer && victim && passer.pos <= 6) {
-                const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "Turn 1";
-                const clipTitle = `OVERTAKE FOR P${passer.pos} · ${passer.card.code3} PASSES ${victim.card.code3} AT ${corner.toUpperCase()}`;
-                const clipId = saveReplayClip(clipTitle, passer.idx);
-                const kind = passer.battleState === "cutback"
-                  ? "overtake_cutback"
-                  : (passer.battleState === "tow" || passer.inDrsRange ? "overtake_drs" : "overtake_dive");
-                emitBroadcastCall(kind, {
-                  lap: passer.lap + 1,
-                  passer: passer.card.clean_name,
-                  victim: victim.card.clean_name,
-                  pos: passer.pos,
-                  corner,
-                  clipId,
-                });
-                // Auto Instant Replay on P1 Lead Change!
-                if (passer.pos === 1 && fs.autoReplay && performance.now() - fs.lastAutoReplayTs > 28000) {
-                  fs.lastAutoReplayTs = performance.now();
-                  setTimeout(() => {
-                    const clip = fs.replayClips.find((c) => c.id === clipId);
-                    if (clip && fs.running && !fs.replay.active) startInstantReplay({ frames: clip.frames, focusIdx: clip.focusIdx, title: clip.title });
-                  }, 1000);
-                }
-              }
-            }
-          }
-        }
-      }
-      fs.prevOnTrackOrder = onTrack;
-      if (onTrack.length && fs.prevLeaderIdx !== -1 && onTrack[0] !== fs.prevLeaderIdx) {
-        fs.stats.leadChanges += 1;
-      }
-      if (onTrack.length) fs.prevLeaderIdx = onTrack[0];
-
-      runAutoTvDirector(sortedAfter, null, null);
-
-      // Ambient Brundle/Crofty color commentary during intense clean battles (every ~14s)
-      if (now - fs.lastAmbientCallTs > 14000 && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
-        const focCar = fs.cars[fs.focusIdx];
-        if (focCar && !focCar.dnf && focCar.aiObs) {
-          if (focCar.aiObs.state === "avoid") {
-            fs.lastAmbientCallTs = now;
-            emitBroadcastCall("avoid", { lap: focCar.lap + 1, driver: focCar.card.clean_name });
-          } else if (focCar.aiObs.state === "fight" || focCar.aiObs.state === "defend") {
-            const rival = sortedAfter.find((c) => c.idx !== focCar.idx && !c.dnf && Math.abs(c.totalProg - focCar.totalProg) * fs.circuit.base_lap_s < 0.45);
-            if (rival) {
-              fs.lastAmbientCallTs = now;
-              emitBroadcastCall("battle_clean", { lap: focCar.lap + 1, a: focCar.card.clean_name, b: rival.card.clean_name });
+    // Track genuine on-track overtakes + psychology swings
+    const sortedAfter = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    const onTrack = sortedAfter.filter((c) => !c.dnf && c.inPit === 0).map((c) => c.idx);
+    if (fs.prevOnTrackOrder.length && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
+      const prevIdxMap = new Map();
+      fs.prevOnTrackOrder.forEach((id, r) => prevIdxMap.set(id, r));
+      for (let r = 0; r < onTrack.length; r++) {
+        const passerId = onTrack[r];
+        const prevR = prevIdxMap.get(passerId);
+        if (prevR == null || r >= prevR) continue;
+        const victimId = onTrack[r + 1];
+        const victimPrevR = victimId != null ? prevIdxMap.get(victimId) : null;
+        if (victimId != null && victimPrevR != null && victimPrevR < prevR) {
+          const pk = passerId < victimId ? `${passerId}_${victimId}` : `${victimId}_${passerId}`;
+          if (!fs.overtakeCooldown[pk] || fs.raceClock >= fs.overtakeCooldown[pk]) {
+            fs.overtakeCooldown[pk] = fs.raceClock + 18;
+            fs.stats.overtakes += 1;
+            const passer = fs.cars[passerId];
+            const victim = fs.cars[victimId];
+            if (passer) ENG.applyPsychologyEvent(passer, "overtake");
+            if (victim) ENG.applyPsychologyEvent(victim, "overtaken");
+            if (passer && victim && passer.pos <= 6) {
+              const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "Turn 1";
+              const clipId = fastMode ? null : saveReplayClip(`OVERTAKE FOR P${passer.pos} · ${passer.card.code3} PASSES ${victim.card.code3}`, passer.idx);
+              const kind = passer.battleState === "cutback"
+                ? "overtake_cutback"
+                : (passer.battleState === "tow" || passer.inDrsRange ? "overtake_drs" : "overtake_dive");
+              emitBroadcastCall(kind, { lap: passer.lap + 1, passer: passer.card.clean_name, victim: victim.card.clean_name, pos: passer.pos, corner, clipId });
+              if (fs.telemetry) fs.telemetry.addEvent(passer.lap + 1, "overtake", `${passer.card.code3} passes ${victim.card.code3}`, `For P${passer.pos} at ${corner}`, passer.idx);
             }
           }
         }
       }
     }
+    fs.prevOnTrackOrder = onTrack;
+    if (onTrack.length && fs.prevLeaderIdx !== -1 && onTrack[0] !== fs.prevLeaderIdx) {
+      fs.stats.leadChanges += 1;
+    }
+    if (onTrack.length) fs.prevLeaderIdx = onTrack[0];
+
+    if (!fastMode) {
+      const now = performance.now();
+      if (now - fs.lastUiSync > 160) {
+        fs.lastUiSync = now;
+        renderHud();
+        runAutoTvDirector(sortedAfter, null, null);
+      }
+    }
+    return fs.running && !fs.finished;
+  }
+
+  function stepSimulation(dt) {
+    if (!fs.running || fs.paused || fs.finished || fs.simToEndActive) return;
+    ENG.runFixedSubsteps(dt, fs.speedMult, 0.08, (subDt) => stepSimCore(subDt, false));
+  }
+
+  function runSimToEnd() {
+    if (!fs.running || fs.finished || fs.simToEndActive) return;
+    stopInstantReplay();
+    fs.paused = false;
+    fs.simToEndActive = true;
+    const ovl = getEl("fsim-simtoend-ovl");
+    const bar = getEl("fsim-ste-bar");
+    const sub = getEl("fsim-ste-sub");
+    if (ovl) ovl.classList.remove("hidden");
+
+    const pump = () => {
+      if (!fs.simToEndActive || fs.finished || !fs.running) {
+        fs.simToEndActive = false;
+        if (ovl) ovl.classList.add("hidden");
+        renderHud();
+        drawCanvas();
+        return;
+      }
+      // Run 90 substeps per animation frame (~6-8 laps/sec while keeping browser responsive!)
+      for (let i = 0; i < 90; i++) {
+        if (!stepSimCore(0.08, true)) break;
+      }
+      const lLap = Math.min(fs.totalLaps, Math.max(...fs.cars.map((c) => c.lap), 0) + 1);
+      const pct = Math.min(100, Math.round((lLap / Math.max(1, fs.totalLaps)) * 100));
+      if (bar) bar.style.width = `${pct}%`;
+      if (sub) sub.textContent = `Lap ${lLap} / ${fs.totalLaps} (${pct}%)`;
+      if (fs.finished) {
+        fs.simToEndActive = false;
+        if (ovl) ovl.classList.add("hidden");
+        renderHud();
+        drawCanvas();
+      } else {
+        requestAnimationFrame(pump);
+      }
+    };
+    requestAnimationFrame(pump);
   }
 
   function finishGrandPrix() {
@@ -1373,7 +1542,24 @@
     addCommentary(fs.totalLaps, `🏁 CHEQUERED FLAG at ${fs.circuit.name}! ${podTxt}`, "win");
     playSfx("winLap");
 
-    // Award Championship Points if in Season Mode
+    // Export full telemetry buffer for Phase 4 Race Analytics Studio & Post-Race Interviews
+    if (fs.telemetry) {
+      fs.telemetry.recordLapSnapshot(fs.totalLaps, sorted, { wetness: fs.wetness, scActive: false, vscActive: false });
+      const finalMeta = sorted.map((c, i) => ({
+        idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team, color: c.card.hero_color,
+        finishPos: i + 1, dnf: c.dnf, dnfReason: c.dnfReason || "", stintHistory: c.stintHistory || [],
+        confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
+        momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
+        totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+      }));
+      window.F1_FULLSIM_LAST_TELEMETRY = fs.telemetry.exportPayload(finalMeta);
+    }
+
+    // Award Era-Authentic Championship Points if in Season Mode
+    const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
+    const ptsTable = Array.isArray(era.points) && era.points.length ? era.points : F1_POINTS;
+    const flPt = Number(era.fastest_lap_point || 0);
+    const flTopN = Number(era.fastest_lap_top_n || 0);
     let seasonDone = false;
     if (fs.season.active) {
       fs.season.racesRun += 1;
@@ -1386,9 +1572,9 @@
         if (!fs.season.wcc[tKey]) {
           fs.season.wcc[tKey] = { team: tKey, color: c.card.hero_color, pts: 0, wins: 0 };
         }
-        if (!c.dnf && i < F1_POINTS.length) {
-          let pts = F1_POINTS[i];
-          if (fs.fastestLap.driver === key) pts += 1;
+        if (!c.dnf) {
+          let pts = i < ptsTable.length ? ptsTable[i] : 0;
+          if (flPt > 0 && fs.fastestLap.driver === key && (flTopN === 0 || (i + 1) <= flTopN)) pts += flPt;
           fs.season.wdc[key].pts += pts;
           fs.season.wcc[tKey].pts += pts;
           if (i === 0) { fs.season.wdc[key].wins += 1; fs.season.wcc[tKey].wins += 1; }
@@ -1485,10 +1671,30 @@
     const cardsRaw = await loadDeck(deckSpec, maxCars);
     if (!cardsRaw.length) return;
 
-    const selCir = fs.season.active
+    const selCirMeta = fs.season.active
       ? fs.season.rounds[fs.season.roundIdx]
       : (CIRCUITS.find((c) => c.id === getEl("fsim-circuit-sel")?.value) || CIRCUITS[0]);
+    const selCir = await ENG.fetchCircuit(selCirMeta.id);
     fs.circuit = selCir;
+    fs.eraRule = resolveEraRule(deckSpec);
+    fs.simToEndActive = false;
+    getEl("fsim-simtoend-ovl")?.classList.add("hidden");
+
+    // Fetch historical Per-Track × Per-Era × Per-Team × Per-Driver balancing & psychology profiles
+    const balKey = `${selCir.id}|${fs.eraRule.key}`;
+    let balData = fs.balanceCache[balKey];
+    if (!balData) {
+      try {
+        const r = await fetch(`/api/sim/balance?circuit_id=${encodeURIComponent(selCir.id)}&era_key=${encodeURIComponent(fs.eraRule.key)}`);
+        if (r.ok) {
+          balData = await r.json();
+          fs.balanceCache[balKey] = balData;
+        }
+      } catch (_) {}
+    }
+    const drvAff = (balData && balData.driver_affinity) || {};
+    const teamAff = (balData && balData.team_affinity) || {};
+    const drvPsych = (balData && balData.driver_psychology) || {};
 
     const dist = getEl("fsim-laps-sel")?.value || "15";
     fs.totalLaps = dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15);
@@ -1543,20 +1749,26 @@
         comp = i < 5 ? "soft" : (i % 5 === 4 ? "hard" : "medium");
       }
       const isWetStart = COMPOUNDS[comp].wet > 0;
+      const dKey = String(card.clean_name || "").toLowerCase();
+      const tKey = String(card.hero_team || "").toLowerCase();
+      const combinedAff = Number(drvAff[dKey] || 0) + Number(teamAff[tKey] || 0) * 0.65;
       const car = {
         idx: i,
         card,
         pos: i + 1,
+        gridPos: i + 1,
         lap: 0,
         totalProg: -0.0055 * i,
         latOffset: (i % 2 === 0 ? -2.4 : 2.4),
         compound: comp,
         nextCompound: comp,
         dryCompoundsUsed: new Set(isWetStart ? [] : [comp]),
+        stintHistory: [{ compound: comp, startLap: 1, endLap: fs.totalLaps }],
         usedWet: isWetStart,
         tyreLife: 100,
         tyreTemp: COMPOUNDS[comp].optTemp - 3,
-        ers: 68,
+        fuelKg: fs.eraRule.refuelling ? (fs.eraRule.start_fuel_kg || 58) * (0.75 + Math.random() * 0.25) : (fs.eraRule.start_fuel_kg || 100),
+        ers: fs.eraRule.ers_enabled ? 68 : 0,
         stops: 0,
         inPit: 0,
         pitDuration: 0,
@@ -1567,6 +1779,9 @@
         intervalS: 0,
         liveKph: 190,
         liveGear: 4,
+        lastLapTime: selCir.base_lap_s,
+        bestLapS: 999,
+        sectorTimes: [0, 0, 0],
         bestSectors: [999, 999, 999],
         sectorColors: ["none", "none", "none"],
         paceMode: "balanced",
@@ -1575,9 +1790,22 @@
         aiStatus: "RACE START",
         currentLapS: selCir.base_lap_s,
       };
+      ENG.initDriverPsychology(car, drvPsych[dKey], combinedAff, null);
       car.currentLapS = computeCarLapTime(car, selCir, fs.wetness);
       return car;
     });
+
+    // Initialize Scrubbable Telemetry Buffer Recorder
+    fs.telemetry = ENG.createTelemetryRecorder(
+      selCir,
+      fs.cars.map((c) => ({
+        idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team,
+        color: c.card.hero_color, persona: c.persona, trackAffinity: c.trackAffinity,
+      })),
+      fs.totalLaps,
+      fs.eraRule
+    );
+    fs.telemetry.recordLapSnapshot(0, fs.cars, { wetness: fs.wetness, scActive: false, vscActive: false });
 
     fs.focusIdx = 0;
     const ul = getEl("fsim-radio-log");
@@ -1717,6 +1945,14 @@
     document.querySelectorAll("[data-fsim-speed]").forEach((btn) => {
       btn.addEventListener("click", () => setSpeed(Number(btn.dataset.fsimSpeed)));
     });
+    getEl("fsim-sim-end-btn")?.addEventListener("click", runSimToEnd);
+    getEl("fsim-tower-wide")?.addEventListener("click", () => {
+      fs.towerWide = !fs.towerWide;
+      getEl("fsim-cockpit-grid")?.classList.toggle("is-tower-wide", fs.towerWide);
+      getEl("fsim-tower-wide")?.classList.toggle("is-wide", fs.towerWide);
+      fs.staticKey = "";
+      requestAnimationFrame(() => drawCanvas());
+    });
     document.querySelectorAll("[data-fsim-cam]").forEach((btn) => {
       btn.addEventListener("click", () => setCamMode(btn.dataset.fsimCam, false));
     });
@@ -1724,8 +1960,6 @@
       btn.addEventListener("click", () => {
         fs.gapMode = btn.dataset.fsimGap;
         document.querySelectorAll("[data-fsim-gap]").forEach((b) => b.classList.toggle("active", b === btn));
-        const hd = getEl("fsim-gap-head");
-        if (hd) hd.textContent = fs.gapMode.toUpperCase();
         renderHud();
       });
     });
@@ -1843,6 +2077,8 @@
       else if (k === "2") setSpeed(2);
       else if (k === "3") setSpeed(4);
       else if (k === "4") setSpeed(8);
+      else if (k === "5") setSpeed(16);
+      else if (k === "6") setSpeed(32);
       else if (k === "r") {
         if (fs.replay.active) stopInstantReplay();
         else startInstantReplay({ focusIdx: fs.focusIdx });
