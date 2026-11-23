@@ -70,6 +70,11 @@
     paused: false,
     running: false,
     finished: false,
+    chequeredFlag: false,
+    chequeredStartS: 0,
+    allUnlappedDoneAt: null,
+    chequeredFinishedCount: 0,
+    chequeredRunningCount: 0,
     sfxOn: true,
     voiceOn: false,
     autoReplay: true,
@@ -505,7 +510,7 @@
       return;
     }
 
-    if (now - fs.lastCamCutClock < minHoldS && fs.cars[fs.focusIdx] && !fs.cars[fs.focusIdx].dnf) {
+    if (now - fs.lastCamCutClock < minHoldS && fs.cars[fs.focusIdx] && !fs.cars[fs.focusIdx].dnf && !(fs.chequeredFlag && fs.cars[fs.focusIdx].finishedRace && (now - (fs.cars[fs.focusIdx].finishTimeS || 0)) > 2.2)) {
       // Refresh chyron text for current target
       const cur = fs.cars[fs.focusIdx];
       const rank = sorted.findIndex((c) => c.idx === cur.idx);
@@ -513,9 +518,9 @@
       const behind = rank >= 0 && rank < sorted.length - 1 ? sorted[rank + 1] : null;
       const gA = ahead ? (ahead.totalProg - cur.totalProg) * fs.circuit.base_lap_s : 99;
       const gB = behind && !behind.dnf ? (cur.totalProg - behind.totalProg) * fs.circuit.base_lap_s : 99;
-      if (gA < 0.9) updateChyron(`⚔️ BATTLE FOR P${ahead.pos} · ${ahead.card.code3} vs ${cur.card.code3} (+${gA.toFixed(2)}s)`);
-      else if (gB < 0.9) updateChyron(`⚔️ BATTLE FOR P${cur.pos} · ${cur.card.code3} vs ${behind.card.code3} (+${gB.toFixed(2)}s)`);
-      else updateChyron(`🎥 FOLLOWING P${cur.pos} · ${cur.card.clean_name.toUpperCase()}`);
+      if (gA < 0.9 && !cur.finishedRace) updateChyron(`⚔️ BATTLE FOR P${ahead.pos} · ${ahead.card.code3} vs ${cur.card.code3} (+${gA.toFixed(2)}s)`);
+      else if (gB < 0.9 && !cur.finishedRace) updateChyron(`⚔️ BATTLE FOR P${cur.pos} · ${cur.card.code3} vs ${behind.card.code3} (+${gB.toFixed(2)}s)`);
+      else updateChyron(cur.finishedRace ? `🏁 FINISHED P${cur.pos} · ${cur.card.clean_name.toUpperCase()}` : `🎥 FOLLOWING P${cur.pos} · ${cur.card.clean_name.toUpperCase()}`);
       return;
     }
 
@@ -523,8 +528,31 @@
     if (!leader) return;
     const leaderLap = leader.lap;
 
-    // Final lap? Lock onto the Lead Battle!
-    if (leaderLap >= fs.totalLaps - 1) {
+    // Chequered flag out: follow the closest STILL-RACING battle to the line!
+    if (fs.chequeredFlag && !fs.finished) {
+      const stillRacing = sorted.filter((c) => !c.dnf && !c.finishedRace);
+      const liveBattles = getActiveBattles(stillRacing);
+      if (liveBattles.length) {
+        const pick = liveBattles[0];
+        fs.focusIdx = pick.chaser.idx;
+        fs.battlePair = pick;
+        fs.lastCamCutClock = now;
+        if (!fs.userZoomLocked) setCamMode(pick.gap < 0.45 ? "close" : "battle", true);
+        updateChyron(`🏁 SPRINT TO LINE FOR P${pick.ahead.pos} · ${pick.ahead.card.code3} vs ${pick.chaser.card.code3} (+${pick.gap.toFixed(2)}s)`);
+        return;
+      }
+      if (stillRacing.length) {
+        fs.focusIdx = stillRacing[0].idx;
+        fs.battlePair = null;
+        fs.lastCamCutClock = now;
+        if (!fs.userZoomLocked) setCamMode("battle", true);
+        updateChyron(`🏁 FINAL DASH · P${stillRacing[0].pos} ${stillRacing[0].card.clean_name.toUpperCase()} APPROACHING LINE`);
+        return;
+      }
+    }
+
+    // Final lap (pre-chequered)? Lock onto the Lead Battle!
+    if (leaderLap >= fs.totalLaps - 1 && !leader.finishedRace) {
       fs.focusIdx = leader.idx;
       fs.lastCamCutClock = now;
       if (!fs.userZoomLocked) setCamMode("battle", true);
@@ -831,14 +859,14 @@
   // HUD RENDERING (Timing Tower, Director Console, Battles, Standings)
   // =========================================================================
   function renderHud() {
-    const sorted = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    const sorted = ENG.sortRaceStandings(fs.cars, fs.finished);
     const leader = sorted[0];
     if (!leader) return;
 
     sorted.forEach((c, i) => {
       c.pos = i + 1;
       c.intervalS = i > 0 && !c.dnf ? Math.max(0.03, (sorted[i - 1].totalProg - c.totalProg) * fs.circuit.base_lap_s) : 0;
-      c.inDrsRange = i > 0 && c.intervalS <= 1.05 && c.inPit === 0;
+      c.inDrsRange = i > 0 && c.intervalS <= 1.05 && c.inPit === 0 && !c.finishedRace;
     });
 
     // Update top director bar
@@ -849,6 +877,7 @@
     const flagEl = getEl("fsim-flag-pill");
     if (flagEl) {
       if (fs.finished) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
+      else if (fs.chequeredFlag) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
       else if (fs.safetyCarLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
       else if (fs.vscLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> VSC`; }
       else if (fs.yellowSector > 0) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
@@ -886,7 +915,10 @@
         totalProg: c.totalProg,
         inPit: c.inPit,
         dnf: c.dnf,
-        drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf),
+        finishedRace: !!c.finishedRace,
+        finishLaps: c.finishLaps || 0,
+        finishTimeS: c.finishTimeS || 0,
+        drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
         gridPos: c.gridPos || (c.idx + 1),
         lastLapTime: c.lastLapTime || c.currentLapS,
         bestLapS: c.bestLapS || c.currentLapS,
@@ -1110,13 +1142,13 @@
       fs.drying = fs.wetness < prevW - 0.01;
     }
 
-    const sortedNow = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    const sortedNow = ENG.sortRaceStandings(fs.cars, false);
     const prevLeaderLap = leaderLap;
     const baseWearPerLap = Math.min(9.2, 165 / Math.max(12, fs.totalLaps));
 
     // Pre-step: update CPU strategies, pit lane timers & record pre-step lap/sector
     fs.cars.forEach((car) => {
-      if (car.dnf) return;
+      if (car.dnf || car.finishedRace) return;
       updateCpuStrategy(car, sortedNow);
       car._prevLap = car.lap;
       car._prevSec = Math.floor((((car.totalProg % 1) + 1) % 1) * 3);
@@ -1176,7 +1208,7 @@
     }
 
     fs.cars.forEach((car) => {
-      if (car.dnf || car.inPit > 0) return;
+      if (car.dnf || car.inPit > 0 || car.finishedRace) return;
 
       const prevLap = car._prevLap != null ? car._prevLap : car.lap;
       const prevSec = car._prevSec != null ? car._prevSec : Math.floor((((car.totalProg % 1) + 1) % 1) * 3);
@@ -1256,13 +1288,24 @@
           if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "mistake", `${car.card.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
         }
 
-        if (car.lap >= fs.totalLaps) {
-          if (!hasSatisfiedTwoCompoundRule(car, era)) {
+        if (car.lap >= fs.totalLaps || fs.chequeredFlag) {
+          const completedLaps = Math.min(fs.totalLaps, car.lap);
+          if (completedLaps >= fs.totalLaps && !hasSatisfiedTwoCompoundRule(car, era)) {
             car.timePenaltyS = (car.timePenaltyS || 0) + 20;
-            car.totalProg -= 20 / fs.circuit.base_lap_s;
           }
-          if (!fs.finished) {
-            finishGrandPrix();
+          car.finishedRace = true;
+          car.finishLaps = completedLaps;
+          car.finishTimeS = fs.raceClock;
+          car.boxNextLap = false;
+          if (!fs.chequeredFlag) {
+            fs.chequeredFlag = true;
+            fs.chequeredStartS = fs.raceClock;
+            fs.allUnlappedDoneAt = null;
+            addCommentary(fs.totalLaps, `🏁 ${car.card.clean_name} TAKES THE CHEQUERED FLAG! Field still battling to the line!`, "win");
+            if (!fastMode) {
+              showToast(`🏁 ${car.card.clean_name} WINS! Cars still racing to the line…`, "win");
+              playSfx("checkered");
+            }
           }
           return;
         }
@@ -1440,9 +1483,28 @@
       }
     }
 
+    // Evaluate FIA Chequered Flag Completion (end only once all unlapped cars cross the line!)
+    if (fs.chequeredFlag && !fs.finished) {
+      const finStatus = ENG.evaluateChequeredCompletion(
+        fs.cars,
+        fs.totalLaps,
+        fs.raceClock,
+        fs.chequeredStartS,
+        fs.allUnlappedDoneAt,
+        fs.circuit.base_lap_s,
+      );
+      fs.chequeredFinishedCount = finStatus.finishedCount;
+      fs.chequeredRunningCount = finStatus.runningCount;
+      fs.allUnlappedDoneAt = finStatus.allUnlappedDoneAt;
+      if (finStatus.done) {
+        finishGrandPrix();
+        return false;
+      }
+    }
+
     // Track genuine on-track overtakes + psychology swings
-    const sortedAfter = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
-    const onTrack = sortedAfter.filter((c) => !c.dnf && c.inPit === 0).map((c) => c.idx);
+    const sortedAfter = ENG.sortRaceStandings(fs.cars, false);
+    const onTrack = sortedAfter.filter((c) => !c.dnf && !c.finishedRace && c.inPit === 0).map((c) => c.idx);
     if (fs.prevOnTrackOrder.length && fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
       const prevIdxMap = new Map();
       fs.prevOnTrackOrder.forEach((id, r) => prevIdxMap.set(id, r));
@@ -1540,13 +1602,17 @@
   function finishGrandPrix() {
     fs.finished = true;
     fs.running = false;
-    // Apply FIA time penalties to final order
+    // Classify any remaining far-back lapped cars at race conclusion
     fs.cars.forEach((c) => {
-      if (!c.dnf && c.timePenaltyS > 0) c.totalProg -= c.timePenaltyS / fs.circuit.base_lap_s;
+      if (!c.dnf && !c.finishedRace) {
+        c.finishedRace = true;
+        c.finishLaps = Math.min(fs.totalLaps - 1, Math.max(0, Math.floor(c.totalProg || 0)));
+        c.finishTimeS = fs.raceClock + (1 - ((c.totalProg || 0) % 1)) * fs.circuit.base_lap_s;
+      }
     });
     renderHud();
 
-    const sorted = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    const sorted = ENG.sortRaceStandings(fs.cars, true);
     const podium = sorted.slice(0, 3);
     const podTxt = podium.map((x, i) => `P${i + 1} ${x.card.clean_name}`).join(" · ");
     addCommentary(fs.totalLaps, `🏁 CHEQUERED FLAG at ${fs.circuit.name}! ${podTxt}`, "win");
@@ -1740,6 +1806,11 @@
     fs.radioCount = 0;
     fs.miniFeed = [];
     fs.finished = false;
+    fs.chequeredFlag = false;
+    fs.chequeredStartS = 0;
+    fs.allUnlappedDoneAt = null;
+    fs.chequeredFinishedCount = 0;
+    fs.chequeredRunningCount = 0;
     fs.paused = false;
     fs.running = true;
     fs.staticKey = "";

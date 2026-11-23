@@ -99,15 +99,26 @@
         c4 = momHtml;
         c5 = delta;
       } else {
-        // INT or LDR
+        // INT or LDR (supports locked FIA Chequered Flag finish times + lapped gaps!)
         let gapStr = "LDR";
         if (i > 0 && leader) {
           const ref = mode === "ldr" ? leader : sorted[i - 1];
-          const gapS = Math.max(0, (ref.totalProg - c.totalProg) * baseLapS);
-          gapStr = gapS >= 60 ? `+${Math.floor(gapS / baseLapS)}L` : `+${gapS.toFixed(1)}`;
+          if (c.finishedRace && ref.finishedRace) {
+            const lDiff = (ref.finishLaps || 0) - (c.finishLaps || 0);
+            if (lDiff > 0) {
+              gapStr = `+${lDiff}L`;
+            } else {
+              const dtS = Math.max(0.01, (c.finishTimeS || 0) - (ref.finishTimeS || 0));
+              gapStr = `+${dtS.toFixed(2)}`;
+            }
+          } else {
+            const gapS = Math.max(0, (ref.totalProg - c.totalProg) * baseLapS);
+            gapStr = gapS >= 60 ? `+${Math.floor(gapS / baseLapS)}L` : `+${gapS.toFixed(1)}`;
+          }
         }
-        const inPitTag = c.inPit > 0 ? `<span class="tt-pit">PIT</span>` : `<span class="tt-mono">${gapStr}</span>`;
-        const drsPip = c.drsOpen ? `<i class="tt-drs-dot" title="DRS / Override Active"></i>` : "";
+        const finBadge = c.finishedRace ? `<span class="tt-fin-flag" title="Finished">🏁</span>` : "";
+        const inPitTag = c.inPit > 0 ? `<span class="tt-pit">PIT</span>` : `<span class="tt-mono">${finBadge}${gapStr}</span>`;
+        const drsPip = (!c.finishedRace && c.drsOpen) ? `<i class="tt-drs-dot" title="DRS / Override Active"></i>` : "";
         c3 = `${inPitTag}${drsPip}`;
         c4 = `<span class="sim-tbadge t-${esc(c.compound)}">${comp.code}</span>`;
         c5 = `<span>${c.stops || 0}</span>`;

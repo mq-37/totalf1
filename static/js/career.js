@@ -1185,6 +1185,11 @@
     running: false,
     paused: false,
     finished: false,
+    chequeredFlag: false,
+    chequeredStartS: 0,
+    allUnlappedDoneAt: null,
+    chequeredFinishedCount: 0,
+    chequeredRunningCount: 0,
     speedMult: 1,
     totalLaps: 15,
     weatherMode: "dynamic",
@@ -1939,12 +1944,12 @@
   }
 
   function renderCrHud() {
-    const sorted = cr.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    const sorted = ENG.sortRaceStandings(cr.cars, cr.finished);
     const leader = sorted[0];
     sorted.forEach((c, i) => {
       c.pos = i + 1;
       c.intervalS = i > 0 && !c.dnf ? Math.max(0.05, (sorted[i - 1].totalProg - c.totalProg) * cr.circuit.base_lap_s) : 0;
-      c.inDrsRange = i > 0 && c.intervalS <= 1.05 && c.inPit === 0;
+      c.inDrsRange = i > 0 && c.intervalS <= 1.05 && c.inPit === 0 && !c.finishedRace;
     });
 
     // SHOW ALL DRIVERS FROM THE CAREER (F1 Manager Multi-Mode Timing Tower!)
@@ -1969,8 +1974,11 @@
         totalProg: c.totalProg,
         inPit: c.inPit,
         dnf: c.dnf,
+        finishedRace: !!c.finishedRace,
+        finishLaps: c.finishLaps || 0,
+        finishTimeS: c.finishTimeS || 0,
         isTeam: c.isPlayerTeam,
-        drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf),
+        drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf && !c.finishedRace),
         gridPos: c.gridPos || (c.idx + 1),
         lastLapTime: c.lastLapTime || c.currentLapS,
         bestLapS: c.bestLapS || c.currentLapS,
@@ -2036,7 +2044,9 @@
     // Director bar
     const flagEl = getEl("cr-flag-pill");
     if (flagEl) {
-      if (cr.safetyCarLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> SC (${cr.safetyCarLaps}L)`; }
+      if (cr.finished) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
+      else if (cr.chequeredFlag) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${cr.chequeredFinishedCount}/${cr.chequeredRunningCount})`; }
+      else if (cr.safetyCarLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> SC (${cr.safetyCarLaps}L)`; }
       else if (cr.vscLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> VSC`; }
       else if (cr.yellowSector > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-flag"></i> YELLOW S${cr.yellowSector}`; }
       else { flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> ${cr.drsEnabled ? "GREEN · DRS ON" : "GREEN FLAG"}`; }
@@ -2221,7 +2231,7 @@
 
     const prevLeaderLap = leaderLap;
     cr.cars.forEach((car) => {
-      if (car.dnf) return;
+      if (car.dnf || car.finishedRace) return;
       if (!car.isPlayerTeam) {
         car.paceMode = (car.tyreLife < 26 || car.tyreTemp > 113) ? "conserve" : (car.pos <= 5 ? "push" : "balanced");
         car.ersMode = car.ers > 58 && car.pos > 1 ? "overtake" : (car.ers < 24 ? "harvest" : "auto");
@@ -2273,7 +2283,7 @@
     }
 
     cr.cars.forEach((car) => {
-      if (car.dnf || car.inPit > 0) return;
+      if (car.dnf || car.inPit > 0 || car.finishedRace) return;
 
       const prevLap = car._prevLap != null ? car._prevLap : car.lap;
       const prevSec = car._prevSec != null ? car._prevSec : Math.floor((((car.totalProg % 1) + 1) % 1) * 3);
@@ -2363,12 +2373,21 @@
             if (cr.telemetry) cr.telemetry.addEvent(car.lap + 1, "mistake", `${car.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
           }
         }
-        if (car.lap >= cr.totalLaps) {
-          if (!crHasTwoComp(car)) car.totalProg -= 20 / cr.circuit.base_lap_s;
-          if (car.timePenaltyS > 0) car.totalProg -= car.timePenaltyS / cr.circuit.base_lap_s;
-          if (!cr.finished) {
-            cr.finished = true; cr.running = false;
-            finalizeLiveCareerRace();
+        if (car.lap >= cr.totalLaps || cr.chequeredFlag) {
+          const completedLaps = Math.min(cr.totalLaps, car.lap);
+          if (completedLaps >= cr.totalLaps && !crHasTwoComp(car)) {
+            car.timePenaltyS = (car.timePenaltyS || 0) + 20;
+          }
+          car.finishedRace = true;
+          car.finishLaps = completedLaps;
+          car.finishTimeS = cr.raceClock;
+          car.boxNextLap = false;
+          if (!cr.chequeredFlag) {
+            cr.chequeredFlag = true;
+            cr.chequeredStartS = cr.raceClock;
+            cr.allUnlappedDoneAt = null;
+            getEl("cr-radio-latest").textContent = `🏁 ${car.cleanName} TAKES THE CHEQUERED FLAG! Remaining cars racing to the line!`;
+            if (!fastMode && window.F1Sfx) window.F1Sfx.checkered();
           }
           return;
         }
@@ -2504,6 +2523,27 @@
           if (window.F1Sfx) window.F1Sfx.alert();
         }
       });
+    }
+
+    // Evaluate FIA Chequered Flag Completion (end only once all unlapped cars cross the line!)
+    if (cr.chequeredFlag && !cr.finished) {
+      const finStatus = ENG.evaluateChequeredCompletion(
+        cr.cars,
+        cr.totalLaps,
+        cr.raceClock,
+        cr.chequeredStartS,
+        cr.allUnlappedDoneAt,
+        cr.circuit.base_lap_s,
+      );
+      cr.chequeredFinishedCount = finStatus.finishedCount;
+      cr.chequeredRunningCount = finStatus.runningCount;
+      cr.allUnlappedDoneAt = finStatus.allUnlappedDoneAt;
+      if (finStatus.done) {
+        cr.finished = true;
+        cr.running = false;
+        finalizeLiveCareerRace();
+        return false;
+      }
     }
 
     const newL = Math.max(...cr.cars.map((c) => c.lap));
@@ -2812,7 +2852,14 @@
   async function finalizeLiveCareerRace() {
     cr.simToEndActive = false;
     getEl("cr-simtoend-ovl")?.classList.add("hidden");
-    const sorted = cr.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+    cr.cars.forEach((c) => {
+      if (!c.dnf && !c.finishedRace) {
+        c.finishedRace = true;
+        c.finishLaps = Math.min(cr.totalLaps - 1, Math.max(0, Math.floor(c.totalProg || 0)));
+        c.finishTimeS = cr.raceClock + (1 - ((c.totalProg || 0) % 1)) * cr.circuit.base_lap_s;
+      }
+    });
+    const sorted = ENG.sortRaceStandings(cr.cars, true);
     let recorderPayload = null;
     if (cr.telemetry) {
       cr.telemetry.recordLapSnapshot(cr.totalLaps, sorted, { wetness: cr.wetness, scActive: false, vscActive: false });
@@ -2895,6 +2942,11 @@
     cr.raceClock = 0;
     cr.fastestLap = { time: 999, driverId: null, name: "" };
     cr.finished = false;
+    cr.chequeredFlag = false;
+    cr.chequeredStartS = 0;
+    cr.allUnlappedDoneAt = null;
+    cr.chequeredFinishedCount = 0;
+    cr.chequeredRunningCount = 0;
     cr.paused = false;
     cr.running = true;
     cr.active = true;

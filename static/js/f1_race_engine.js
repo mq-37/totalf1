@@ -478,6 +478,66 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // True FIA Sporting Regs Art. 59 Classification & Chequered Flag Completion
+  // ---------------------------------------------------------------------------
+  function sortRaceStandings(cars, applyPenalties) {
+    return (cars || []).slice().sort((a, b) => {
+      if (!!a.dnf !== !!b.dnf) return a.dnf ? 1 : -1;
+      if (a.dnf && b.dnf) return (b.totalProg || 0) - (a.totalProg || 0);
+
+      const aFin = !!a.finishedRace;
+      const bFin = !!b.finishedRace;
+      if (aFin && bFin) {
+        const lapDiff = (b.finishLaps || 0) - (a.finishLaps || 0);
+        if (lapDiff !== 0) return lapDiff;
+        const aTime = (a.finishTimeS || 0) + (applyPenalties ? (a.timePenaltyS || 0) : 0);
+        const bTime = (b.finishTimeS || 0) + (applyPenalties ? (b.timePenaltyS || 0) : 0);
+        if (Math.abs(aTime - bTime) > 1e-4) return aTime - bTime;
+        return (b.totalProg || 0) - (a.totalProg || 0);
+      }
+      if (aFin !== bFin) {
+        const finCar = aFin ? a : b;
+        const runCar = aFin ? b : a;
+        // A finished car on Lap N beats any running car still on Lap < N;
+        // a running car on Lap N-1 racing toward Lap N beats a lapped car that finished on Lap <= N-1!
+        const runLapFloor = Math.floor(runCar.totalProg || 0);
+        const finWins = (finCar.finishLaps || 0) > runLapFloor;
+        return aFin ? (finWins ? -1 : 1) : (finWins ? 1 : -1);
+      }
+      return (b.totalProg || 0) - (a.totalProg || 0);
+    });
+  }
+
+  function evaluateChequeredCompletion(cars, totalLaps, raceClock, chequeredStartS, allUnlappedDoneAt, baseLapS) {
+    const running = (cars || []).filter((c) => !c.dnf);
+    const finished = running.filter((c) => c.finishedRace);
+    const unfinished = running.filter((c) => !c.finishedRace);
+    // Unlapped cars still completing the final lap (lap >= totalLaps - 1, or pit-window boundary)
+    const activeUnlapped = unfinished.filter((c) => (c.lap || 0) >= totalLaps - 1);
+    const elapsedSinceFlag = Math.max(0, (raceClock || 0) - (chequeredStartS || 0));
+    const maxGraceCap = Math.max(90, (baseLapS || 85) * 1.25);
+
+    let nextAllUnlappedAt = allUnlappedDoneAt;
+    if (activeUnlapped.length === 0 && nextAllUnlappedAt == null) {
+      nextAllUnlappedAt = raceClock || 0;
+    }
+
+    const done = (
+      unfinished.length === 0
+      || (activeUnlapped.length === 0 && nextAllUnlappedAt != null && ((raceClock || 0) - nextAllUnlappedAt) >= 4.0)
+      || elapsedSinceFlag >= maxGraceCap
+    );
+
+    return {
+      done,
+      finishedCount: finished.length,
+      runningCount: running.length,
+      activeUnlappedCount: activeUnlapped.length,
+      allUnlappedDoneAt: nextAllUnlappedAt,
+    };
+  }
+
   global.F1RaceEngine = {
     COMPOUNDS,
     DEFAULT_ERA_RULES,
@@ -499,5 +559,7 @@
     computeLapModifiers,
     createTelemetryRecorder,
     drawDeoverlappedLabels,
+    sortRaceStandings,
+    evaluateChequeredCompletion,
   };
 })(window);

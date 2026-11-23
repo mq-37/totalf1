@@ -2080,6 +2080,15 @@
     // 2. SPATIAL MULTI-CAR AI PLANNER (Driver DNA + 5-Lane Corridor + Utility Offense/Defense)
     for (let i = 0; i < active.length; i++) {
       const car = active[i];
+      if (car.finishedRace) {
+        // Post-chequered celebratory cooldown cruise off the racing line (never blocks active finishers!)
+        const cruiseLat = 3.6 + Math.sin(nowS * 0.9 + car.idx) * 0.45;
+        car.latOffset = (car.latOffset || 0) + (cruiseLat - (car.latOffset || 0)) * Math.min(1, dt * 1.8);
+        car.battleState = "clean";
+        car.battleSpeedMult = 0.36;
+        car.aiObs = { state: "clean", badge: "🏁 COOLDOWN", detail: "CHEQUERED FLAG · CELEBRATION LAP", color: "#22c55e" };
+        continue;
+      }
       const dna = getDriverDna(car);
       if (car.spinTimer > 0) {
         car.spinTimer = Math.max(0, car.spinTimer - dt);
@@ -2627,6 +2636,8 @@
           for (let j = 0; j < active.length; j++) {
             if (i === j) continue;
             const other = active[j];
+            // Cruising finished cars ghost out of active racers' braking/blocking corridors
+            if (car.finishedRace !== other.finishedRace) continue;
             const dProg = wrapProgDelta(other.totalProg, car.totalProg);
             if (dProg <= 0) continue;
             const ds = dProg * totalLen;
