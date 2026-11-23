@@ -894,9 +894,9 @@ body.sim-cockpit-active #panel-sim.active {
 @media (max-width: 1320px) { .sim-hotkey-hint { display: none; } }
 
 .sim-radio-drawer {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  bottom: 52px;
+  right: 14px;
   width: min(460px, 94vw);
   max-height: 290px;
   padding: 12px 14px;
@@ -907,7 +907,33 @@ body.sim-cockpit-active #panel-sim.active {
   box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.72);
   display: flex;
   flex-direction: column;
-  z-index: 40;
+  z-index: 60;
+}
+.sim-radio-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  color: #7dd3fc;
+}
+.sim-radio-drawer-head button {
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.sim-radio-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  max-height: 225px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .sim-radio-list { max-height: 220px; overflow-y: auto; }
 .sim-radio-item.radio-win { border-left: 3px solid #22c55e; }
@@ -1322,6 +1348,27 @@ body.sim-cockpit-active #panel-sim.active {
   color: #06101f;
   border-color: #7dd3fc;
   font-weight: 800;
+}
+.sim-stage-panel.is-3d-active .fsim-chyron,
+.sim-stage-panel.is-3d-active .sim-cam-group,
+.sim-stage-panel.is-3d-active .sim-layer-chip,
+.sim-stage-panel.is-3d-active .sim-map-legend {
+  display: none !important;
+}
+.sim-stage-panel.is-3d-active .sim-map-toggles {
+  z-index: 25;
+}
+.sim-director-bar .sim-dir-right {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+.sim-director-bar .sim-speed-btn {
+  padding: 3px 5px;
+  font-size: 0.66rem;
+}
+.sim-director-bar .sim-dir-btn {
+  padding: 4px 7px;
+  font-size: 0.7rem;
 }
 .b3d-hud {
   position: absolute;

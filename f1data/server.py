@@ -62,7 +62,11 @@ async def _db_session_middleware(request: Request, call_next):
     bucket: dict[str, Database] = {}
     token = _REQUEST_DBS.set(bucket)
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        p = request.url.path
+        if p.startswith("/static/js/") or p.startswith("/static/css/"):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
     finally:
         _REQUEST_DBS.reset(token)
         for conn in bucket.values():

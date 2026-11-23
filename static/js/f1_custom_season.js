@@ -304,6 +304,7 @@
     const o = opts || {};
     onLaunchCb = o.onLaunch || null;
     ensureModal();
+    modalEl.classList.remove("hidden");
     await loadMeta();
 
     const eraSel = modalEl.querySelector("#csb-era");
@@ -317,7 +318,6 @@
     renderSavedStrip();
     renderCircuits();
     renderTeams();
-    modalEl.classList.remove("hidden");
   }
 
   function close() {

@@ -1695,6 +1695,7 @@
     fs.circuit = selCir;
     fs.eraRule = resolveEraRule(deckSpec);
     fs.simToEndActive = false;
+    window.F1_FULLSIM_LAST_TELEMETRY = null;
     getEl("fsim-simtoend-ovl")?.classList.add("hidden");
 
     // Fetch historical Per-Track × Per-Era × Per-Team × Per-Driver balancing & psychology profiles
@@ -1988,17 +1989,53 @@
       else startInstantReplay({ focusIdx: fs.focusIdx, title: `F1 TV INSTANT REPLAY · ${fs.cars[fs.focusIdx]?.card.clean_name || "LIVE ACTION"}` });
     });
     getEl("fsim-analytics-btn")?.addEventListener("click", () => {
-      if (!window.F1RaceAnalytics) return;
-      const payload = window.F1_FULLSIM_LAST_TELEMETRY || (fs.telemetry ? fs.telemetry.exportPayload(
-        fs.cars.slice().sort((a, b) => a.pos - b.pos).map((c, i) => ({
+      if (!window.F1RaceAnalytics) {
+        showToast("Telemetry Studio module is still loading — please reload.", "warn");
+        return;
+      }
+      if (!fs.cars.length) {
+        showToast("Wait a second for the grid to load before opening Telemetry!", "info");
+        return;
+      }
+      let payload = window.F1_FULLSIM_LAST_TELEMETRY;
+      if (!payload) {
+        const sortedNow = fs.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
+        const meta = sortedNow.map((c, i) => ({
           idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team, color: c.card.hero_color,
-          finishPos: i + 1, dnf: c.dnf, stintHistory: c.stintHistory || [],
+          finishPos: i + 1, dnf: c.dnf, dnfReason: c.dnfReason || "", stintHistory: c.stintHistory || [],
           confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
           momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
           totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
-        }))
-      ) : null);
-      if (payload) window.F1RaceAnalytics.open(payload, { focusDrvIdx: fs.focusIdx });
+        }));
+        if (fs.telemetry) {
+          payload = fs.telemetry.exportPayload(meta);
+          // Append live in-progress snapshot so opening Telemetry on Lap 1 shows live data immediately!
+          const curLap = Math.max(1, Math.max(...sortedNow.map((c) => c.lap), 0) + 1);
+          const lastFr = payload.frames[payload.frames.length - 1];
+          if (!lastFr || lastFr.lap < curLap) {
+            const ldr = sortedNow[0];
+            const baseLapS = (fs.circuit && fs.circuit.base_lap_s) || 85;
+            payload.frames = payload.frames.concat([{
+              lap: curLap,
+              wetness: Math.round(fs.wetness || 0),
+              sc: fs.safetyCarLaps > 0,
+              vsc: fs.vscLaps > 0,
+              cars: sortedNow.map((c, r) => ({
+                idx: c.idx, pos: r + 1,
+                gap: r === 0 ? 0 : +Math.max(0, (ldr.totalProg - c.totalProg) * baseLapS).toFixed(2),
+                lapTime: Number.isFinite(c.lastLapTime) && c.lastLapTime < 400 ? +c.lastLapTime.toFixed(2) : null,
+                comp: c.compound, tyreLife: Math.round(c.tyreLife ?? 100), ers: Math.round(c.ers ?? 50),
+                conf: Math.round(c.confidence ?? 60), mom: Math.round(c.momentum ?? 0), stops: c.stops || 0, dnf: !!c.dnf,
+              })),
+            }]);
+          }
+        }
+      }
+      if (payload && payload.frames && payload.frames.length) {
+        window.F1RaceAnalytics.open(payload, { focusDrvIdx: fs.focusIdx });
+      } else {
+        showToast("No telemetry recorded yet — let the race run a moment!", "info");
+      }
     });
     getEl("fsim-voice-btn")?.addEventListener("click", () => {
       fs.voiceOn = !fs.voiceOn;
@@ -2040,13 +2077,38 @@
     function setBroadcast3DMode(mode) {
       fs.b3dMode = mode || "off";
       document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === fs.b3dMode));
-      if (!fs.b3d) return;
+      if (!fs.b3d && window.F1Broadcast3D && getEl("fsim-3d-canvas")) {
+        fs.b3d = window.F1Broadcast3D.createBroadcast3D(getEl("fsim-3d-canvas"), getEl("fsim-3d-hud"));
+      }
+      if (!fs.b3d) {
+        showToast("3D Broadcast requires WebGL / Three.js!", "warn");
+        return;
+      }
       if (fs.b3dMode === "off") {
         fs.b3d.setActive(false);
         drawCanvas();
       } else {
         fs.b3d.setMode(fs.b3dMode);
-        fs.b3d.setActive(true);
+        const ok = fs.b3d.setActive(true);
+        if (!ok) {
+          fs.b3dMode = "off";
+          document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === "off"));
+          showToast("WebGL 3D context unavailable in this browser window.", "warn");
+          return;
+        }
+        // Render 1 frame immediately even if paused!
+        fs.b3d.updateAndRender({
+          circuit: fs.circuit,
+          cars: fs.cars.map((c) => ({
+            idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+            inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
+            liveKph: c.liveKph, liveGear: c.liveGear,
+            palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
+          })),
+          focusIdx: fs.focusIdx,
+          dt: 0.016,
+          paused: fs.paused,
+        });
       }
     }
     document.querySelectorAll("[data-fsim-3d]").forEach((btn) => {

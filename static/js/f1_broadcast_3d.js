@@ -161,14 +161,25 @@
     if (!global.THREE || !canvasEl) return null;
     const THREE = global.THREE;
 
-    const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-
+    let renderer = null;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(56, 16 / 9, 0.25, 4500);
+
+    function ensureRenderer() {
+      if (renderer) return true;
+      try {
+        renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+        return true;
+      } catch (err) {
+        console.error("F1Broadcast3D WebGL init failed:", err);
+        renderer = null;
+        return false;
+      }
+    }
 
     const state = {
       active: false,
@@ -547,12 +558,13 @@
 
     function updateAndRender(opts) {
       if (!state.active) return;
+      if (!ensureRenderer()) return;
       const { circuit, cars, focusIdx, dt, paused } = opts;
       if (!circuit || !cars || !cars.length) return;
       buildCircuit3D(circuit);
 
-      const cssW = canvasEl.clientWidth || 720;
-      const cssH = canvasEl.clientHeight || 480;
+      const cssW = canvasEl.clientWidth || (canvasEl.parentElement && canvasEl.parentElement.clientWidth) || 720;
+      const cssH = canvasEl.clientHeight || (canvasEl.parentElement && canvasEl.parentElement.clientHeight) || 480;
       if (cssW < 30 || cssH < 30) return;
       if (canvasEl.width !== Math.round(cssW * renderer.getPixelRatio()) || canvasEl.height !== Math.round(cssH * renderer.getPixelRatio())) {
         renderer.setSize(cssW, cssH, false);
@@ -700,7 +712,13 @@
         state.active = !!on;
         canvasEl.classList.toggle("hidden", !state.active);
         if (hudEl) hudEl.classList.toggle("hidden", !state.active);
-        if (state.active) state.camInit = false;
+        const stage = canvasEl.closest(".sim-stage-panel");
+        if (stage) stage.classList.toggle("is-3d-active", state.active);
+        if (state.active) {
+          state.camInit = false;
+          return ensureRenderer();
+        }
+        return true;
       },
       isActive() { return state.active; },
       setMode(mode) {
@@ -713,7 +731,7 @@
         disposeWorld();
         state.asphaltTex.dispose();
         state.kerbTex.dispose();
-        renderer.dispose();
+        if (renderer) renderer.dispose();
       },
     };
   }
