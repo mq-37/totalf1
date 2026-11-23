@@ -30,6 +30,11 @@ class CareerNewReq(BaseModel):
     budget_tier: str = Field(default="midfield", max_length=24)
     calendar_len: str = Field(default="12", max_length=8)
     slot_name: Optional[str] = Field(default=None, max_length=48)
+    custom_season: Optional[dict] = None
+
+
+class FeederRecruitReq(CareerMutationReq):
+    feeder_id: str = Field(min_length=1, max_length=64)
 
 
 class FacilityUpgradeReq(CareerMutationReq):
@@ -164,8 +169,14 @@ def _career_base_dir() -> Path:
 
 
 def _career_payload(state: dict | None, *, include_static: bool = False) -> dict:
-    from .. import career as _career
-    return _career.serialize_career_payload(state, base_dir=srv._career_base_dir(), include_static=include_static)
+    from .. import career as _career, feeders as _feeders
+    if state:
+        _feeders.ensure_feeder_state(state)
+    payload = _career.serialize_career_payload(state, base_dir=srv._career_base_dir(), include_static=include_static)
+    if state:
+        payload["feeders"] = state.get("feeders")
+        payload["ops_board"] = _feeders.build_team_ops_board(state)
+    return payload
 
 
 def _save_career_checked(base: Path, state: dict, *, checkpoint_label: str | None = None, expected_version: int | None = None) -> None:
@@ -310,7 +321,32 @@ def api_career_new(req: CareerNewReq):
         budget_tier=req.budget_tier,
         calendar_len=req.calendar_len,
     )
-    slot_id = _cdb.create_career_slot(base, state, slot_name=req.slot_name, make_active=True)
+    if req.custom_season and isinstance(req.custom_season, dict):
+        from ..circuits import CIRCUITS_BY_ID
+        cs = req.custom_season
+        cal_ids = cs.get("calendar") or []
+        new_cal = []
+        for idx_r, cid in enumerate(cal_ids, start=1):
+            c = CIRCUITS_BY_ID.get(str(cid).lower())
+            if c:
+                new_cal.append({
+                    "round": idx_r,
+                    "circuit_id": c["id"],
+                    "name": c["name"],
+                    "gp": c.get("gp") or c["name"],
+                    "country": c.get("country") or "",
+                    "is_sprint": bool(c.get("is_sprint_2026")),
+                    "completed": False,
+                })
+        if new_cal:
+            state["calendar"] = new_cal
+        state["custom_season_config"] = cs
+        if cs.get("era_rules"):
+            state["era_rules"] = cs["era_rules"]
+        mkt = cs.get("market_rules") or {}
+        if mkt.get("budget_cap_m"):
+            state["cost_cap_m"] = float(mkt["budget_cap_m"])
+    slot_id = _cdb.create_career_slot(base, state, slot_name=req.slot_name or (req.custom_season.get("name") if isinstance(req.custom_season, dict) else None), make_active=True)
     return {"ok": True, "slot_id": slot_id, "message": "New F1 Career created in a new Save Slot!", **_career_payload(_career.load_career(base))}
 
 
@@ -489,7 +525,8 @@ def _finalize_race_commit_persistence(
     expected_version: int | None = None,
     telemetry_payload: dict | None = None,
 ) -> list[dict]:
-    from .. import career_db as _cdb
+    from .. import career_db as _cdb, feeders as _feeders
+    _feeders.simulate_feeder_round(state)
     ckpt_lbl = f"Post-Race · S{debrief['season_num']} R{debrief['round']} {debrief['gp'][:24]}"
     _save_career_checked(base, state, checkpoint_label=ckpt_lbl, expected_version=expected_version)
     sid = state.get("_slot_id") or _cdb.get_active_slot_id(base)
@@ -719,6 +756,36 @@ def api_career_media_respond(req: MediaRespondReq):
         if ok:
             _save_career_checked(base, state, expected_version=req.expected_version)
         return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/feeders/recruit")
+def api_career_feeder_recruit(req: FeederRecruitReq):
+    from .. import career as _career, career_db as _cdb, feeders as _feeders
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _feeders.recruit_feeder_driver(state, req.feeder_id)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/feeders/sim-round")
+def api_career_feeder_sim_round(req: Optional[CareerMutationReq] = None):
+    from .. import career as _career, career_db as _cdb, feeders as _feeders
+    base = srv._career_base_dir()
+    exp_v = req.expected_version if req else None
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        res = _feeders.simulate_feeder_round(state)
+        _save_career_checked(base, state, expected_version=exp_v)
+        w = res.get("winners") or {}
+        msg = f"Feeder Round {res['rounds_completed']} complete! Winners: F2 {w.get('f2', '—')} · F3 {w.get('f3', '—')} · F1A {w.get('f1_academy', '—')}"
+        return {"ok": True, "message": msg, **_career_payload(state)}
 
 
 @router.get("/career/cards.pdf")

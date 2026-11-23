@@ -1952,6 +1952,31 @@
     }
 
     getEl("fsim-start-btn")?.addEventListener("click", startNewBroadcast);
+    getEl("fsim-custom-season-btn")?.addEventListener("click", () => {
+      if (!window.F1CustomSeason) return;
+      window.F1CustomSeason.open({
+        onLaunch: async (cfg) => {
+          clearTimeout(fs.autoAdvTimer);
+          const rounds = (cfg.calendar || []).map((cid) => CIRCUITS.find((c) => c.id === cid)).filter(Boolean);
+          fs.season = {
+            active: rounds.length > 0,
+            rounds: rounds.length ? rounds : CIRCUITS.slice(0, 10),
+            roundIdx: 0,
+            wdc: {},
+            wcc: {},
+            racesRun: 0,
+            customConfig: cfg,
+          };
+          if (cfg.era_rules) fs.eraRule = cfg.era_rules;
+          if (cfg.race_laps && getEl("fsim-laps-sel")) getEl("fsim-laps-sel").value = cfg.race_laps;
+          if (cfg.era_key && getEl("fsim-era-sel")) getEl("fsim-era-sel").value = cfg.era_key;
+          toggleSetupDrawer(false);
+          await launchCurrentRound();
+          if (cfg.era_rules) fs.eraRule = cfg.era_rules;
+          showToast(`🏆 Launched Custom Season: ${cfg.name} (${fs.season.rounds.length} Rounds)!`, "win");
+        },
+      });
+    });
     getEl("fsim-restart-btn")?.addEventListener("click", launchCurrentRound);
     getEl("fsim-setup-toggle")?.addEventListener("click", () => toggleSetupDrawer());
     getEl("fsim-setup-close")?.addEventListener("click", () => toggleSetupDrawer(false));

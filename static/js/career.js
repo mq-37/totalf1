@@ -205,13 +205,96 @@
 
     if (DATA.profile && window.F1Profile) window.F1Profile.applyBoot(DATA.profile);
     renderDashboard();
+    renderOpsBoard();
     renderMarket();
+    renderFeeders();
     renderScouting();
     renderStaff();
     renderRd();
     renderFacilities();
     renderStandingsAndFinance();
     renderDynasty();
+  }
+
+  let activeFeederSeries = "f2";
+  function renderOpsBoard() {
+    const board = DATA.ops_board;
+    const el = getEl("car-ops-board");
+    const rEl = getEl("car-silly-rumours");
+    const goalEl = getEl("car-ops-goal-pill");
+    if (!el || !board) return;
+    const g = board.season_goal || {};
+    if (goalEl && g.target_wcc) {
+      goalEl.textContent = `WCC P${g.wcc_pos || "—"} / Target P${g.target_wcc} · ${g.on_track ? "ON TRACK" : "AT RISK"}`;
+      goalEl.style.color = g.on_track ? "#4ade80" : "#fbbf24";
+    }
+    el.innerHTML = (board.departments || []).map((dep) => {
+      const ctaAttr = dep.cta && dep.cta.tab
+        ? `data-ops-tab="${esc(dep.cta.tab)}"`
+        : `data-ops-act="${esc((dep.cta && dep.cta.action) || "")}"`;
+      return `
+        <div class="car-ops-row ops-${esc(dep.status || "info")}">
+          <div class="car-ops-ico"><i class="fas ${esc(dep.icon || "fa-clipboard")}"></i></div>
+          <div class="car-ops-txt">
+            <strong>${esc(dep.role)}</strong>
+            <p>${esc(dep.message)}</p>
+          </div>
+          ${dep.cta ? `<button type="button" class="car-btn-xs car-btn-gold" ${ctaAttr}>${esc(dep.cta.label)}</button>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    if (rEl) {
+      const rum = board.rumours || [];
+      rEl.innerHTML = rum.length
+        ? rum.map((r) => `<div class="car-rumour-row"><span class="car-rum-tag">${esc(r.tag)}</span><span>${esc(r.text)}</span></div>`).join("")
+        : `<div class="muted small">Paddock quiet — rumours heat up as contracts near expiry!</div>`;
+    }
+  }
+
+  function renderFeeders() {
+    const feed = DATA.feeders || (DATA.state && DATA.state.feeders);
+    const tbody = getEl("car-feeder-tbody");
+    const descEl = getEl("car-feeder-desc");
+    if (!tbody || !feed) return;
+    const meta = (feed.series_meta && feed.series_meta[activeFeederSeries]) || { name: "Feeder Series", desc: "" };
+    if (descEl) descEl.textContent = `${meta.name} (Round ${feed.rounds_completed || 0} completed) — ${meta.desc}`;
+
+    document.querySelectorAll("[data-feeder-ser]").forEach((b) => {
+      const on = b.dataset.feederSer === activeFeederSeries;
+      b.classList.toggle("active", on);
+      b.classList.toggle("car-btn-red", on);
+    });
+
+    const list = (feed.drivers || [])
+      .filter((d) => d.series === activeFeederSeries)
+      .sort((a, b) => (b.season_pts - a.season_pts) || (b.season_wins - a.season_wins) || (b.overall - a.overall));
+
+    tbody.innerHTML = list.map((d, i) => {
+      const slPct = Math.min(100, Math.round(((d.sl_points || 0) / 40) * 100));
+      const slCol = d.sl_eligible ? "#22c55e" : (slPct >= 65 ? "#facc15" : "#38bdf8");
+      const fee = d.series === "f2" ? "$1.2M" : "$0.7M";
+      const actBtn = d.recruited
+        ? `<span class="car-pill-ok">✓ IN F1 MARKET</span>`
+        : `<button type="button" class="car-btn-xs car-btn-gold" data-feeder-recruit="${esc(d.id)}">Sign (${fee})</button>`;
+      return `
+        <tr>
+          <td><b>P${i + 1}</b></td>
+          <td><b>${esc(d.name)}</b> <small class="muted">${esc(d.code3)} · ${esc(d.nationality)}</small></td>
+          <td>${esc(d.team)} <small class="muted">(${esc(d.academy || "Ind")})</small></td>
+          <td>${d.age}</td>
+          <td><b>${d.overall}</b> / <span style="color:#38bdf8">${d.potential}</span></td>
+          <td><b>${d.season_pts || 0}</b> <small class="muted">(${d.season_wins || 0}W)</small></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="sim-bar-track" style="width:74px;height:6px;"><div class="sim-bar-fill" style="width:${slPct}%;background:${slCol}"></div></div>
+              <small style="color:${slCol};font-weight:800;">${d.sl_points}/40 ${d.sl_eligible ? "✓" : ""}</small>
+            </div>
+          </td>
+          <td>${actBtn}</td>
+        </tr>
+      `;
+    }).join("");
   }
 
   function renderDynasty() {
@@ -2966,6 +3049,30 @@
     }
   });
 
+  getEl("wiz-custom-season-btn")?.addEventListener("click", () => {
+    if (!window.F1CustomSeason) return;
+    window.F1CustomSeason.open({
+      onLaunch: async (cfg) => {
+        try {
+          DATA = await postJson("/api/career/new", {
+            era: cfg.era_key && ["1950s", "1960s", "1970s", "1980s", "1990s"].includes(cfg.era_key) ? "legends" : "2026",
+            calendar_len: String(Math.max(8, Math.min(24, (cfg.calendar || []).length || 12))),
+            team_choice: getEl("wiz-team").value,
+            custom_team_name: getEl("wiz-custom-name").value,
+            custom_color: getEl("wiz-custom-color").value,
+            budget_tier: getEl("wiz-budget-tier").value,
+            slot_name: cfg.name,
+            custom_season: cfg,
+          });
+          renderAll();
+          showHqToast(`Launched Custom Season Career: ${cfg.name} (${DATA.state.calendar.length} Rounds)!`, true);
+        } catch (err) {
+          showHqToast(err.message, false);
+        }
+      },
+    });
+  });
+
   getEl("wiz-cancel-btn").addEventListener("click", () => {
     if (DATA.has_career) {
       getEl("career-wizard").classList.add("hidden");
@@ -3094,6 +3201,31 @@
     if (ev.target.closest("#car-discard-race-btn")) {
       await fetch("/api/career/race/autosave", { method: "DELETE" });
       DATA.midrace = null; renderDashboard(); showHqToast("Discarded mid-race autosave.", true); return;
+    }
+    const fSer = ev.target.closest("[data-feeder-ser]");
+    if (fSer) {
+      activeFeederSeries = fSer.dataset.feederSer;
+      renderFeeders();
+      return;
+    }
+    const fRec = ev.target.closest("[data-feeder-recruit]");
+    if (fRec) {
+      const res = await postJson("/api/career/feeders/recruit", { feeder_id: fRec.dataset.feederRecruit });
+      DATA = res; renderAll(); showHqToast(res.message, res.ok); return;
+    }
+    if (ev.target.closest("#car-feeder-sim-btn")) {
+      const res = await postJson("/api/career/feeders/sim-round", {});
+      DATA = res; renderAll(); showHqToast(res.message, res.ok); return;
+    }
+    const opsTab = ev.target.closest("[data-ops-tab]");
+    if (opsTab) {
+      document.querySelector(`[data-car-tab="${opsTab.dataset.opsTab}"]`)?.click();
+      return;
+    }
+    const opsAct = ev.target.closest("[data-ops-act]");
+    if (opsAct && opsAct.dataset.opsAct === "race") {
+      getEl("car-go-race-btn")?.click();
+      return;
     }
   });
 

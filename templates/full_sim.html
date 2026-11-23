@@ -150,7 +150,10 @@
           <input type="checkbox" id="fsim-autoadv-chk" checked>
           <span>Auto-advance to next GP in Championship mode (6s podium pause)</span>
         </label>
-        <button type="button" id="fsim-start-btn" class="btn-racing"><i class="fas fa-tv"></i> Start Full CPU Broadcast</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" id="fsim-custom-season-btn" class="sim-dir-btn" style="border-color:#facc15;color:#fde047;"><i class="fas fa-magic"></i> Custom Season Builder</button>
+          <button type="button" id="fsim-start-btn" class="btn-racing"><i class="fas fa-tv"></i> Start Full CPU Broadcast</button>
+        </div>
       </div>
     </div>
   </div>
@@ -387,6 +390,7 @@
 <script src="/static/js/f1_broadcast_3d.js"></script>
 <script src="/static/js/f1_radio_engine.js"></script>
 <script src="/static/js/f1_race_analytics.js"></script>
+<script src="/static/js/f1_custom_season.js"></script>
 <script src="/static/js/f1_track_renderer.js"></script>
 <script src="/static/js/full_sim.js"></script>
 {% endblock %}

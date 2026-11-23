@@ -1657,3 +1657,57 @@ body.sim-cockpit-active #panel-sim.active {
 .ras-qa-q { font-size: 0.78rem; color: #94a3b8; margin-bottom: 6px; }
 .ras-qa-a { font-size: 0.86rem; color: #f8fafc; font-style: italic; line-height: 1.45; }
 
+/* =========================================================================
+   PHASE 5: Custom Season Builder, Team Operations Board & Feeder Series Hub
+   ========================================================================= */
+.csb-saved-strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.csb-saved-pill {
+  display: inline-flex; align-items: center; border-radius: 7px; overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(15, 23, 42, 0.9);
+}
+.csb-saved-pill button { border: 0; background: transparent; color: #e2e8f0; padding: 4px 8px; font-size: 0.72rem; cursor: pointer; }
+.csb-saved-pill button:hover { background: rgba(56, 189, 248, 0.2); color: #fff; }
+.csb-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
+@media (max-width: 900px) { .csb-grid { grid-template-columns: 1fr; } }
+.csb-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.csb-form-row label { display: flex; flex-direction: column; gap: 3px; font-size: 0.7rem; color: #94a3b8; font-weight: 700; }
+.csb-form-row input, .csb-form-row select {
+  padding: 5px 8px; border-radius: 6px; background: #0f172a; color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.76rem;
+}
+.csb-checks { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 0.74rem; color: #cbd5e1; }
+.csb-checks label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.csb-cir-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 5px; max-height: 220px; overflow-y: auto; padding-right: 4px;
+}
+.csb-cir-chip {
+  text-align: left; padding: 5px 7px; border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2); background: rgba(255, 255, 255, 0.03);
+  color: #cbd5e1; font-size: 0.68rem; cursor: pointer; display: flex; flex-direction: column;
+}
+.csb-cir-chip small { font-size: 0.58rem; color: #64748b; }
+.csb-cir-chip.is-on { background: rgba(34, 197, 94, 0.16); border-color: #22c55e; color: #f8fafc; }
+.csb-cir-chip.is-on b { color: #fde047; }
+.csb-teams-list { display: flex; flex-direction: column; gap: 6px; }
+.csb-team-row { display: grid; grid-template-columns: 34px 1.2fr 58px 1fr 1fr 1fr 1fr 28px; gap: 5px; align-items: center; }
+.csb-team-row input { padding: 4px 6px; border-radius: 5px; background: #0f172a; color: #fff; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.72rem; }
+
+.car-ops-board { display: flex; flex-direction: column; gap: 6px; }
+.car-ops-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(148, 163, 184, 0.16);
+  border-left: 3px solid #38bdf8;
+}
+.car-ops-row.ops-ok { border-left-color: #22c55e; }
+.car-ops-row.ops-warn { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.07); }
+.car-ops-ico { width: 24px; text-align: center; color: #7dd3fc; font-size: 0.85rem; flex-shrink: 0; }
+.car-ops-txt { flex: 1; min-width: 0; }
+.car-ops-txt strong { display: block; font-size: 0.72rem; color: #f8fafc; }
+.car-ops-txt p { margin: 1px 0 0; font-size: 0.68rem; color: #94a3b8; line-height: 1.28; }
+.car-rumour-list { display: flex; flex-direction: column; gap: 4px; }
+.car-rumour-row { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: #cbd5e1; padding: 3px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.03); }
+.car-rum-tag { font-family: 'Orbitron', sans-serif; font-size: 0.54rem; font-weight: 800; padding: 2px 5px; border-radius: 4px; background: rgba(250, 204, 21, 0.2); color: #fde047; flex-shrink: 0; }
+.car-feeder-pills { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.car-pill-ok { font-size: 0.66rem; font-weight: 800; color: #4ade80; }
+

@@ -65,6 +65,7 @@
 
       <div class="car-wiz-foot">
         <button type="button" id="wiz-cancel-btn" class="btn-util hidden">Cancel</button>
+        <button type="button" id="wiz-custom-season-btn" class="sim-dir-btn" style="border-color:#facc15;color:#fde047;"><i class="fas fa-magic"></i> Custom Season Builder (79 Tracks &amp; Rules)</button>
         <button type="button" id="wiz-launch-btn" class="btn-launch-battle">
           <i class="fas fa-flag-checkered"></i> Sign Team Principal Contract &amp; Start Season
         </button>
@@ -113,6 +114,7 @@
       <nav class="car-nav" aria-label="Team Principal HQ">
         <button type="button" class="car-nav-btn active" data-car-tab="dashboard"><i class="fas fa-tachometer-alt"></i> HQ Dashboard <span id="car-badge-dilemma" class="car-nav-badge"></span></button>
         <button type="button" class="car-nav-btn" data-car-tab="market"><i class="fas fa-users"></i> Drivers &amp; Market</button>
+        <button type="button" class="car-nav-btn" data-car-tab="feeders"><i class="fas fa-graduation-cap"></i> F2 · F3 · Academy</button>
         <button type="button" class="car-nav-btn" data-car-tab="scouting"><i class="fas fa-binoculars"></i> Scouting Hub <span id="car-badge-scouts" class="car-nav-badge"></span></button>
         <button type="button" class="car-nav-btn" data-car-tab="staff"><i class="fas fa-user-tie"></i> Technical Staff</button>
         <button type="button" class="car-nav-btn" data-car-tab="rd"><i class="fas fa-cogs"></i> Car R&amp;D <span id="car-badge-rd" class="car-nav-badge"></span></button>
@@ -183,6 +185,13 @@
             </div>
 
             <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-clipboard-list"></i> TEAM OPERATIONS BOARD &amp; SILLY SEASON</span><small id="car-ops-goal-pill">Board Target</small></div>
+              <div id="car-ops-board" class="car-ops-board"></div>
+              <div class="car-subhead" style="margin-top:8px;"><i class="fas fa-comments"></i> SILLY SEASON RUMOUR MILL</div>
+              <div id="car-silly-rumours" class="car-rumour-list"></div>
+            </div>
+
+            <div class="car-panel">
               <div class="car-panel-head"><span><i class="fas fa-envelope-open-text"></i> PADDOCK INBOX &amp; SPONSORS</span></div>
               <ul id="car-inbox-list" class="car-inbox-list"></ul>
               <div class="car-subhead" style="margin-top:8px;"><i class="fas fa-handshake"></i> ACTIVE SPONSORS &amp; BOARD TARGET</div>
@@ -221,6 +230,35 @@
                   </tr>
                 </thead>
                 <tbody id="car-market-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2B: FIA FEEDER SERIES (F2, F3, F1 ACADEMY, W SERIES) & SUPER LICENCE -->
+        <div id="car-tab-feeders" class="car-tab-pane">
+          <div class="car-panel">
+            <div class="car-panel-head">
+              <span><i class="fas fa-graduation-cap"></i> FIA FEEDER SERIES &amp; SUPER LICENCE HUB</span>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <div class="car-feeder-pills" id="car-feeder-pills">
+                  <button type="button" class="car-btn-xs car-btn-red active" data-feeder-ser="f2">Formula 2</button>
+                  <button type="button" class="car-btn-xs" data-feeder-ser="f3">Formula 3</button>
+                  <button type="button" class="car-btn-xs" data-feeder-ser="f1_academy">F1 Academy</button>
+                  <button type="button" class="car-btn-xs" data-feeder-ser="w_series">W Series Legacy</button>
+                </div>
+                <button type="button" id="car-feeder-sim-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-forward"></i> Sim Feeder Round</button>
+              </div>
+            </div>
+            <p id="car-feeder-desc" class="muted small" style="margin:0 0 8px;"></p>
+            <div class="car-table-scroll">
+              <table class="car-table">
+                <thead>
+                  <tr>
+                    <th>Pos</th><th>Driver</th><th>Junior Team / Link</th><th>Age</th><th>OVR / POT</th><th>Pts (W)</th><th>Super Licence (40 Needed)</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="car-feeder-tbody"></tbody>
               </table>
             </div>
           </div>
@@ -931,6 +969,7 @@
 <script src="/static/js/f1_broadcast_3d.js"></script>
 <script src="/static/js/f1_radio_engine.js"></script>
 <script src="/static/js/f1_race_analytics.js"></script>
+<script src="/static/js/f1_custom_season.js"></script>
 <script src="/static/js/f1_profile.js"></script>
 <script src="/static/js/f1_track_renderer.js"></script>
 <script src="/static/js/career.js"></script>

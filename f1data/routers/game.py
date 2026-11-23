@@ -97,6 +97,53 @@ async def api_sim_interviews(request: Request):
     return {"ok": True, "interviews": generate_race_interviews(telem)}
 
 
+@router.get("/api/feeders/overview")
+def api_feeders_overview():
+    """Public browseable FIA Feeder Series (F2, F3, F1 Academy, W Series Legacy) & Super Licence catalog."""
+    from ..feeders import build_initial_feeders
+    return {"ok": True, **build_initial_feeders()}
+
+
+@router.get("/api/custom-seasons/presets")
+def api_custom_season_presets():
+    from ..custom_season import builder_presets
+    return builder_presets()
+
+
+@router.get("/api/custom-seasons")
+def api_custom_seasons_list():
+    from ..custom_season import list_seasons
+    return {"ok": True, "seasons": list_seasons(srv._career_base_dir())}
+
+
+@router.post("/api/custom-seasons")
+async def api_custom_seasons_save(request: Request):
+    from ..custom_season import save_season
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid custom season payload")
+    saved = save_season(srv._career_base_dir(), body, season_id=body.get("season_id"))
+    return {"ok": True, **saved}
+
+
+@router.get("/api/custom-seasons/{season_id}")
+def api_custom_season_get(season_id: str):
+    from ..custom_season import get_season
+    s = get_season(srv._career_base_dir(), season_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Custom season not found")
+    return {"ok": True, "season": s}
+
+
+@router.delete("/api/custom-seasons/{season_id}")
+def api_custom_season_delete(season_id: str):
+    from ..custom_season import delete_season
+    ok = delete_season(srv._career_base_dir(), season_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Custom season not found")
+    return {"ok": True}
+
+
 @router.get("/sim", response_class=HTMLResponse)
 async def full_sim_page(request: Request):
     db = srv.get_db()
