@@ -1459,3 +1459,201 @@ body.sim-cockpit-active #panel-sim.active {
 }
 .tr-act-btn:hover { background: #0284c7; color: #fff; }
 
+/* =========================================================================
+   PHASE 4: Scrubbable Race Data Analysis Studio & Post-Race Interviews
+   ========================================================================= */
+.ras-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(4, 8, 18, 0.86);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+.ras-backdrop.hidden { display: none; }
+.ras-shell {
+  width: min(1240px, 97vw);
+  height: min(820px, 92dvh);
+  background: #090f1d;
+  border: 1.5px solid rgba(56, 189, 248, 0.45);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #f8fafc;
+}
+.ras-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.96);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  flex-wrap: wrap;
+}
+.ras-title-wrap { display: flex; align-items: center; gap: 10px; }
+.ras-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+}
+.ras-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.ras-tab {
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ras-tab.active { background: #e10600; border-color: #f87171; color: #fff; }
+.ras-close {
+  border: 0; background: transparent; color: #94a3b8;
+  font-size: 1.5rem; line-height: 1; cursor: pointer;
+}
+.ras-close:hover { color: #fff; }
+
+.ras-scrubber-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.75);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+.ras-play-btn {
+  width: 30px; height: 30px; border-radius: 7px;
+  border: 1px solid #38bdf8; background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc; cursor: pointer;
+}
+.ras-lap-read {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #fde047;
+  min-width: 92px;
+}
+.ras-slider-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ras-slider-wrap input[type="range"] { width: 100%; accent-color: #38bdf8; cursor: pointer; }
+.ras-event-pins { position: relative; height: 10px; }
+.ras-pin {
+  position: absolute;
+  top: 0;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 0;
+  transform: translateX(-50%);
+  cursor: pointer;
+  background: #38bdf8;
+}
+.ras-pin-sc { background: #facc15; }
+.ras-pin-rain { background: #38bdf8; }
+.ras-pin-dnf, .ras-pin-incident { background: #ef4444; }
+.ras-pin-mistake { background: #fb923c; }
+.ras-env-read { font-size: 0.72rem; font-weight: 700; color: #cbd5e1; white-space: nowrap; }
+.ras-drv-filter {
+  background: #0f172a; color: #f8fafc; border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px; padding: 4px 8px; font-size: 0.72rem;
+}
+
+.ras-body { flex: 1; min-height: 0; padding: 12px 14px; overflow: hidden; display: flex; flex-direction: column; }
+.ras-pane { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
+.ras-pane.active { display: flex; }
+.ras-overview-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+.ras-card {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ras-scroll { overflow-y: auto; scrollbar-width: thin; }
+.ras-card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'Orbitron', sans-serif; font-size: 0.68rem; color: #7dd3fc;
+  margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+.ras-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.ras-table th { text-align: left; font-size: 0.62rem; color: #94a3b8; padding: 4px 6px; border-bottom: 1px solid rgba(148, 163, 184, 0.2); }
+.ras-table td { padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+.ras-ev-list { display: flex; flex-direction: column; gap: 5px; }
+.ras-ev-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.04);
+  font-size: 0.72rem; border-left: 3px solid #38bdf8;
+}
+.ras-ev-row b { color: #fde047; font-family: ui-monospace, monospace; }
+.ras-ev-row small { color: #94a3b8; margin-left: auto; }
+.ras-ev-sc, .ras-ev-mistake { border-left-color: #f59e0b; }
+.ras-ev-dnf, .ras-ev-incident { border-left-color: #ef4444; }
+.ras-ev-overtake { border-left-color: #22c55e; }
+
+.ras-canvas { width: 100%; flex: 1; min-height: 320px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.2); }
+.ras-legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.74rem; }
+.ras-leg-item { display: inline-flex; align-items: center; gap: 5px; }
+.ras-leg-item i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; }
+
+.ras-gantt { display: flex; flex-direction: column; gap: 5px; }
+.ras-gantt-row { display: grid; grid-template-columns: 36px 68px 1fr; align-items: center; gap: 8px; }
+.ras-g-pos { font-family: 'Orbitron', sans-serif; font-size: 0.68rem; color: #94a3b8; }
+.ras-g-drv { display: inline-flex; align-items: center; gap: 5px; font-size: 0.74rem; }
+.ras-g-track {
+  position: relative; display: flex; gap: 2px; height: 20px;
+  background: rgba(255, 255, 255, 0.05); border-radius: 5px; overflow: hidden;
+}
+.ras-stint-seg {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.64rem; font-weight: 800; white-space: nowrap; overflow: hidden;
+}
+.ras-g-cursor {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: #fde047;
+  box-shadow: 0 0 6px #fde047; pointer-events: none;
+}
+
+.ras-int-grid { display: grid; grid-template-columns: 280px 1fr; gap: 12px; flex: 1; min-height: 0; }
+.ras-int-list { display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+.ras-int-card {
+  text-align: left; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2); background: rgba(15, 23, 42, 0.8);
+  color: #f8fafc; cursor: pointer;
+}
+.ras-int-card.active { background: rgba(56, 189, 248, 0.16); border-color: #38bdf8; }
+.ras-ic-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; }
+.ras-rating { font-family: 'Orbitron', sans-serif; color: #fde047; font-weight: 800; font-size: 0.74rem; }
+.ras-ic-meta { display: flex; gap: 8px; font-size: 0.66rem; color: #94a3b8; margin-top: 3px; }
+.ras-int-detail {
+  background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.ras-id-head { display: flex; justify-content: space-between; align-items: center; padding-left: 10px; }
+.ras-id-head h3 { margin: 0; font-size: 1.05rem; }
+.ras-id-score { text-align: right; }
+.ras-id-score strong { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: #fde047; display: block; }
+.ras-reasons { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.24); }
+.ras-r-lbl { font-size: 0.64rem; font-weight: 800; color: #7dd3fc; margin-right: 4px; }
+.ras-r-chip { font-size: 0.66rem; padding: 2px 7px; border-radius: 99px; background: rgba(255, 255, 255, 0.08); color: #e2e8f0; font-weight: 700; }
+.ras-qas { display: flex; flex-direction: column; gap: 10px; }
+.ras-qa-item { padding: 10px 12px; border-radius: 9px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(148, 163, 184, 0.15); }
+.ras-qa-topic { font-family: 'Orbitron', sans-serif; font-size: 0.58rem; color: #38bdf8; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+.ras-qa-q { font-size: 0.78rem; color: #94a3b8; margin-bottom: 6px; }
+.ras-qa-a { font-size: 0.86rem; color: #f8fafc; font-style: italic; line-height: 1.45; }
+

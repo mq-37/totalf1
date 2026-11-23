@@ -1621,10 +1621,17 @@
           ${seasonLine}
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" id="fsim-fin-analytics" class="sim-dir-btn" style="border-color:#38bdf8;color:#7dd3fc;"><i class="fas fa-chart-area"></i> Telemetry &amp; Interviews</button>
           ${nextBtn}
           <button type="button" id="fsim-fin-setup" class="sim-dir-btn"><i class="fas fa-sliders-h"></i> Setup</button>
         </div>
       `;
+      getEl("fsim-fin-analytics")?.addEventListener("click", () => {
+        clearTimeout(fs.autoAdvTimer);
+        if (window.F1RaceAnalytics && window.F1_FULLSIM_LAST_TELEMETRY) {
+          window.F1RaceAnalytics.open(window.F1_FULLSIM_LAST_TELEMETRY, { initialTab: "interviews" });
+        }
+      });
       getEl("fsim-next-gp-btn")?.addEventListener("click", () => {
         clearTimeout(fs.autoAdvTimer);
         fs.season.roundIdx += 1;
@@ -1954,6 +1961,19 @@
     getEl("fsim-replay-btn")?.addEventListener("click", () => {
       if (fs.replay.active) stopInstantReplay();
       else startInstantReplay({ focusIdx: fs.focusIdx, title: `F1 TV INSTANT REPLAY · ${fs.cars[fs.focusIdx]?.card.clean_name || "LIVE ACTION"}` });
+    });
+    getEl("fsim-analytics-btn")?.addEventListener("click", () => {
+      if (!window.F1RaceAnalytics) return;
+      const payload = window.F1_FULLSIM_LAST_TELEMETRY || (fs.telemetry ? fs.telemetry.exportPayload(
+        fs.cars.slice().sort((a, b) => a.pos - b.pos).map((c, i) => ({
+          idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team, color: c.card.hero_color,
+          finishPos: i + 1, dnf: c.dnf, stintHistory: c.stintHistory || [],
+          confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
+          momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
+          totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+        }))
+      ) : null);
+      if (payload) window.F1RaceAnalytics.open(payload, { focusDrvIdx: fs.focusIdx });
     });
     getEl("fsim-voice-btn")?.addEventListener("click", () => {
       fs.voiceOn = !fs.voiceOn;

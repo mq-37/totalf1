@@ -86,6 +86,17 @@ def api_sim_balance(
     return get_track_balance_bundle(srv.DATA_DB, circuit_id, era_key or era, drv_list or None)
 
 
+@router.post("/api/sim/interviews")
+async def api_sim_interviews(request: Request):
+    """Generate context-aware post-race driver reports & press-pen interviews from telemetry."""
+    from ..interviews import generate_race_interviews
+    body = await request.json()
+    telem = body.get("telemetry") if isinstance(body, dict) else None
+    if not isinstance(telem, dict):
+        raise HTTPException(status_code=400, detail="Missing telemetry payload")
+    return {"ok": True, "interviews": generate_race_interviews(telem)}
+
+
 @router.get("/sim", response_class=HTMLResponse)
 async def full_sim_page(request: Request):
     db = srv.get_db()

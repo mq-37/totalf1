@@ -1543,8 +1543,12 @@
     const rivalLine = rivalBon > 0
       ? `<div><span>🔥 Rivalry Bonus (Beat ${esc((debrief.rivals_beaten || []).join(", "))})</span><b class="fin-pos">+$${rivalBon.toFixed(1)}M</b></div>`
       : "";
+    const analyticsBtnHtml = window.F1_CAREER_LAST_TELEMETRY
+      ? `<div style="margin:8px 0;"><button type="button" id="car-deb-analytics-btn" class="car-btn-xs car-btn-gold" style="width:100%;padding:7px;"><i class="fas fa-chart-area"></i> Open Full Race Telemetry Studio &amp; Post-Race Driver Interviews</button></div>`
+      : "";
     getEl("car-debrief-body").innerHTML = `
       <div class="car-deb-section">${finishes}</div>
+      ${analyticsBtnHtml}
       <div class="car-deb-finances">
         <div><span>Race Prize Money (+${debrief.race_pts_player} pts)</span><b class="fin-pos">+$${debrief.prize_m.toFixed(1)}M</b></div>
         <div><span>Sponsor Base Income</span><b class="fin-pos">+$${debrief.sponsor_base_m.toFixed(1)}M</b></div>
@@ -1557,6 +1561,11 @@
       ${rdHtml}${scHtml}${mediaHtml}
     `;
     getEl("car-debrief-modal").classList.remove("hidden");
+    getEl("car-deb-analytics-btn")?.addEventListener("click", () => {
+      if (window.F1RaceAnalytics && window.F1_CAREER_LAST_TELEMETRY) {
+        window.F1RaceAnalytics.open(window.F1_CAREER_LAST_TELEMETRY, { initialTab: "interviews" });
+      }
+    });
   }
 
   function getFocusedCar() {
@@ -3251,8 +3260,21 @@
   });
   getEl("car-q-laps")?.addEventListener("change", renderStrategyPlanner);
 
-  // Live Pit Wall: Lap Chart Modal, SFX Toggle, Click-Any-Driver Rival Inspector
+  // Live Pit Wall: Open Scrubbable Telemetry Studio (falls back to simple Lap Chart if empty)
   getEl("cr-chart-btn")?.addEventListener("click", () => {
+    if (window.F1RaceAnalytics && cr.telemetry && cr.telemetry.frames.length) {
+      const payload = cr.telemetry.exportPayload(
+        cr.cars.slice().sort((a, b) => a.pos - b.pos).map((c, i) => ({
+          idx: c.idx, code3: c.code3, name: c.cleanName, team: c.teamName, color: c.color,
+          finishPos: i + 1, dnf: c.dnf, stintHistory: c.stintHistory || [],
+          confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
+          momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
+          totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+        }))
+      );
+      window.F1RaceAnalytics.open(payload);
+      return;
+    }
     getEl("car-lapchart-modal")?.classList.remove("hidden");
     const meta = cr.cars.slice().sort((a, b) => a.pos - b.pos).map((c) => ({ id: c.driverId, code3: c.code3, color: c.color, isPlayer: c.isPlayerTeam }));
     requestAnimationFrame(() => drawLapPositionChart("car-live-lapchart-canvas", "car-lapchart-legend", cr.lapHistory, meta));
