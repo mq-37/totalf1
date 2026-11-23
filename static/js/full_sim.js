@@ -56,6 +56,9 @@
     telemetry: null,
     simToEndActive: false,
     towerWide: false,
+    b3d: null,
+    b3dMode: "off",
+    radio: null,
     geom: null,
     staticCanvas: null,
     staticKey: "",
@@ -916,7 +919,7 @@
       if (cardEl) cardEl.style.setProperty("--drv-col", foc.card.hero_color || "#e10600");
       getEl("fsim-f-code").textContent = foc.card.code3;
       getEl("fsim-f-name").textContent = foc.card.clean_name;
-      getEl("fsim-f-team").textContent = `${foc.card.hero_team} · OVR ${Math.round(foc.card.overall)}`;
+      getEl("fsim-f-team").textContent = `${foc.card.hero_team} · OVR ${Math.round(foc.card.overall)}${foc.engineer ? " · 🎧 " + foc.engineer.short : ""}`;
       getEl("fsim-f-pos").textContent = foc.dnf ? "DNF" : `P${foc.pos}`;
       getEl("fsim-f-lap").textContent = foc.inPit > 0 ? "IN PIT" : fmtLapTime(foc.currentLapS);
 
@@ -1246,6 +1249,9 @@
           if (car.pos <= 8) {
             const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "a heavy braking zone";
             addCommentary(car.lap + 1, `💨 LOCK-UP! ${car.card.clean_name} runs wide at ${corner} (-${lossS.toFixed(1)}s, confidence rattled)!`, "warn");
+            if (!fastMode && fs.radio && (car.idx === fs.focusIdx || car.pos <= 4)) {
+              fs.radio.emit("mistake", { code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, lap: car.lap }, { lap: car.lap + 1 });
+            }
           }
           if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "mistake", `${car.card.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
         }
@@ -1463,6 +1469,9 @@
                 : (passer.battleState === "tow" || passer.inDrsRange ? "overtake_drs" : "overtake_dive");
               emitBroadcastCall(kind, { lap: passer.lap + 1, passer: passer.card.clean_name, victim: victim.card.clean_name, pos: passer.pos, corner, clipId });
               if (fs.telemetry) fs.telemetry.addEvent(passer.lap + 1, "overtake", `${passer.card.code3} passes ${victim.card.code3}`, `For P${passer.pos} at ${corner}`, passer.idx);
+              if (!fastMode && fs.radio && (passer.idx === fs.focusIdx || passer.pos <= 3)) {
+                fs.radio.emit("overtake", { code3: passer.card.code3, name: passer.card.clean_name, color: passer.card.hero_color, confidence: passer.confidence, engineer: passer.engineer, lap: passer.lap }, { rival: victim.card.code3, lap: passer.lap + 1 });
+              }
             }
           }
         }
@@ -1743,6 +1752,7 @@
     }
 
     const startComp = fs.wetness >= 60 ? "wet" : (fs.wetness >= 22 ? "inter" : "medium");
+    const teamSeatMap = {};
     fs.cars = cards.map((card, i) => {
       // Realistic strategy split across the grid (Soft / Medium / Hard)
       let comp = startComp;
@@ -1752,10 +1762,14 @@
       const isWetStart = COMPOUNDS[comp].wet > 0;
       const dKey = String(card.clean_name || "").toLowerCase();
       const tKey = String(card.hero_team || "").toLowerCase();
+      const seatNum = teamSeatMap[tKey] || 0;
+      teamSeatMap[tKey] = seatNum + 1;
+      const engObj = window.F1RadioEngine ? window.F1RadioEngine.assignEngineer(card.hero_team, seatNum) : null;
       const combinedAff = Number(drvAff[dKey] || 0) + Number(teamAff[tKey] || 0) * 0.65;
       const car = {
         idx: i,
         card,
+        engineer: engObj,
         pos: i + 1,
         gridPos: i + 1,
         lap: 0,
@@ -1899,7 +1913,22 @@
     } else if (fs.running && !fs.paused) {
       stepSimulation(dt);
     }
-    drawCanvas();
+    if (fs.b3d && fs.b3d.isActive()) {
+      fs.b3d.updateAndRender({
+        circuit: fs.circuit,
+        cars: fs.cars.map((c) => ({
+          idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+          inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
+          liveKph: c.liveKph, liveGear: c.liveGear,
+          palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
+        })),
+        focusIdx: fs.focusIdx,
+        dt,
+        paused: fs.paused,
+      });
+    } else {
+      drawCanvas();
+    }
   }
 
   function init() {
@@ -1952,6 +1981,32 @@
       btn.addEventListener("click", () => setSpeed(Number(btn.dataset.fsimSpeed)));
     });
     getEl("fsim-sim-end-btn")?.addEventListener("click", runSimToEnd);
+
+    // Phase 3: Live 3D Broadcast Camera Engine & Team Radio Controller
+    if (window.F1Broadcast3D && getEl("fsim-3d-canvas")) {
+      fs.b3d = window.F1Broadcast3D.createBroadcast3D(getEl("fsim-3d-canvas"), getEl("fsim-3d-hud"));
+    }
+    if (window.F1RadioEngine && getEl("fsim-radio-card")) {
+      fs.radio = window.F1RadioEngine.createRadioController(getEl("fsim-radio-card"), {
+        sfxEnabled: () => fs.sfxOn,
+        voiceEnabled: () => fs.voiceOn,
+      });
+    }
+    function setBroadcast3DMode(mode) {
+      fs.b3dMode = mode || "off";
+      document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.dataset.fsim3d === fs.b3dMode));
+      if (!fs.b3d) return;
+      if (fs.b3dMode === "off") {
+        fs.b3d.setActive(false);
+        drawCanvas();
+      } else {
+        fs.b3d.setMode(fs.b3dMode);
+        fs.b3d.setActive(true);
+      }
+    }
+    document.querySelectorAll("[data-fsim-3d]").forEach((btn) => {
+      btn.addEventListener("click", () => setBroadcast3DMode(btn.dataset.fsim3d));
+    });
     getEl("fsim-tower-wide")?.addEventListener("click", () => {
       fs.towerWide = !fs.towerWide;
       getEl("fsim-cockpit-grid")?.classList.toggle("is-tower-wide", fs.towerWide);
@@ -2091,6 +2146,11 @@
       }
       else if (k === "escape" && fs.replay.active) stopInstantReplay();
       else if (k === "t") setAutoTv(!fs.autoTv);
+      else if (k === "v") {
+        const order = ["off", "tv", "pov", "chase", "pitlane", "director"];
+        const nxt = order[(order.indexOf(fs.b3dMode || "off") + 1) % order.length];
+        document.querySelector(`[data-fsim-3d="${nxt}"]`)?.click();
+      }
       else if (k === "l") getEl("fsim-cam-leader")?.click();
       else if (k === "n") getEl("fsim-cam-battle")?.click();
       else if (k === "f") getEl("fsim-focus-btn")?.click();

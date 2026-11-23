@@ -194,9 +194,12 @@
       </div>
     </aside>
 
-    <!-- CENTER STAGE: HERO TRUE-SCALE 3D GPS TRACK BROADCAST CANVAS -->
+    <!-- CENTER STAGE: HERO TRUE-SCALE 2D GPS & LIVE 3D BROADCAST STAGE -->
     <div class="sim-stage-panel">
       <canvas id="fsim-track-canvas" class="sim-track-canvas" aria-label="Live Full CPU F1 Circuit Broadcast"></canvas>
+      <canvas id="fsim-3d-canvas" class="sim-3d-canvas hidden" aria-label="Live 3D F1 TV Broadcast Camera"></canvas>
+      <div id="fsim-3d-hud" class="b3d-hud hidden"></div>
+      <div id="fsim-radio-card" class="tr-dock hidden"></div>
 
       <!-- Floating F1 TV Live Broadcast Chyron -->
       <div id="fsim-chyron" class="fsim-chyron">
@@ -221,6 +224,14 @@
 
       <!-- Bottom-Left Camera Zoom & Layer Toggles -->
       <div class="sim-map-toggles">
+        <div class="sim-3d-group" role="group" aria-label="3D Broadcast Cameras">
+          <button type="button" class="sim-cam-chip active" data-fsim-3d="off" title="2D Satellite GPS Map [V]">2D</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="tv" title="3D Off-Side Trackside TV Broadcast Cam"><i class="fas fa-video"></i> TV</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="pov" title="3D Onboard Halo T-Cam POV">POV</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="chase" title="3D 3rd Person Chase Cam">3rd</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="pitlane" title="3D Pitlane & Pit Crew Cam">Pit</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="director" title="Auto 3D Broadcast Director">Auto 3D</button>
+        </div>
         <div class="sim-cam-group" role="group" aria-label="Broadcast Camera Zoom">
           <button type="button" class="sim-cam-chip" data-fsim-cam="full" title="Full Circuit Overview [Z]"><i class="fas fa-map"></i> Full</button>
           <button type="button" class="sim-cam-chip" data-fsim-cam="follow" title="2.5× Follow Cam [Z]">2.5×</button>
@@ -370,6 +381,8 @@
 <script src="/static/js/f1_sfx.js"></script>
 <script src="/static/js/f1_race_engine.js"></script>
 <script src="/static/js/f1_timing_tower.js"></script>
+<script src="/static/js/f1_broadcast_3d.js"></script>
+<script src="/static/js/f1_radio_engine.js"></script>
 <script src="/static/js/f1_track_renderer.js"></script>
 <script src="/static/js/full_sim.js"></script>
 {% endblock %}

@@ -2233,6 +2233,19 @@
             ENG.applyPsychologyEvent(car, "mistake");
             if (car.isPlayerTeam && !fastMode) {
               getEl("cr-radio-latest").textContent = `💨 ${car.cleanName} locked up under braking (-${lossS.toFixed(1)}s, confidence dropped)!`;
+              if (cr.radio) {
+                cr.radio.emit("mistake", { code3: car.code3, name: car.cleanName, color: car.color, confidence: car.confidence, engineer: car.engineer, lap: car.lap }, {
+                  lap: car.lap + 1,
+                  actions: [{
+                    label: "🎧 Calm Driver (+Conf)",
+                    onClick: () => {
+                      ENG.applyPsychologyEvent(car, "radio_calm");
+                      getEl("cr-radio-latest").textContent = `📻 Pit Wall calmed ${car.cleanName} down — confidence recovering!`;
+                      renderCrHud();
+                    },
+                  }],
+                }, true);
+              }
             }
             if (cr.telemetry) cr.telemetry.addEvent(car.lap + 1, "mistake", `${car.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
           }
@@ -2811,8 +2824,10 @@
       const dKey = String(g.clean_name || "").toLowerCase();
       const tKey = String(g.team_name || "").toLowerCase();
       const aff = Number(drvAff[dKey] || 0) + Number(teamAff[tKey] || 0) * 0.65;
+      const engObj = window.F1RadioEngine ? window.F1RadioEngine.assignEngineer(g.team_name, i % 2) : null;
       const car = {
         idx: i,
+        engineer: engObj,
         driverId: g.driver_id,
         cleanName: g.clean_name,
         code3: g.code3,
@@ -2894,7 +2909,24 @@
     cr.lastTs = ts;
     cr.lastDt = dt;
     if (cr.running && !cr.paused) stepCrSim(dt);
-    drawCrCanvas();
+    if (cr.b3d && cr.b3d.isActive()) {
+      const foc = getFocusedCar();
+      const insp = cr.inspectedDriverId ? cr.cars.find((x) => x.driverId === cr.inspectedDriverId && !x.dnf) : null;
+      const targetCar = insp || foc || cr.cars[0];
+      cr.b3d.updateAndRender({
+        circuit: cr.circuit,
+        cars: cr.cars.map((c) => ({
+          idx: c.idx, code3: c.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+          inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.color,
+          liveKph: c.liveKph, liveGear: c.liveGear,
+        })),
+        focusIdx: targetCar ? targetCar.idx : 0,
+        dt,
+        paused: cr.paused,
+      });
+    } else {
+      drawCrCanvas();
+    }
   }
 
   // =========================================================================
@@ -3423,6 +3455,24 @@
     });
   });
   getEl("cr-sim-end-btn")?.addEventListener("click", runCrSimToEnd);
+  if (window.F1Broadcast3D && getEl("cr-3d-canvas")) {
+    cr.b3d = window.F1Broadcast3D.createBroadcast3D(getEl("cr-3d-canvas"), getEl("cr-3d-hud"));
+  }
+  if (window.F1RadioEngine && getEl("cr-radio-card")) {
+    cr.radio = window.F1RadioEngine.createRadioController(getEl("cr-radio-card"), {
+      sfxEnabled: () => true,
+      voiceEnabled: () => false,
+    });
+  }
+  document.querySelectorAll("[data-cr-3d]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      cr.b3dMode = btn.dataset.cr3d || "off";
+      document.querySelectorAll("[data-cr-3d]").forEach((b) => b.classList.toggle("active", b.dataset.cr3d === cr.b3dMode));
+      if (!cr.b3d) return;
+      if (cr.b3dMode === "off") { cr.b3d.setActive(false); drawCrCanvas(); }
+      else { cr.b3d.setMode(cr.b3dMode); cr.b3d.setActive(true); }
+    });
+  });
   getEl("cr-tower-wide")?.addEventListener("click", () => {
     cr.towerWide = !cr.towerWide;
     getEl("cr-cockpit-grid")?.classList.toggle("is-tower-wide", cr.towerWide);
