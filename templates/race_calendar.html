@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Race — {{ season }} Calendar — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1><i class="fas fa-flag-checkered"></i> {{ season }} Grand Prix Calendar</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → {{ season }} season schedule</p>
+  </div>
+
+  <div class="card toolbar-card" style="margin-bottom: 18px;">
+    <div class="toolbar">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span class="badge">{{ races | length }} Rounds</span>
+        {% if calendar_source == 'local' %}
+        <span class="muted small">Local SQLite archive ({{ season }})</span>
+        {% else %}
+        <span class="muted small">Live schedule via <a href="https://api.jolpi.ca/ergast/f1/current.json" target="_blank" rel="noopener">Jolpica-F1 API</a></span>
+        {% endif %}
+      </div>
+      <div class="toolbar-actions">
+        <a href="/play?mode=sim"><button type="button"><i class="fas fa-route"></i> 24-Circuit GPS Simulator</button></a>
+        <a href="/career"><button type="button" class="btn-secondary"><i class="fas fa-briefcase"></i> Career Manager</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="head">
+      <h3><i class="fas fa-calendar-alt"></i> {{ season }} F1 Schedule</h3>
+    </div>
+    {% if races %}
+    {% if calendar_source == 'local' %}
+    <table>
+      <thead>
+        <tr>
+          <th>Rnd</th>
+          <th>Grand Prix</th>
+          <th>Date</th>
+          <th>Winner</th>
+          <th>Team</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in races %}
+        <tr>
+          <td><span class="badge">R{{ r.round }}</span></td>
+          <td><strong>{{ r.full_name }}</strong></td>
+          <td><span class="race-date">{{ r.date }}</span></td>
+          <td>{% if r.winner %}<a href="/driver/{{ r.winner.replace(' ', '-') }}">{{ r.winner }}</a>{% else %}—{% endif %}</td>
+          <td>{% if r.team %}<a href="/team/{{ r.team.replace(' ', '-') }}">{{ r.team }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Rnd</th>
+          <th>Grand Prix</th>
+          <th>Circuit</th>
+          <th>Location</th>
+          <th>Race</th>
+          <th>FP1</th>
+          <th>Qualifying</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in races %}
+        <tr>
+          <td><span class="badge">R{{ r.round }}</span></td>
+          <td><strong>{{ r.full_name }}</strong></td>
+          <td>{{ r.circuit }}</td>
+          <td class="muted">{{ r.locality }}{% if r.locality and r.country %}, {% endif %}{{ r.country }}</td>
+          <td>
+            <span class="race-date">{{ r.date }}</span>{% if r.time %}
+            <span class="race-time muted small">{{ r.time | replace('Z', ' UTC') }}</span>{% endif %}
+          </td>
+          <td class="muted small">
+            {% if r.fp1_date %}{{ r.fp1_date }}{% if r.fp1_time %} {{ r.fp1_time | replace('Z', '') }}{% endif %}{% else %}—{% endif %}
+          </td>
+          <td class="muted small">
+            {% if r.qual_date %}{{ r.qual_date }}{% if r.qual_time %} {{ r.qual_time | replace('Z', '') }}{% endif %}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% else %}
+    <p class="muted">No races loaded. Check your connection or run <code>python3 -m f1data.cli scrape-all</code> to populate local races.</p>
+    {% endif %}
+  </div>
+{% endblock %}

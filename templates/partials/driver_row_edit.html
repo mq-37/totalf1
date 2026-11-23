@@ -1,0 +1,20 @@
+<tr id="row-{{ r['position'] }}">
+  <td>{{ r["position"] }}</td>
+  <td>
+    <input type="text" name="driver" value="{{ r['driver'] }}" style="width:180px" />
+  </td>
+  <td>
+    <input type="text" name="nationality" value="{{ r['nationality'] }}" style="width:70px" />
+  </td>
+  <td>
+    <input type="text" name="team" value="{{ r['team'] }}" style="width:180px" />
+  </td>
+  <td>
+    <input type="number" name="points" step="any" value="{{ r['points'] }}" style="width:80px" />
+  </td>
+  <td>
+    <input type="text" name="driver_id" value="{{ r['driver_id'] or '' }}" placeholder="driver id (opt)" style="width:120px" />
+    <button hx-post="/drivers/{{ r['year'] }}/edit/{{ r['position'] }}" hx-include="#row-{{ r['position'] }} input" hx-target="#row-{{ r['position'] }}" hx-swap="outerHTML">Save</button>
+    <button type="button" hx-get="/drivers/{{ r['year'] }}/row/{{ r['position'] }}" hx-target="#row-{{ r['position'] }}" hx-swap="outerHTML">Cancel</button>
+  </td>
+</tr>

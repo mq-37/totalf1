@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}Full CPU Sim — F1 TV Broadcast Director · Local F1{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="/static/css/sim.css">
+{% endblock %}
+{% block content %}
+<div id="fsim-app" class="sim-cockpit-root fsim-broadcast-shell">
+  <!-- TOP F1 TV BROADCAST DIRECTOR BAR -->
+  <div class="sim-director-bar">
+    <div class="sim-dir-left">
+      <span id="fsim-flag-pill" class="sim-flag-pill flag-green"><i class="fas fa-flag"></i> GREEN FLAG</span>
+      <span id="fsim-round-pill" class="fsim-round-pill hidden">R1/12</span>
+      <div class="sim-dir-circuit">
+        <strong id="fsim-dir-name">Albert Park</strong>
+        <span id="fsim-dir-specs" class="sim-dir-specs">5.278km · 14T · 4 DRS · 100% CPU Grid</span>
+      </div>
+    </div>
+
+    <div class="sim-dir-center">
+      <div class="sim-lap-box">
+        <small>LAP</small>
+        <strong><span id="fsim-lap-num">01</span> / <span id="fsim-lap-tot">15</span></strong>
+      </div>
+      <div id="fsim-weather-pill" class="sim-weather-pill w-dry">
+        <i class="fas fa-sun"></i>
+        <span id="fsim-weather-txt">DRY 0%</span>
+        <span class="sim-wet-meter"><i id="fsim-wet-fill" style="width:0%"></i></span>
+      </div>
+    </div>
+
+    <div class="sim-dir-right">
+      <button type="button" id="fsim-autotv-btn" class="fsim-autotv-btn is-on" title="Auto TV Director: automatically cuts to the hottest wheel-to-wheel battle, pit stops & incidents [T]">
+        <span class="fsim-live-dot"></span> Auto TV
+      </button>
+      <button type="button" id="fsim-replay-btn" class="sim-dir-btn" title="Watch 0.45× Slow-Mo Instant Replay of the last 6 seconds [R]">
+        <i class="fas fa-history"></i> <span class="sim-lbl-md">Replay</span>
+      </button>
+      <button type="button" id="fsim-voice-btn" class="sim-dir-btn sim-dir-icon" title="Toggle Spoken F1 TV Voice Commentary (Offline Web Speech)">
+        <i class="fas fa-microphone-alt"></i>
+      </button>
+      <div class="sim-speed-btns" role="group" aria-label="Simulation speed">
+        <button type="button" class="sim-speed-btn" data-fsim-speed="0" title="Pause [Space]"><i class="fas fa-pause"></i></button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="0.25" title="0.25× True-Time Battle Cam (~88s/lap)">0.25×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="0.5" title="0.5× Slow-Mo Battle Speed [-]">0.5×</button>
+        <button type="button" class="sim-speed-btn active" data-fsim-speed="1" title="1× Broadcast Pace [1]">1×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="2" title="2× Fast Broadcast [2]">2×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="4" title="4× Sprint [3]">4×</button>
+        <button type="button" class="sim-speed-btn" data-fsim-speed="8" title="8× Hyper-Sim [4]">8×</button>
+      </div>
+      <button type="button" id="fsim-sfx-btn" class="sim-dir-btn sim-dir-icon" title="Toggle Broadcast SFX"><i class="fas fa-volume-up"></i></button>
+      <button type="button" id="fsim-focus-btn" class="sim-dir-btn sim-dir-icon" title="Full-Screen Broadcast Focus Mode [F]"><i class="fas fa-expand"></i></button>
+      <button type="button" id="fsim-setup-toggle" class="sim-dir-btn" aria-expanded="false" title="Configure CPU Grid, Era, Season Mode & Chaos"><i class="fas fa-sliders-h"></i> <span class="sim-lbl-md">Setup</span></button>
+      <button type="button" id="fsim-restart-btn" class="sim-dir-btn sim-dir-icon" title="Restart Grand Prix"><i class="fas fa-redo"></i></button>
+    </div>
+
+    <!-- COLLAPSIBLE FULL CPU SIM SETUP DRAWER (Anchored inside director bar!) -->
+    <div id="fsim-setup-drawer" class="sim-setup-drawer hidden" role="region" aria-label="Full CPU Broadcast Setup">
+      <div class="sim-drawer-head">
+        <span><i class="fas fa-tv"></i> FULL CPU SIM — BROADCAST &amp; CHAMPIONSHIP SETUP</span>
+        <button type="button" id="fsim-setup-close" class="sim-drawer-close" aria-label="Close setup">&times;</button>
+      </div>
+      <div class="sim-setup-grid fsim-setup-grid">
+        <div class="arena-control-group">
+          <label for="fsim-mode-sel">Simulation Format</label>
+          <select id="fsim-mode-sel">
+            <option value="single" selected>Single Grand Prix (CPU Watch)</option>
+            <option value="season8">🏆 8-Round CPU Championship</option>
+            <option value="season12">🏆 12-Round World Tour Championship</option>
+            <option value="season24">🏆 Full 24-Round FIA Calendar</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-deck-sel">Era / Driver Grid (100% CPU)</label>
+          <select id="fsim-deck-sel">
+            <option value="season:{{ latest_year }}" selected>{{ latest_year }} Modern Grid</option>
+            {% for y in seasons[1:] %}
+            <option value="season:{{ y }}">{{ y }} Historical Season</option>
+            {% endfor %}
+            {% for d in decades %}
+            <option value="decade:{{ d }}">{{ d }}s Decade Legends</option>
+            {% endfor %}
+            <option value="alltime:24">★ All-Time Top 24 Legends</option>
+            <option value="alltime:80">★ All-Time Legends Shuffle</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-circuit-sel">Circuit (24 GPS Tracks)</label>
+          <select id="fsim-circuit-sel"></select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-laps-sel">Race Distance</label>
+          <select id="fsim-laps-sel">
+            <option value="5">5 Laps (Quick Sprint)</option>
+            <option value="10">10 Laps (Sprint GP)</option>
+            <option value="15" selected>15 Laps (Feature GP)</option>
+            <option value="25">25 Laps (Strategy GP)</option>
+            <option value="full">Full Real GP Laps</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-weather-sel">Weather</label>
+          <select id="fsim-weather-sel">
+            <option value="dynamic" selected>Dynamic Forecast</option>
+            <option value="dry">Dry Sun</option>
+            <option value="showers">Changing Showers</option>
+            <option value="rain">Heavy Rain</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-chaos-sel">Collisions &amp; Chaos</label>
+          <select id="fsim-chaos-sel">
+            <option value="1.0" selected>Realistic FIA Racing</option>
+            <option value="1.8">Spicy Wheel-to-Wheel</option>
+            <option value="3.0">Full Chaos &amp; Safety Cars</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-grid-order">Starting Grid</label>
+          <select id="fsim-grid-order">
+            <option value="quali" selected>Simulated Qualifying</option>
+            <option value="reverse">Reverse Grid (Chaos!)</option>
+            <option value="random">Random Grid Shuffle</option>
+          </select>
+        </div>
+        <div class="arena-control-group">
+          <label for="fsim-grid-size">Grid Size</label>
+          <select id="fsim-grid-size">
+            <option value="20" selected>20 CPU Cars</option>
+            <option value="24">24 CPU Cars (Full Pack)</option>
+          </select>
+        </div>
+      </div>
+      <div class="sim-drawer-circuit-meta" style="justify-content:space-between;align-items:center;">
+        <label class="fsim-autoadv-chk">
+          <input type="checkbox" id="fsim-autoadv-chk" checked>
+          <span>Auto-advance to next GP in Championship mode (6s podium pause)</span>
+        </label>
+        <button type="button" id="fsim-start-btn" class="btn-racing"><i class="fas fa-tv"></i> Start Full CPU Broadcast</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN 3-COLUMN ONE-SCREEN BROADCAST STUDIO (0px SCROLL) -->
+  <div id="fsim-cockpit-grid" class="sim-cockpit-grid" data-dock-pane="strategy">
+    <div class="sim-mobile-dock" role="tablist" aria-label="Broadcast view">
+      <button type="button" class="sim-dock-tab active" data-dock-target="strategy"><i class="fas fa-tv"></i> TV Director</button>
+      <button type="button" class="sim-dock-tab" data-dock-target="tower"><i class="fas fa-stopwatch"></i> Live Timing</button>
+    </div>
+
+    <!-- LEFT COLUMN: FULL 20-24 CAR LIVE TIMING TOWER -->
+    <aside class="sim-tower-panel">
+      <div class="sim-panel-head">
+        <span><i class="fas fa-stopwatch"></i> CPU GRID <small id="fsim-grid-count" class="muted">(20)</small></span>
+        <div class="sim-gap-toggle" role="group" aria-label="Gap mode">
+          <button type="button" class="sim-gap-btn active" data-fsim-gap="int">INT</button>
+          <button type="button" class="sim-gap-btn" data-fsim-gap="ldr">LDR</button>
+        </div>
+      </div>
+      <div class="sim-timing-wrap">
+        <table class="sim-timing-table cr-full-tower">
+          <thead>
+            <tr>
+              <th>P</th>
+              <th>DRV</th>
+              <th id="fsim-gap-head">INT</th>
+              <th>TYRE</th>
+              <th>ST</th>
+            </tr>
+          </thead>
+          <tbody id="fsim-timing-body"></tbody>
+        </table>
+      </div>
+      <div class="sim-tower-foot">
+        <span><i class="sim-dot dot-drs"></i>DRS</span>
+        <span><i class="sim-dot dot-fl"></i>FL</span>
+        <span>Click any car to follow</span>
+      </div>
+    </aside>
+
+    <!-- CENTER STAGE: HERO TRUE-SCALE 3D GPS TRACK BROADCAST CANVAS -->
+    <div class="sim-stage-panel">
+      <canvas id="fsim-track-canvas" class="sim-track-canvas" aria-label="Live Full CPU F1 Circuit Broadcast"></canvas>
+
+      <!-- Floating F1 TV Live Broadcast Chyron -->
+      <div id="fsim-chyron" class="fsim-chyron">
+        <span class="fsim-chyron-badge"><span class="fsim-live-dot"></span> LIVE</span>
+        <span id="fsim-chyron-txt">AUTO TV DIRECTOR · SCANNING GRID</span>
+      </div>
+
+      <!-- Floating Race Control Alert Toast -->
+      <div id="fsim-alert-toast" class="sim-alert-toast hidden"></div>
+
+      <!-- Floating Checkered Flag / Championship Finish Overlay -->
+      <div id="fsim-finish-banner" class="sim-finish-overlay hidden"></div>
+
+      <!-- Bottom-Left Camera Zoom & Layer Toggles -->
+      <div class="sim-map-toggles">
+        <div class="sim-cam-group" role="group" aria-label="Broadcast Camera Zoom">
+          <button type="button" class="sim-cam-chip" data-fsim-cam="full" title="Full Circuit Overview [Z]"><i class="fas fa-map"></i> Full</button>
+          <button type="button" class="sim-cam-chip" data-fsim-cam="follow" title="2.5× Follow Cam [Z]">2.5×</button>
+          <button type="button" class="sim-cam-chip active" data-fsim-cam="battle" title="5× Wheel-to-Wheel Battle Zoom [Z]">5×</button>
+          <button type="button" class="sim-cam-chip" data-fsim-cam="close" title="8.5× Tight Apex Close-Up [Z]">8.5×</button>
+          <button type="button" class="sim-cam-chip" data-fsim-cam="heli" title="11× Ultra Heli Close-Up (Scroll up to 12×) [Z]"><i class="fas fa-helicopter"></i> 11×</button>
+        </div>
+        <button type="button" class="sim-layer-chip active" data-fsim-layer="corners">Corners</button>
+        <button type="button" class="sim-layer-chip active" data-fsim-layer="sectors">Sectors</button>
+        <button type="button" class="sim-layer-chip active" data-fsim-layer="line" title="Toggle Optimal Racing Line (Green = Flat Out, Amber = Apex, Red = Braking)">Best Line</button>
+        <button type="button" class="sim-layer-chip active" data-fsim-layer="ai" title="Toggle Live AI Perception, Steering Vectors & Decision Badges (AVOID / ATTACK / DEFEND / HOLD / FIGHT)">AI Mind</button>
+        <button type="button" class="sim-layer-chip active" data-fsim-layer="hud" title="Toggle F1 TV Broadcast Telemetry Halo">TV HUD</button>
+      </div>
+
+      <!-- Bottom-Right Sector & DRS Broadcast Legend -->
+      <div class="sim-map-legend">
+        <span><i style="background:#ef4444"></i>S1</span>
+        <span><i style="background:#38bdf8"></i>S2</span>
+        <span><i style="background:#facc15"></i>S3</span>
+        <span><i style="background:#22c55e"></i>DRS</span>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: F1 TV RACE DIRECTOR CONSOLE (100% SPECTATOR TELEMETRY) -->
+    <aside class="sim-strategy-panel fsim-director-panel">
+      <!-- 1. Focused Car Live Telemetry + AI Strategy Brain -->
+      <div id="fsim-focus-card" class="sim-driver-card fsim-focus-card">
+        <div class="sim-drv-top">
+          <span id="fsim-f-code" class="sim-drv-code">CPU</span>
+          <div class="sim-drv-info">
+            <strong id="fsim-f-name">Loading Grid…</strong>
+            <small id="fsim-f-team">100% Autonomous CPU</small>
+          </div>
+          <div class="sim-drv-pos-box">
+            <strong id="fsim-f-pos">P1</strong>
+            <small id="fsim-f-lap">1:20.0</small>
+          </div>
+        </div>
+        <div class="sim-drv-gaps">
+          <button type="button" id="fsim-f-ahead" class="fsim-gap-jump" title="Jump camera to car ahead">▲ RACE LEADER</button>
+          <button type="button" id="fsim-f-behind" class="fsim-gap-jump" title="Jump camera to car behind">▼ CLEAR</button>
+        </div>
+        <div class="sim-telem-live-row">
+          <span class="sim-speed-read"><b id="fsim-f-kph">285</b> <small>KPH</small></span>
+          <span class="sim-gear-badge" id="fsim-f-gear">G7</span>
+          <span class="sim-mini-sectors" id="fsim-f-sectors"><i class="sd-none">S1</i><i class="sd-none">S2</i><i class="sd-none">S3</i></span>
+          <span class="fsim-ai-pill" id="fsim-f-ai">BALANCED</span>
+        </div>
+        <div class="fsim-mini-meters">
+          <div class="fsim-m-row">
+            <span>TYRE <strong id="fsim-f-tyre">S 100%</strong> <em id="fsim-f-temp" class="sim-temp-tag temp-opt">96°C</em></span>
+            <div class="sim-bar-track"><div id="fsim-f-tyre-bar" class="sim-bar-fill" style="width:100%"></div></div>
+          </div>
+          <div class="fsim-m-row">
+            <span>ERS <strong id="fsim-f-ers">65%</strong> <em id="fsim-f-ers-mode" class="muted">AUTO</em></span>
+            <div class="sim-bar-track"><div id="fsim-f-ers-bar" class="sim-bar-fill ers-fill" style="width:65%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Hottest On-Track Battles Radar (Click any fight to cut camera!) -->
+      <div class="sim-ctrl-card fsim-battles-card">
+        <div class="sim-ctrl-head">
+          <span><i class="fas fa-fire"></i> HOTTEST BATTLES</span>
+          <div style="display:flex;gap:4px;">
+            <button type="button" id="fsim-cam-leader" class="fsim-mini-btn" title="Lock camera on Race Leader [L]">👑 P1</button>
+            <button type="button" id="fsim-cam-battle" class="fsim-mini-btn" title="Cut to closest battle on track [N]">⚔️ Closest</button>
+          </div>
+        </div>
+        <div id="fsim-battles-list" class="fsim-battles-list">
+          <div class="muted small">Scanning grid for wheel-to-wheel fights…</div>
+        </div>
+      </div>
+
+      <!-- 3. Broadcast Intelligence: Race Stats / Championship Standings Switcher -->
+      <div class="sim-ctrl-card fsim-intel-card">
+        <div class="sim-ctrl-head">
+          <div class="fsim-intel-tabs">
+            <button type="button" class="fsim-itab active" data-fsim-itab="stats"><i class="fas fa-chart-bar"></i> Race Feed</button>
+            <button type="button" class="fsim-itab" data-fsim-itab="wdc"><i class="fas fa-trophy"></i> WDC</button>
+            <button type="button" class="fsim-itab" data-fsim-itab="wcc"><i class="fas fa-shield-alt"></i> WCC</button>
+          </div>
+          <span id="fsim-fl-badge" class="fsim-fl-badge">FL —</span>
+        </div>
+
+        <div id="fsim-pane-stats" class="fsim-ipane active">
+          <div class="fsim-kpi-grid">
+            <div class="fsim-kpi"><small>OVERTAKES</small><b id="fsim-st-ovt">0</b></div>
+            <div class="fsim-kpi"><small>PIT STOPS</small><b id="fsim-st-pits">0</b></div>
+            <div class="fsim-kpi"><small>INCIDENTS</small><b id="fsim-st-inc">0</b></div>
+            <div class="fsim-kpi"><small>DNFs</small><b id="fsim-st-dnf">0</b></div>
+          </div>
+          <div class="fsim-forecast-strip" id="fsim-forecast-strip"></div>
+          <div class="fsim-mini-feed" id="fsim-mini-feed"></div>
+        </div>
+
+        <div id="fsim-pane-wdc" class="fsim-ipane">
+          <div id="fsim-wdc-list" class="fsim-standings-list"></div>
+        </div>
+
+        <div id="fsim-pane-wcc" class="fsim-ipane">
+          <div id="fsim-wcc-list" class="fsim-standings-list"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- BOTTOM LIVE BROADCAST COMMENTARY TICKER -->
+  <div class="sim-radio-bar">
+    <span class="sim-radio-badge"><i class="fas fa-microphone-alt"></i> F1 TV</span>
+    <span id="fsim-radio-lap" class="sim-radio-lap">L1</span>
+    <span id="fsim-radio-latest" class="sim-radio-latest">Loading 100% CPU Broadcast Grid…</span>
+    <div class="sim-radio-right">
+      <span class="sim-keys-hint">Space: Pause · R: Instant Replay · T: Auto TV · Z: Zoom · L: Leader · N: Next Battle · F: Fullscreen</span>
+      <button type="button" id="fsim-radio-toggle" class="sim-dir-btn"><i class="fas fa-list"></i> Log (<span id="fsim-radio-count">0</span>)</button>
+    </div>
+  </div>
+
+  <!-- EXPANDABLE FULL COMMENTARY & INCIDENT LOG -->
+  <div id="fsim-radio-drawer" class="sim-radio-drawer hidden">
+    <div class="sim-radio-drawer-head">
+      <strong><i class="fas fa-broadcast-tower"></i> F1 TV Broadcast Commentary &amp; Race Control Log</strong>
+      <button type="button" id="fsim-radio-close" aria-label="Close log">&times;</button>
+    </div>
+    <ul id="fsim-radio-log" class="sim-radio-log"></ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.F1_FULLSIM_BOOT = {
+    latestYear: {{ latest_year }},
+    circuits: {{ circuits | tojson }}
+  };
+</script>
+<script src="/static/vendor/three.min.js"></script>
+<script src="/static/js/f1_car_3d.js"></script>
+<script src="/static/js/f1_sfx.js"></script>
+<script src="/static/js/f1_race_engine.js"></script>
+<script src="/static/js/f1_track_renderer.js"></script>
+<script src="/static/js/full_sim.js"></script>
+{% endblock %}

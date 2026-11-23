@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Car composition v2 — Local F1{% endblock %}
+{% block head %}
+<style>
+  .comp-page { max-width: 1240px; }
+  .comp-intro { color: var(--muted); margin: 0 0 20px; max-width: 62ch; line-height: 1.45; }
+  .comp-grid-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) {
+    .comp-grid-pair { grid-template-columns: 1fr; }
+  }
+  .comp-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .comp-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .comp-stage {
+    position: relative;
+    aspect-ratio: 272 / 160;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 70%, rgba(0,0,0,0.18), transparent 70%),
+      #9aa1aa;
+    overflow: hidden;
+  }
+  .comp-stage img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    background: #c8ccd2;
+  }
+  .comp-stage .comp-svg-wrap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .comp-stage .comp-svg-wrap svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .comp-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .comp-overlay svg { width: 100%; height: 100%; display: block; }
+  .comp-row-label,
+  .comp-col-label {
+    position: absolute;
+    z-index: 3;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: rgba(225, 6, 0, 0.88);
+    padding: 2px 5px;
+    border-radius: 3px;
+    line-height: 1.2;
+  }
+  .comp-row-label { left: 4px; transform: translateY(-50%); }
+  .comp-col-label { top: 4px; transform: translateX(-50%); }
+  .comp-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+  }
+  .comp-page.hide-grid .comp-overlay,
+  .comp-page.hide-grid .comp-row-label,
+  .comp-page.hide-grid .comp-col-label { display: none; }
+  .comp-page.hide-labels .comp-row-label,
+  .comp-page.hide-labels .comp-col-label { display: none; }
+</style>
+{% endblock %}
+{% block content %}
+{% set rows = [
+  {"id": "R1", "y": 10},
+  {"id": "R2", "y": 30},
+  {"id": "R3", "y": 50},
+  {"id": "R4", "y": 70},
+  {"id": "R5", "y": 90},
+] %}
+{% set cols = [
+  {"id": "C1", "x": 10},
+  {"id": "C2", "x": 30},
+  {"id": "C3", "x": 50},
+  {"id": "C4", "x": 70},
+  {"id": "C5", "x": 90},
+] %}
+
+<div class="comp-page" id="comp-page">
+  <div class="page-header">
+    <h1>Car composition · v2</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/dev/car-composition">Composition</a> → v2</p>
+  </div>
+  <p class="comp-intro">
+    Parallel photo-based front silhouette (<code>f1_car_front_v2.html</code>).
+    Existing v1 is unchanged — compare photo → v2 → v1 here.
+  </p>
+
+  <div class="comp-controls">
+    <label><input type="checkbox" id="toggle-grid" checked> Show grid</label>
+    <label><input type="checkbox" id="toggle-labels" checked> Show cell labels</label>
+  </div>
+
+  <div class="comp-grid-pair">
+    <div class="comp-panel">
+      <div class="comp-panel-head">
+        <span>Photo reference</span>
+        <span>SF90-era front-on</span>
+      </div>
+      <div class="comp-stage">
+        <img src="/static/ref/f1_front_photo_reference.png" alt="F1 front photo reference"/>
+        {% include "partials/composition_grid_overlay.html" %}
+        {% for r in rows %}
+        <span class="comp-row-label" style="top: {{ r.y }}%">{{ r.id }}</span>
+        {% endfor %}
+        {% for c in cols %}
+        <span class="comp-col-label" style="left: {{ c.x }}%">{{ c.id }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="comp-panel">
+      <div class="comp-panel-head">
+        <span>SVG v2 (live)</span>
+        <span>Photo-led · team tokens</span>
+      </div>
+      <div class="comp-stage">
+        <div class="comp-svg-wrap">
+          {% set car_style = '--s:1; --primary:#DC0000; --secondary:#111111; --accent:#FFD100; --ink:rgba(10,14,28,0.55); --tyre:#111111;' %}
+          {% with symbol_id='comp-v2-car', car_style=car_style, width=544, height=320, preserve_aspect_ratio='none' %}
+          {% include 'partials/f1_car_front_v2.html' %}
+          {% endwith %}
+        </div>
+        {% include "partials/composition_grid_overlay.html" %}
+        {% for r in rows %}
+        <span class="comp-row-label" style="top: {{ r.y }}%">{{ r.id }}</span>
+        {% endfor %}
+        {% for c in cols %}
+        <span class="comp-col-label" style="left: {{ c.x }}%">{{ c.id }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="comp-grid-pair">
+    <div class="comp-panel">
+      <div class="comp-panel-head">
+        <span>SVG v1 (unchanged)</span>
+        <span>Vector-ref silhouette</span>
+      </div>
+      <div class="comp-stage">
+        <div class="comp-svg-wrap">
+          {% set car_style = '--s:1; --primary:#FFFFFF; --secondary:#111111; --accent:#D4AF37; --ink:rgba(10,14,28,0.55); --tyre:#111111;' %}
+          {% with symbol_id='comp-v1-car', car_style=car_style, width=544, height=320, preserve_aspect_ratio='none' %}
+          {% include 'partials/f1_car_front.html' %}
+          {% endwith %}
+        </div>
+        {% include "partials/composition_grid_overlay.html" %}
+        {% for r in rows %}
+        <span class="comp-row-label" style="top: {{ r.y }}%">{{ r.id }}</span>
+        {% endfor %}
+        {% for c in cols %}
+        <span class="comp-col-label" style="left: {{ c.x }}%">{{ c.id }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="comp-panel">
+      <div class="comp-panel-head">
+        <span>SVG v2 · white/gold</span>
+        <span>Structure QA livery</span>
+      </div>
+      <div class="comp-stage">
+        <div class="comp-svg-wrap">
+          {% set car_style = '--s:1; --primary:#FFFFFF; --secondary:#111111; --accent:#D4AF37; --ink:rgba(10,14,28,0.55); --tyre:#111111;' %}
+          {% with symbol_id='comp-v2-qa', car_style=car_style, width=544, height=320, preserve_aspect_ratio='none' %}
+          {% include 'partials/f1_car_front_v2.html' %}
+          {% endwith %}
+        </div>
+        {% include "partials/composition_grid_overlay.html" %}
+        {% for r in rows %}
+        <span class="comp-row-label" style="top: {{ r.y }}%">{{ r.id }}</span>
+        {% endfor %}
+        {% for c in cols %}
+        <span class="comp-col-label" style="left: {{ c.x }}%">{{ c.id }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <p class="comp-intro">
+    Photo: <a href="/static/ref/f1_front_photo_reference.png" target="_blank" rel="noopener">f1_front_photo_reference.png</a>
+    · Partial: <code>traf1/templates/partials/f1_car_front_v2.html</code>
+    · Team blueprint + Team Colors use v2 alongside v1.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var page = document.getElementById('comp-page');
+  var g = document.getElementById('toggle-grid');
+  var l = document.getElementById('toggle-labels');
+  if (!page) return;
+  function sync() {
+    page.classList.toggle('hide-grid', g && !g.checked);
+    page.classList.toggle('hide-labels', l && !l.checked);
+  }
+  if (g) g.addEventListener('change', sync);
+  if (l) l.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% endblock %}

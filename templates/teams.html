@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Teams {{ year }} — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Teams {{ year }}</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/">Seasons</a> → {{ year }}</p>
+  </div>
+
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Pos</th>
+          <th>Team</th>
+          <th>Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set slug = car_slugs.get(r['team']) if car_slugs else none %}
+        <tr>
+          <td>{{ r["position"] }}</td>
+          <td>
+            <div class="team-cell">
+              {% if slug %}<img class="team-cell-car" src="/static/cars/png/{{ slug }}.png" alt="{{ r['team'] }} 3D car" loading="lazy"/>{% endif %}
+              <a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a>
+            </div>
+          </td>
+          <td>{{ r["points"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <style>
+    .team-cell { display: flex; align-items: center; gap: 12px; }
+    .team-cell-car { width: 96px; height: auto; flex: none; }
+  </style>
+{% endblock %}

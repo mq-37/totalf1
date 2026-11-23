@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Local F1 — Home{% endblock %}
+{% block content %}
+  <div class="museum-hero">
+    <div>
+      <p class="hero-kicker">The Private Collection · {{ latest or '' }}</p>
+      <h1 class="hero-title">LOCAL&nbsp;F1</h1>
+      <p class="hero-sub">Seventy-five seasons of Formula 1, catalogued. Driver cards, team liveries and career records — exhibited season by season, from 1950 to today.</p>
+      <div class="hero-doors">
+        <a href="/career" class="hero-door is-primary-door"><i class="fas fa-briefcase"></i> F1 Career Manager</a>
+        <a href="/play" class="hero-door"><i class="fas fa-gamepad"></i> Play &amp; GPS Sim</a>
+        <a href="/cards" class="hero-door"><i class="fas fa-id-card"></i> Driver Cards</a>
+        <a href="/races/{{ latest or '' }}" class="hero-door"><i class="fas fa-flag-checkered"></i> Races {{ latest or '' }}</a>
+        <a href="/drivers/{{ latest or '' }}" class="hero-door"><i class="fas fa-helmet-safety"></i> Drivers {{ latest or '' }}</a>
+        <a href="/analytics/overall" class="hero-door"><i class="fas fa-chart-line"></i> Analytics</a>
+      </div>
+      {% if champion_team %}
+      <p class="hero-champion">Now exhibiting — the <strong>{{ champion_team }}</strong> car of <strong>{{ champion_driver }}</strong>, {{ latest }} World Champion. Drag the exhibit to walk around it.</p>
+      {% endif %}
+    </div>
+      <div>
+      {% if champion_team and champion_slug %}
+      <div class="plinth" data-team="{{ champion_team }}" data-color="{{ champion_color }}">
+        <canvas class="plinth-canvas" aria-label="3D model of the {{ champion_team }} livery car"></canvas>
+        <img class="plinth-fallback" src="/static/cars/png/{{ champion_slug }}.png" alt="{{ champion_team }} 3D livery car"/>
+        <span class="plinth-hint">drag to orbit · scroll to zoom</span>
+      </div>
+      {% endif %}
+      </div>
+  </div>
+
+  <div data-tabs>
+    <div class="tabs-nav" data-tab-nav role="tablist">
+      <button type="button" data-tab role="tab" aria-selected="true">Browse Latest</button>
+      <button type="button" data-tab role="tab">Admin</button>
+      <button type="button" data-tab role="tab">All Seasons</button>
+    </div>
+
+    <div data-tab-panel class="tab-panel" role="tabpanel">
+      <div class="card">
+        <div class="head">
+          <h3><i class="fas fa-clock"></i> Browse Latest</h3>
+        </div>
+        {% set latest = seasons[-1] if seasons else None %}
+        {% if latest %}
+        <div class="link-list">
+          <a href="/races/{{ latest }}" class="badge">Races {{ latest }}</a>
+          <a href="/drivers/{{ latest }}" class="badge">Drivers {{ latest }}</a>
+          <a href="/teams/{{ latest }}" class="badge">Teams {{ latest }}</a>
+          <a href="/awards/{{ latest }}" class="badge">Fastest Laps {{ latest }}</a>
+        </div>
+        {% else %}
+        <p class="muted">No seasons loaded yet. Run <code>python3 -m f1data.cli scrape-all</code> from the traf1 directory.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div data-tab-panel class="tab-panel" role="tabpanel">
+      <div class="card">
+        <div class="head">
+          <h3><i class="fas fa-tools"></i> Admin Shortcuts</h3>
+        </div>
+        <div class="link-list">
+          <a href="/admin/teams/colors" class="badge">Team Colors</a>
+          <a href="/driver" class="badge">Driver Search</a>
+          <a href="/dev/car-liveries" class="badge">Car Liveries</a>
+          <a href="/dev/car-3d" class="badge">3D Car Studio</a>
+          <button type="button" id="prefetch-images-btn" class="badge" style="cursor:pointer;">Prefetch Next 10 Images</button>
+          <span id="prefetch-images-status" class="muted small" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+
+    <div data-tab-panel class="tab-panel" role="tabpanel">
+      <div class="card">
+        <div class="head">
+          <h3><i class="fas fa-calendar-alt"></i> All Seasons</h3>
+        </div>
+        <ul class="seasons-list">
+          {% for y in seasons %}
+          <li>
+            <strong class="season-year">{{ y }}</strong>
+            <span class="season-links">
+              <a href="/races/{{ y }}">Races</a>
+              <a href="/drivers/{{ y }}">Drivers</a>
+              <a href="/teams/{{ y }}">Teams</a>
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_car_3d.js"></script>
+  <script src="/static/js/museum.js"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById('prefetch-images-btn');
+      var status = document.getElementById('prefetch-images-status');
+      if (!btn || !status) return;
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        status.textContent = 'Prefetching up to 10 driver images…';
+        try {
+          var res = await fetch('/api/prefetch/driver-images?limit=10', { method: 'POST' });
+          var data = await res.json();
+          status.textContent = 'Done: ' + (data.fetched || 0) + ' fetched, ' + (data.existing || 0) + ' cached, ' + (data.failed || 0) + ' failed.';
+        } catch (e) {
+          status.textContent = 'Prefetch failed (offline or server error).';
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+{% endblock %}

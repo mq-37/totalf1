@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}{{ team }} — Local F1{% endblock %}
+{% block content %}
+  {% set colors = request.app.state.get_team_colors(team) if (request and request.app and request.app.state and request.app.state.get_team_colors) else {'primary':'#777','secondary':'#ddd','accent':'#111'} %}
+  {% set car_style_team = '--s:1; --primary:' ~ colors.primary ~ '; --secondary:' ~ colors.secondary ~ '; --accent:' ~ colors.accent ~ '; --ink:rgba(10,14,28,0.55); --tyre:#111111;' %}
+
+  <div class="profile-page">
+    <div class="page-header">
+      <h1>{{ team }}</h1>
+      <p class="breadcrumb"><a href="/">Home</a> → <a href="/analytics/team">Analytics</a> → {{ team }}</p>
+    </div>
+
+    <div data-tabs class="profile-tabs">
+      <div class="tabs-nav" data-tab-nav role="tablist">
+        <button type="button" data-tab role="tab" aria-selected="true">Overview</button>
+        <button type="button" data-tab role="tab"><i class="fas fa-id-card"></i> Driver Cards ({{ (team_cards | default([])) | length }})</button>
+        <button type="button" data-tab role="tab">Results</button>
+        <button type="button" data-tab role="tab"><i class="fas fa-trophy"></i> Champions</button>
+        <button type="button" data-tab role="tab">Drivers</button>
+      </div>
+
+      {# —— Overview —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <section class="team-blueprint" aria-label="{{ team }} technical sheet"
+                 style="--blueprint-accent: {{ colors.primary }};">
+          <header class="team-blueprint-header">
+            <div>
+              <h1 class="team-blueprint-title">{{ team }}</h1>
+              <p class="team-blueprint-meta">
+                <span>{{ range.first_year }} — {{ range.last_year }}</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ totals.seasons or 0 }} seasons</span>
+              </p>
+            </div>
+            <div class="profile-swatches" aria-label="Team colours">
+              <span class="profile-swatch" title="Primary {{ colors.primary }}" style="background: {{ colors.primary }}"></span>
+              <span class="profile-swatch" title="Secondary {{ colors.secondary }}" style="background: {{ colors.secondary }}"></span>
+              <span class="profile-swatch" title="Accent {{ colors.accent }}" style="background: {{ colors.accent }}"></span>
+            </div>
+          </header>
+
+          {% if car_slug %}
+          <div class="team-livery-hero">
+            <div class="plinth" data-team="{{ team }}" data-color="{{ colors.primary }}" data-era="{{ car_era or '2020s' }}">
+              <canvas class="plinth-canvas" aria-label="3D model of the {{ team }} livery car"></canvas>
+              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png" alt="{{ team }} 3D livery car"/>
+              <span class="plinth-hint">drag to orbit · scroll to zoom</span>
+            </div>
+            {% if car_palette %}
+            <div class="team-livery-swatches" aria-label="Livery palette">
+              {% for slot, hexv in car_palette.items() %}
+              <span class="team-livery-swatch" title="{{ slot }} {{ hexv }}">
+                <span class="team-livery-chip" style="background: {{ hexv }}"></span>
+                <span class="team-livery-hex">{{ hexv }}</span>
+                <span class="team-livery-slot">{{ slot }}</span>
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div class="team-blueprint-sheet" id="team-blueprint-sheet"
+               data-palette='{{ (car_palette or {"main": colors.primary, "secondary": colors.secondary, "accent": colors.accent, "pop": "#FFFFFF", "detail": "#2A303C"}) | tojson }}'
+               data-style="{{ car_livery_style or 'modern' }}"
+               data-era="{{ car_era or '2020s' }}">
+            <div class="team-blueprint-top">
+              <p class="team-blueprint-view-label">Top · 3D Orthographic</p>
+              <img class="team-blueprint-car ortho-view" data-ortho="top" alt="{{ team }} top 3D blueprint" style="display:none;"/>
+              <div class="ortho-fallback">
+                {% with symbol_id='f1-top-team-blueprint', car_style=car_style_team, width=520, height=243, extra_class='team-blueprint-car' %}
+                {% include 'partials/f1_car_top.html' %}
+                {% endwith %}
+              </div>
+            </div>
+
+            <div class="team-blueprint-flavour">
+              <dl class="team-blueprint-specs">
+                <div>
+                  <dt>Engine</dt>
+                  <dd>1.6 L 90° V6 turbocharged hybrid, mid-mounted RWD, ~15,000 RPM limit</dd>
+                </div>
+                <div>
+                  <dt>Electric</dt>
+                  <dd>Motor Generator Unit-Kinetic (MGU-K) and Motor Generator Unit-Heat (MGU-H)</dd>
+                </div>
+                <div>
+                  <dt>Transmission</dt>
+                  <dd>8-speed semi-automatic seamless-shift sequential gearbox + 1 reverse</dd>
+                </div>
+                <div>
+                  <dt>Power</dt>
+                  <dd>~1,000 hp hybrid class (ICE + ERS)</dd>
+                </div>
+                <div>
+                  <dt>Weight</dt>
+                  <dd>Regulation minimum (hybrid-era cars)</dd>
+                </div>
+              </dl>
+              <p class="team-blueprint-flavour-note">Generic modern F1 power-unit flavour — not team-specific scraped data.</p>
+            </div>
+
+            <div class="team-blueprint-front">
+              <p class="team-blueprint-view-label">Front · 3D Orthographic</p>
+              <img class="team-blueprint-car ortho-view" data-ortho="front" alt="{{ team }} front 3D blueprint" style="display:none;"/>
+              <div class="ortho-fallback">
+                {% with symbol_id='f1-front-v2-team-blueprint', car_style=car_style_team, width=520, height=306, extra_class='team-blueprint-car' %}
+                {% include 'partials/f1_car_front_v2.html' %}
+                {% endwith %}
+              </div>
+            </div>
+
+            <div class="team-blueprint-team">
+              <dl class="team-blueprint-specs">
+                <div>
+                  <dt>Team</dt>
+                  <dd>{{ team }}</dd>
+                </div>
+                <div>
+                  <dt>Active</dt>
+                  <dd>{{ range.first_year }} — {{ range.last_year }} ({{ totals.seasons or 0 }} seasons)</dd>
+                </div>
+                <div>
+                  <dt>Total points</dt>
+                  <dd>{{ totals.total_points or 0 }}</dd>
+                </div>
+                <div>
+                  <dt>Wins</dt>
+                  <dd>{{ totals.wins or 0 }}</dd>
+                </div>
+                <div>
+                  <dt>Constructor titles</dt>
+                  <dd>{{ totals.titles or 0 }}</dd>
+                </div>
+                <div>
+                  <dt>Era &amp; Livery</dt>
+                  <dd>{{ car_era or '2020s' }} · {{ (car_livery_style or 'modern') | replace('-', ' ') | title }} · <a href="/dev/car-3d?team={{ team | urlencode }}&era={{ car_era or '2020s' }}">Open in 3D Studio →</a></dd>
+                </div>
+                <div>
+                  <dt>Colours</dt>
+                  <dd>
+                    <span class="team-blueprint-hex">{{ colors.primary }}</span>
+                    <span class="team-blueprint-hex">{{ colors.secondary }}</span>
+                    <span class="team-blueprint-hex">{{ colors.accent }}</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="team-blueprint-side">
+              <p class="team-blueprint-view-label">Side · 3D Orthographic</p>
+              <img class="team-blueprint-car ortho-view" data-ortho="side" alt="{{ team }} side 3D blueprint" style="display:none;"/>
+              <div class="ortho-fallback">
+                {% with symbol_id='f1-side-team-blueprint', car_style=car_style_team, width=520, height=156, extra_class='team-blueprint-car' %}
+                {% include 'partials/f1_car_side.html' %}
+                {% endwith %}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <details class="profile-edit no-print">
+          <summary>Edit colours</summary>
+          <div class="profile-edit-body">
+            <div class="profile-edit-section">
+              <form method="post" action="/api/team/{{ team.replace(' ', '-') }}/colors" class="form-row">
+                <label>Primary <input type="color" name="primary" value="{{ colors.primary }}"/></label>
+                <label>Secondary <input type="color" name="secondary" value="{{ colors.secondary }}"/></label>
+                <label>Accent <input type="color" name="accent" value="{{ colors.accent }}"/></label>
+                <button type="submit">Save Colours</button>
+              </form>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      {# —— All Team Driver Cards (View & Download Collector / Game PDFs) —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <div class="card no-print toolbar-card" style="margin-bottom:18px;">
+          <div class="toolbar">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;">
+              <input type="text" id="team-cards-filter" placeholder="Filter {{ team }} drivers…" class="input-search" style="max-width:280px;" oninput="filterTeamCards()"/>
+              <span id="team-cards-count" class="badge">{{ (team_cards | default([])) | length }} Drivers</span>
+            </div>
+            <div class="toolbar-actions">
+              <a href="/team/{{ team.replace(' ', '-') }}/cards.pdf?mode=collector" target="_blank"><button type="button"><i class="fas fa-file-pdf"></i> All Collector Cards PDF</button></a>
+              <a href="/team/{{ team.replace(' ', '-') }}/cards.pdf?mode=game" target="_blank"><button type="button" class="btn-secondary"><i class="fas fa-bolt"></i> All Game Cards PDF</button></a>
+              <button type="button" class="btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cards-grid print-grid" id="team-cards-grid">
+          {% for c in (team_cards | default([])) %}
+          {% set medal = 'medal-gold' if c.rank == 1 else ('medal-silver' if c.rank == 2 else ('medal-bronze' if c.rank == 3 else '')) %}
+          <article class="exhibit {{ medal }}" data-tcard-name="{{ c.driver | lower }}" style="--team: {{ c.team_color or colors.primary }}">
+            <div class="career-bar" aria-hidden="true"><span class="career-seg" style="background:{{ c.team_color or colors.primary }}"></span></div>
+            <header class="exhibit-head">
+              <span class="exhibit-rank">#{{ c.rank }}</span>
+              {% if c.driver_image %}<img class="exhibit-photo" src="/{{ c.driver_image }}" alt="" loading="lazy"/>{% endif %}
+              <div class="exhibit-id">
+                <a class="exhibit-name" href="/driver/{{ c.driver.replace(' ', '-') }}">{{ c.driver }}</a>
+                <span class="exhibit-meta">{{ c.nationality or '' }} · {{ c.years_active }} ({{ c.team_seasons }}s)</span>
+              </div>
+            </header>
+            <div class="exhibit-car">
+              {% if c.car_slug %}
+              <img src="/static/cars/png/{{ c.car_slug }}.png" alt="{{ team }} 3D livery" loading="lazy"/>
+              {% endif %}
+              <span class="exhibit-teams">{{ team }}</span>
+            </div>
+            <div class="exhibit-heroes">
+              <div><b>{{ c.overall }}</b><span>overall</span></div>
+              <div><b>{{ c.points }}</b><span>team pts</span></div>
+              <div><b>{{ c.wins }}</b><span>team wins</span></div>
+              <div><b>{{ c.fastest_laps }}</b><span>career fl</span></div>
+            </div>
+            {% if c.badges %}
+            <div class="exhibit-badges">
+              {% for b in c.badges[:3] %}
+              <span class="badge acc-mini-badge">{% with badge_name=b, size=16 %}{% include 'partials/accolade_icon.html' %}{% endwith %}{{ b }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <div class="exhibit-dl-row no-print">
+              <a href="/driver/{{ c.driver.replace(' ', '-') }}" class="badge"><i class="fas fa-user"></i> Profile</a>
+              <a href="/driver/{{ c.driver.replace(' ', '-') }}/cards.pdf?mode=collector" target="_blank" class="badge"><i class="fas fa-file-pdf"></i> PDF</a>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+        <script>
+          function filterTeamCards() {
+            var q = (document.getElementById('team-cards-filter').value || '').trim().toLowerCase();
+            var cards = document.querySelectorAll('#team-cards-grid article[data-tcard-name]');
+            var shown = 0;
+            cards.forEach(function (el) {
+              var ok = !q || el.getAttribute('data-tcard-name').indexOf(q) !== -1;
+              el.style.display = ok ? '' : 'none';
+              if (ok) shown++;
+            });
+            document.getElementById('team-cards-count').textContent = shown + ' / ' + cards.length + ' Drivers';
+          }
+        </script>
+      </div>
+
+      {# —— Results —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <div class="profile-two-col">
+          <div>
+            <h2 class="profile-section-title">Points by season</h2>
+            <div class="card table-card">
+              <table>
+                <thead><tr><th>Year</th><th>Points</th></tr></thead>
+                <tbody>
+                  {% for r in points_by_year %}
+                  <tr><td>{{ r["year"] }}</td><td>{{ r["points"] }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h2 class="profile-section-title">Wins by season</h2>
+            <div class="card table-card">
+              <table>
+                <thead><tr><th>Year</th><th>Wins</th></tr></thead>
+                <tbody>
+                  {% for r in wins_by_year %}
+                  <tr><td>{{ r["year"] }}</td><td>{{ r["wins"] }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# —— Champions —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <h2 class="profile-section-title">Champion drivers for {{ team }}</h2>
+        <div class="card table-card">
+          <table>
+            <thead><tr><th>Year</th><th>Driver</th><th>Points</th></tr></thead>
+            <tbody>
+              {% for r in champion_drivers %}
+              <tr>
+                <td><span class="badge" style="border-color:#fbbf24;color:#fde047;">{{ r["year"] }}</span></td>
+                <td><a href="/driver/{{ r['driver'].replace(' ', '-') }}" style="display:inline-flex;align-items:center;gap:8px;">{% with badge_name='Champion', size=22 %}{% include 'partials/accolade_icon.html' %}{% endwith %}<strong>{{ r["driver"] }}</strong></a></td>
+                <td><strong>{{ r["points"] }}</strong></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# —— Drivers —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <h2 class="profile-section-title">Drivers (all-time)</h2>
+        <div class="card">
+          <ul class="driver-list">
+            {% for d in drivers %}
+            <li><a href="/driver/{{ d.replace(' ', '-') }}">{{ d }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .team-livery-hero { padding: 18px 20px 8px; }
+    .team-livery-car { width: 100%; max-width: 640px; height: auto; display: block; margin: 0 auto; }
+    .team-livery-swatches { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; justify-content: center; }
+    .team-livery-swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; }
+    .team-livery-chip { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.25); display: inline-block; }
+    .team-livery-hex { font-family: monospace; }
+    .team-livery-slot { opacity: 0.65; }
+  </style>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_car_3d.js"></script>
+  <script src="/static/js/museum.js"></script>
+  <script>
+    (function () {
+      var sheet = document.getElementById('team-blueprint-sheet');
+      if (!sheet || !window.F1Car3D || !window.THREE) return;
+      try {
+        var pal = JSON.parse(sheet.getAttribute('data-palette') || '{}');
+        var style = sheet.getAttribute('data-style') || 'modern';
+        var era = sheet.getAttribute('data-era') || '2020s';
+        var views = F1Car3D.renderOrthoViews(pal, style, era);
+        if (!views) return;
+        ['top', 'front', 'side'].forEach(function (k) {
+          var img = sheet.querySelector('img[data-ortho="' + k + '"]');
+          if (!img || !views[k]) return;
+          img.src = views[k];
+          img.style.display = 'block';
+          var fb = img.parentElement && img.parentElement.querySelector('.ortho-fallback');
+          if (fb) fb.style.display = 'none';
+        });
+      } catch (e) {}
+    })();
+  </script>
+{% endblock %}

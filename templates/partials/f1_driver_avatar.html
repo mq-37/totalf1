@@ -1,0 +1,195 @@
+{# Studio-grade sculpted FIA F1 Race Suit + Carbon-Aero Helmet SVG.
+   Expects avatar_style (CSS vars: --suit, --helmet, --accent, --trim).
+   Optional: width, height, svg_id, extra_class #}
+{% set uid = svg_id | default('av') %}
+<svg {% if svg_id %}id="{{ svg_id }}"{% endif %}
+     class="avatar-silhouette driver-avatar {{ extra_class | default('') }}"
+     viewBox="0 0 140 210"
+     width="{{ width | default(140) }}"
+     height="{{ height | default(210) }}"
+     preserveAspectRatio="xMidYMid meet"
+     xmlns="http://www.w3.org/2000/svg"
+     style="{{ avatar_style }}">
+  <defs>
+    {# 3D cylindrical fabric shading overlay for Nomex suit depth #}
+    <linearGradient id="suitShade-{{ uid }}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.30"/>
+      <stop offset="22%" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="78%" stop-color="#000000" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.34"/>
+    </linearGradient>
+    {# Helmet glossy spherical sheen #}
+    <radialGradient id="helmGloss-{{ uid }}" cx="38%" cy="28%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.46"/>
+      <stop offset="32%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="78%" stop-color="#000000" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.42"/>
+    </radialGradient>
+    {# Iridium dark FIA visor gradient #}
+    <linearGradient id="visorGrad-{{ uid }}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="38%" stop-color="#0b1324"/>
+      <stop offset="68%" stop-color="#172554"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    {# Subtle floor spotlight contact shadow #}
+    <radialGradient id="floorShad-{{ uid }}" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.62"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    {# Clip path for helmet shell graphics #}
+    <clipPath id="helmClip-{{ uid }}">
+      <path d="M46 34 C46 16 56 8 70 8 C84 8 94 16 94 34 C94 46 86 55 70 56 C54 55 46 46 46 34 Z"/>
+    </clipPath>
+  </defs>
+
+  {# —— Ground Shadow —— #}
+  <ellipse cx="70" cy="201" rx="34" ry="5.5" fill="url(#floorShad-{{ uid }})"/>
+
+  {# —— Carbon F1 Racing Boots —— #}
+  <g id="boots">
+    {# Left boot #}
+    <path d="M48 184 L62 184 L61 196 L43 197 C40 197 39 194 41 191 L47 185 Z" fill="#11151d"/>
+    <path d="M40 196 L62 195.5 L62 199.5 L41 199.5 C39.5 199.5 39 197.5 40 196 Z" fill="#06080d"/>
+    <path d="M46 190 L59 190" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+    {# Right boot #}
+    <path d="M92 184 L78 184 L79 196 L97 197 C100 197 101 194 99 191 L93 185 Z" fill="#11151d"/>
+    <path d="M100 196 L78 195.5 L78 199.5 L99 199.5 C100.5 199.5 101 197.5 100 196 Z" fill="#06080d"/>
+    <path d="M94 190 L81 190" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  {# —— Nomex Legs & Knee Articulation —— #}
+  <g id="legs">
+    {# Left leg #}
+    <path d="M47 125 L69 125 L65 157 L62 185 L48 185 L46 156 Z" fill="var(--suit)"/>
+    <path d="M47 125 L69 125 L65 157 L62 185 L48 185 L46 156 Z" fill="url(#suitShade-{{ uid }})"/>
+    {# Right leg #}
+    <path d="M71 125 L93 125 L94 156 L92 185 L78 185 L75 157 Z" fill="var(--suit)"/>
+    <path d="M71 125 L93 125 L94 156 L92 185 L78 185 L75 157 Z" fill="url(#suitShade-{{ uid }})"/>
+    {# Outer leg racing stripes #}
+    <path d="M48 128 L47 156 L49 183" stroke="var(--trim)" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M92 128 L93 156 L91 183" stroke="var(--trim)" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="0.9"/>
+    <path d="M51 130 L50.5 156 L52 181" stroke="var(--accent)" stroke-width="1.3" fill="none" opacity="0.95"/>
+    <path d="M89 130 L89.5 156 L88 181" stroke="var(--accent)" stroke-width="1.3" fill="none" opacity="0.95"/>
+    {# Knee quilted creases & ankle cuffs #}
+    <path d="M50 156 Q56 159 62 156" stroke="rgba(0,0,0,0.28)" stroke-width="1.4" fill="none"/>
+    <path d="M78 156 Q84 159 90 156" stroke="rgba(0,0,0,0.28)" stroke-width="1.4" fill="none"/>
+    <rect x="47.5" y="180" width="15" height="4.5" rx="1.2" fill="var(--trim)"/>
+    <rect x="77.5" y="180" width="15" height="4.5" rx="1.2" fill="var(--trim)"/>
+  </g>
+
+  {# —— Arms & Fireproof Racing Gloves —— #}
+  <g id="arms">
+    {# Left sleeve #}
+    <path d="M40 65 L27 98 L25 126 L36 127 L41 102 L48 79 Z" fill="var(--suit)"/>
+    <path d="M40 65 L27 98 L25 126 L36 127 L41 102 L48 79 Z" fill="url(#suitShade-{{ uid }})"/>
+    <path d="M38 69 L28 98 L27 123" stroke="var(--trim)" stroke-width="2.6" fill="none" opacity="0.88"/>
+    <path d="M25 122 L36 123.5" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+    {# Right sleeve #}
+    <path d="M100 65 L113 98 L115 126 L104 127 L99 102 L92 79 Z" fill="var(--suit)"/>
+    <path d="M100 65 L113 98 L115 126 L104 127 L99 102 L92 79 Z" fill="url(#suitShade-{{ uid }})"/>
+    <path d="M102 69 L112 98 L113 123" stroke="var(--trim)" stroke-width="2.6" fill="none" opacity="0.88"/>
+    <path d="M115 122 L104 123.5" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <g id="gloves">
+    {# Left FIA glove #}
+    <path d="M25 125 L36 126 L37 137 C37 141 33 144 29 143 C25 142 23 138 24 133 Z" fill="var(--accent)"/>
+    <path d="M26 131 L35 132" stroke="#0f172a" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+    {# Right FIA glove #}
+    <path d="M115 125 L104 126 L103 137 C103 141 107 144 111 143 C115 142 117 138 116 133 Z" fill="var(--accent)"/>
+    <path d="M114 131 L105 132" stroke="#0f172a" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+  </g>
+
+  {# —— Sculpted Athletic Nomex Torso —— #}
+  <g id="torso">
+    <path d="M40 65
+             C45 60 54 57 70 57
+             C86 57 95 60 100 65
+             L96 86 L93 127 L47 127 L44 86 Z"
+          fill="var(--suit)"/>
+
+    {# Side dark ergonomic stretch panels #}
+    <path d="M44 79 L52 84 L51 118 L47 124 Z" fill="var(--trim)" opacity="0.9"/>
+    <path d="M96 79 L88 84 L89 118 L93 124 Z" fill="var(--trim)" opacity="0.9"/>
+
+    {# Dynamic F1 Telemetry Chest Chevron & Accent Stripes #}
+    <path d="M51 74 L70 84 L89 74 L89 80 L70 90 L51 80 Z" fill="var(--accent)" opacity="0.95"/>
+    <path d="M53 84 L70 93 L87 84 L87 87 L70 96 L53 87 Z" fill="var(--trim)" opacity="0.88"/>
+
+    {# Shoulder FIA Extraction Epaulettes #}
+    <path d="M41 64 L57 59 L59 64 L44 70 Z" fill="var(--trim)"/>
+    <path d="M43 65 L56 60.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M99 64 L83 59 L81 64 L96 70 Z" fill="var(--trim)"/>
+    <path d="M97 65 L84 60.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/>
+
+    {# Center zip & subtle sponsor badge micro-blocks #}
+    <line x1="70" y1="62" x2="70" y2="119" stroke="rgba(0,0,0,0.34)" stroke-width="1.3"/>
+    <rect x="54" y="96" width="11" height="4" rx="1" fill="rgba(255,255,255,0.78)" opacity="0.72"/>
+    <rect x="75" y="96" width="11" height="4" rx="1" fill="rgba(255,255,255,0.78)" opacity="0.72"/>
+    <rect x="58" y="104" width="24" height="3.2" rx="1" fill="var(--accent)" opacity="0.62"/>
+
+    {# 3D Torso shading overlay #}
+    <path d="M40 65 C45 60 54 57 70 57 C86 57 95 60 100 65 L96 86 L93 127 L47 127 L44 86 Z"
+          fill="url(#suitShade-{{ uid }})"/>
+
+    {# FIA Nomex Collar + Carbon HANS Device #}
+    <path d="M55 56 Q70 64 85 56 L89 63 Q70 72 51 63 Z" fill="#141923"/>
+    <path d="M57 57 Q70 64 83 57" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M53 60 L58 72 L62 71 L58 59 Z" fill="#0b0f17" opacity="0.9"/>
+    <path d="M87 60 L82 72 L78 71 L82 59 Z" fill="#0b0f17" opacity="0.9"/>
+
+    {# FIA Velcro Waist Belt & Buckle #}
+    <rect x="46.5" y="117" width="47" height="7" rx="2" fill="var(--trim)"/>
+    <rect x="47.5" y="119.5" width="45" height="2" rx="1" fill="var(--accent)" opacity="0.9"/>
+    <rect x="63" y="116.5" width="14" height="8" rx="1.8" fill="#0f172a" stroke="var(--accent)" stroke-width="1"/>
+  </g>
+
+  {# —— Carbon-Aero FIA F1 Helmet —— #}
+  <g id="helmet">
+    {# Base shell #}
+    <path d="M46 34 C46 16 56 8 70 8 C84 8 94 16 94 34 C94 46 86 55 70 56 C54 55 46 46 46 34 Z"
+          fill="var(--helmet)"/>
+
+    {# Clipped Helmet Livery Graphics (NEVER crosses over the visor!) #}
+    <g clip-path="url(#helmClip-{{ uid }})">
+      {# Top crown racing stripe (stops cleanly at brow line y=25) #}
+      <path d="M64 7 L76 7 L74 26 L66 26 Z" fill="var(--accent)" opacity="0.95"/>
+      {# Side dynamic aero swoosh lines #}
+      <path d="M43 22 Q56 18 65 23 L64 26 Q54 22 43 27 Z" fill="var(--trim)" opacity="0.88"/>
+      <path d="M97 22 Q84 18 75 23 L76 26 Q86 22 97 27 Z" fill="var(--trim)" opacity="0.88"/>
+      {# Lower jaw aero contour band #}
+      <path d="M44 43 Q57 48 70 48 Q83 48 96 43 L96 56 L44 56 Z" fill="var(--trim)" opacity="0.82"/>
+      <path d="M45 42 Q58 46.5 70 46.5 Q82 46.5 95 42" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.95"/>
+    </g>
+
+    {# Glossy 3D spherical lighting on shell #}
+    <path d="M46 34 C46 16 56 8 70 8 C84 8 94 16 94 34 C94 46 86 55 70 56 C54 55 46 46 46 34 Z"
+          fill="url(#helmGloss-{{ uid }})"/>
+
+    {# Top aero intake vents #}
+    <ellipse cx="62" cy="14" rx="2.4" ry="1.3" fill="rgba(0,0,0,0.45)"/>
+    <ellipse cx="78" cy="14" rx="2.4" ry="1.3" fill="rgba(0,0,0,0.45)"/>
+
+    {# Sculpted Iridium Curved FIA Visor + Tear-Off Strip + Specular Glint #}
+    <path d="M49 30 C54 25.5 62 24.5 70 24.5 C78 24.5 86 25.5 91 30
+             L89 39.5 C83 37.5 76 37 70 37 C64 37 57 37.5 51 39.5 Z"
+          fill="url(#visorGrad-{{ uid }})" stroke="#020617" stroke-width="1.2"/>
+    {# Upper visor sponsor sun-strip #}
+    <path d="M50.5 29.5 C56 26 63 25.2 70 25.2 C77 25.2 84 26 89.5 29.5 L88.8 31.8 C83 28.8 76.5 28.2 70 28.2 C63.5 28.2 57 28.8 51.2 31.8 Z"
+          fill="var(--accent)" opacity="0.88"/>
+    {# Bright angled glass reflection across iridium visor #}
+    <path d="M55 32.5 L63 31.5 L59 37.5 L53 38 Z" fill="#38bdf8" opacity="0.28"/>
+    <path d="M66 31.3 L70 31.2 L67 36.8 L63.5 36.9 Z" fill="#ffffff" opacity="0.24"/>
+    {# Visor pivot screws #}
+    <circle cx="49.5" cy="34.5" r="2" fill="#0f172a" stroke="rgba(255,255,255,0.4)" stroke-width="0.7"/>
+    <circle cx="90.5" cy="34.5" r="2" fill="#0f172a" stroke="rgba(255,255,255,0.4)" stroke-width="0.7"/>
+
+    {# Chin vent grille #}
+    <rect x="64" y="49" width="12" height="3.2" rx="1.4" fill="#090d16" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>
+    {# Crisp outer shell outline #}
+    <path d="M46 34 C46 16 56 8 70 8 C84 8 94 16 94 34 C94 46 86 55 70 56 C54 55 46 46 46 34 Z"
+          fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  </g>
+</svg>

@@ -1,0 +1,545 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} — Local F1{% endblock %}
+{% block content %}
+  {% set img_path = driver_image if driver_image else None %}
+  {% set latest_team = latest_team if latest_team is defined else (seasons[-1]['team'] if seasons else '') %}
+  {% set tc = request.app.state.get_team_colors(latest_team) if (latest_team and request.app and request.app.state and request.app.state.get_team_colors) else {} %}
+  {% set tcolors = {'primary': tc.get('primary', '#777777'), 'secondary': tc.get('secondary', '#DDDDDD'), 'accent': tc.get('accent', '#111111')} %}
+  {% set team_defaults = team_defaults if team_defaults is defined else {'suit': tcolors.primary, 'helmet': tcolors.secondary, 'accent': tcolors.accent, 'trim': tcolors.accent} %}
+  {% set av_suit = avatar.suit if avatar else team_defaults.suit %}
+  {% set av_helmet = avatar.helmet if avatar else team_defaults.helmet %}
+  {% set av_accent = avatar.accent if avatar else team_defaults.accent %}
+  {% set av_trim = avatar.trim if avatar and avatar.trim else av_accent %}
+  {% set avatar_style = '--suit:' ~ av_suit ~ '; --helmet:' ~ av_helmet ~ '; --accent:' ~ av_accent ~ '; --trim:' ~ av_trim ~ ';' %}
+
+  <div class="profile-page">
+    <div class="page-header">
+      <h1>{{ name }}</h1>
+      <p class="breadcrumb"><a href="/">Home</a> → <a href="/driver">Driver Search</a> → {{ name }}</p>
+    </div>
+
+    <div data-tabs class="profile-tabs">
+      <div class="tabs-nav" data-tab-nav role="tablist">
+        <button type="button" data-tab role="tab" aria-selected="true">Overview</button>
+        <button type="button" data-tab role="tab"><i class="fas fa-trophy"></i> Accolades</button>
+        <button type="button" data-tab role="tab"><i class="fas fa-id-card"></i> Cards ({{ (driver_cards | default([])) | length }})</button>
+        <button type="button" data-tab role="tab">Seasons</button>
+        <button type="button" data-tab role="tab">Performance</button>
+      </div>
+
+      {# —— Overview —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <section class="profile-hero">
+          <div class="profile-hero-media">
+            {% if img_path %}
+            <img src="/{{ img_path }}" alt="{{ name }}" class="driver-photo" loading="lazy"/>
+            {% else %}
+            <div class="profile-hero-placeholder" aria-hidden="true"><i class="fas fa-user"></i></div>
+            {% endif %}
+          </div>
+          <div class="profile-hero-main">
+            <h1>{{ name }}</h1>
+            <p class="profile-meta">
+              <span>Active {{ years_active or '—' }}</span>
+              {% if latest_team %}
+              <span aria-hidden="true">·</span>
+              <a href="/team/{{ latest_team.replace(' ', '-') }}">{{ latest_team }}</a>
+              {% endif %}
+            </p>
+          </div>
+          <div class="profile-hero-car">
+            {% if car_slug %}
+            <div class="plinth plinth-driver" data-team="{{ latest_team }}" data-color="{{ tcolors.primary }}" data-era="{{ car_era or '2020s' }}"{% if latest_year %} data-year="{{ latest_year }}"{% endif %}>
+              <canvas class="plinth-canvas" aria-label="{{ latest_team }} car exhibit"></canvas>
+              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png" alt="{{ latest_team }} 3D car"/>
+              <span class="plinth-hint">drag to orbit</span>
+            </div>
+            {% else %}
+            {% with symbol_id='f1-front-modern-driver', car_style='--s:1; --primary:' ~ tcolors.primary ~ '; --secondary:' ~ tcolors.secondary ~ '; --accent:' ~ tcolors.accent ~ '; --ink:rgba(10,14,28,0.55); --tyre:#111111;', width=200, height=140 %}
+            {% include 'partials/f1_car_front.html' %}
+            {% endwith %}
+            {% endif %}
+          </div>
+        </section>
+
+        <div class="profile-kpis">
+          <div class="profile-kpi">
+            <span class="label">Career Points</span>
+            <div class="value">{{ totals.total_points or 0 }}</div>
+            <div class="hint">{{ totals.seasons_count or 0 }} seasons</div>
+          </div>
+          <div class="profile-kpi">
+            <span class="label">Wins</span>
+            <div class="value">{{ totals.wins or 0 }}</div>
+          </div>
+          <div class="profile-kpi">
+            <span class="label">Fastest Laps</span>
+            <div class="value">{{ totals.fastest_laps or 0 }}</div>
+          </div>
+          <div class="profile-kpi">
+            <span class="label">World Titles</span>
+            <div class="value">{{ totals.titles or 0 }}</div>
+          </div>
+        </div>
+
+        <div class="profile-secondary">
+          <div class="profile-kpi">
+            <span class="label">Teammate W/L</span>
+            <div class="value">{{ team_wl_career.wins or 0 }} / {{ team_wl_career.losses or 0 }}</div>
+          </div>
+          <div class="profile-kpi">
+            <span class="label">Best Overall</span>
+            <div class="value">{{ overall_best or 0 }}</div>
+            <div class="hint">Season {{ overall_best_year or '—' }}</div>
+          </div>
+          <div class="profile-kpi">
+            <span class="label">Best Legacy</span>
+            <div class="value">{{ legacy_overall_best or 0 }}</div>
+            <div class="hint">Season {{ legacy_overall_best_year or '—' }}</div>
+          </div>
+        </div>
+
+        <details class="profile-edit no-print" id="customise-panel" open>
+          <summary><i class="fas fa-sliders-h"></i> Customise Race Suit &amp; Portrait</summary>
+          <div class="profile-edit-body customise-layout">
+            <section class="customise-avatar card">
+              <div class="customise-avatar-head">
+                <h3><i class="fas fa-user-astronaut"></i> FIA Race Suit Studio</h3>
+                {% if avatar and avatar.custom %}
+                <span class="customise-badge">Custom override</span>
+                {% else %}
+                <span class="customise-badge muted-badge">Team defaults{% if latest_team %} · {{ latest_team }}{% endif %}</span>
+                {% endif %}
+              </div>
+              <div class="customise-avatar-grid">
+                <div class="customise-preview" id="avatar-preview-wrap">
+                  {% with svg_id='driver-avatar-preview', avatar_style=avatar_style, width=156, height=234 %}
+                  {% include 'partials/f1_driver_avatar.html' %}
+                  {% endwith %}
+                </div>
+                <form class="customise-form" id="avatar-form" method="post" action="/api/driver/{{ name.replace(' ', '-') }}/avatar">
+                  <div class="suit-presets" aria-label="Quick F1 Suit Presets">
+                    <small class="muted">Quick Presets:</small>
+                    <button type="button" class="suit-preset-chip" data-preset="#dc0000,#ffffff,#facc15,#111827" title="Scuderia Rosso"><i style="background:#dc0000"></i>Rosso</button>
+                    <button type="button" class="suit-preset-chip" data-preset="#c0c7d1,#111827,#00d2be,#1e293b" title="Silver Arrows"><i style="background:#00d2be"></i>Silver</button>
+                    <button type="button" class="suit-preset-chip" data-preset="#ff8000,#111827,#38bdf8,#1e293b" title="Papaya"><i style="background:#ff8000"></i>Papaya</button>
+                    <button type="button" class="suit-preset-chip" data-preset="#1e3a8a,#facc15,#e10600,#0f172a" title="Milton Keynes"><i style="background:#1e3a8a"></i>Blue Bull</button>
+                    <button type="button" class="suit-preset-chip" data-preset="#006f62,#f8fafc,#cedc00,#0b1318" title="British Racing Green"><i style="background:#006f62"></i>BRG</button>
+                    <button type="button" class="suit-preset-chip" data-preset="#b81d24,#f5f0e6,#facc15,#1f2937" title="Classic 1950s Rosso"><i style="background:#b81d24"></i>Classic</button>
+                  </div>
+                  <div class="colour-fields">
+                    <label class="colour-field">
+                      <span>Suit</span>
+                      <span class="colour-controls">
+                        <input type="color" id="av-suit-picker" value="{{ av_suit }}" data-sync="av-suit"/>
+                        <input type="text" name="suit" id="av-suit" value="{{ av_suit }}" pattern="^#?[0-9A-Fa-f]{6}$" spellcheck="false"/>
+                      </span>
+                    </label>
+                    <label class="colour-field">
+                      <span>Helmet</span>
+                      <span class="colour-controls">
+                        <input type="color" id="av-helmet-picker" value="{{ av_helmet }}" data-sync="av-helmet"/>
+                        <input type="text" name="helmet" id="av-helmet" value="{{ av_helmet }}" pattern="^#?[0-9A-Fa-f]{6}$" spellcheck="false"/>
+                      </span>
+                    </label>
+                    <label class="colour-field">
+                      <span>Accent</span>
+                      <span class="colour-controls">
+                        <input type="color" id="av-accent-picker" value="{{ av_accent }}" data-sync="av-accent"/>
+                        <input type="text" name="accent" id="av-accent" value="{{ av_accent }}" pattern="^#?[0-9A-Fa-f]{6}$" spellcheck="false"/>
+                      </span>
+                    </label>
+                    <label class="colour-field">
+                      <span>Trim</span>
+                      <span class="colour-controls">
+                        <input type="color" id="av-trim-picker" value="{{ av_trim }}" data-sync="av-trim"/>
+                        <input type="text" name="trim" id="av-trim" value="{{ av_trim }}" pattern="^#?[0-9A-Fa-f]{6}$" spellcheck="false"/>
+                      </span>
+                    </label>
+                  </div>
+                  <p class="customise-hint muted">Defaults follow {{ latest_team or 'team' }} colours. Saving applies this override across profiles and cards.</p>
+                  <div class="customise-actions">
+                    <button type="submit"><i class="fas fa-check"></i> Save override</button>
+                    <button type="submit" name="reset" value="1" class="btn-secondary" formnovalidate>Reset to team</button>
+                    <button type="button" class="btn-ghost" id="avatar-use-team"
+                            data-suit="{{ team_defaults.suit }}"
+                            data-helmet="{{ team_defaults.helmet }}"
+                            data-accent="{{ team_defaults.accent }}"
+                            data-trim="{{ team_defaults.trim }}">Preview team</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section class="customise-image card">
+              <h3><i class="fas fa-camera"></i> Driver Portrait</h3>
+              <p class="muted small" style="margin:0 0 10px;">Upload a custom portrait photo used on driver cards, PDF sheets, and Career Mode.</p>
+              <form class="customise-upload" action="/api/driver/{{ name.replace(' ', '-') }}/image" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" accept="image/*" required />
+                <button type="submit"><i class="fas fa-upload"></i> Upload</button>
+              </form>
+            </section>
+          </div>
+        </details>
+      </div>
+
+      {# —— Accolades Trophy Cabinet —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <div class="acc-cabinet">
+          {# World Championship Trophy Shelf #}
+          <section class="card acc-hero-card">
+            <div class="head">
+              <h3><i class="fas fa-trophy"></i> World Championship Trophy Shelf</h3>
+              {% if accolades and accolades.champion_years %}
+              <span class="badge" style="border-color:#fbbf24;color:#fde047;">{{ accolades.champion_years | length }}× WORLD CHAMPION</span>
+              {% endif %}
+            </div>
+            {% if accolades and accolades.champion_years %}
+            <div class="acc-champ-shelf">
+              {% for cy in accolades.champion_years %}
+              <a href="/analytics/season?year={{ cy }}" class="acc-champ-plaque">
+                {% with badge_name='Champion', size=40 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                <div>
+                  <strong>{{ cy }}</strong>
+                  <small>WDC Champion</small>
+                </div>
+              </a>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="muted" style="margin:0;">No Formula 1 World Drivers' Championships recorded.</p>
+            {% endif %}
+          </section>
+
+          {# Earned Career Accolades & Badges #}
+          <section class="card">
+            <div class="head">
+              <h3><i class="fas fa-medal"></i> Earned Career Accolades &amp; Honours</h3>
+            </div>
+            {% if accolades and accolades.badge_counts %}
+            <div class="acc-badge-grid">
+              {% for k, v in accolades.badge_counts.items() %}
+              {% set yrs = (accolades.badge_years or {}).get(k, []) %}
+              <div class="acc-badge-card">
+                <div class="acc-badge-ico">
+                  {% with badge_name=k, size=38 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                </div>
+                <div class="acc-badge-body">
+                  <div class="acc-badge-top">
+                    <strong>{{ k }}</strong>
+                    <span class="acc-count-pill">×{{ v }}</span>
+                  </div>
+                  {% if yrs %}
+                  <div class="acc-year-chips">
+                    {% for y in yrs %}<a href="/analytics/season?year={{ y }}" class="acc-yr-chip">{{ y }}</a>{% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="muted" style="margin:0;">No seasonal honour badges recorded yet.</p>
+            {% endif %}
+          </section>
+
+          {# Career Peak Plaques & Legacy Breakdown #}
+          <div class="profile-two-col">
+            <section class="card">
+              <div class="head"><h3><i class="fas fa-bolt"></i> Career Peak Milestones</h3></div>
+              <div class="acc-peak-grid">
+                <div class="acc-peak-card">
+                  {% with badge_name='Wins leader', size=34 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                  <div>
+                    <small>MOST WINS (SEASON)</small>
+                    <b>{{ peaks.most_wins or 0 }} Wins</b>
+                    <span>Season {{ peaks.most_wins_year or '—' }}</span>
+                  </div>
+                </div>
+                <div class="acc-peak-card">
+                  {% with badge_name='Fastest-lap beast', size=34 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                  <div>
+                    <small>MOST FASTEST LAPS</small>
+                    <b>{{ peaks.most_fastest or 0 }} FL</b>
+                    <span>Season {{ peaks.most_fastest_year or '—' }}</span>
+                  </div>
+                </div>
+                <div class="acc-peak-card">
+                  {% with badge_name='GOAT season', size=34 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                  <div>
+                    <small>PEAK OVERALL RATING</small>
+                    <b>{{ overall_best or 0 }}</b>
+                    <span>Season {{ overall_best_year or '—' }}</span>
+                  </div>
+                </div>
+                <div class="acc-peak-card">
+                  {% with badge_name='Teammate sweep', size=34 %}{% include 'partials/accolade_icon.html' %}{% endwith %}
+                  <div>
+                    <small>TEAMMATE HEAD-TO-HEAD</small>
+                    <b>{{ team_wl_career.wins or 0 }} – {{ team_wl_career.losses or 0 }}</b>
+                    <span>Career Record</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="head">
+                <h3><i class="fas fa-crown"></i> Legacy Top-5 Breakdown</h3>
+                {% if legacy_detail %}<span class="badge">+{{ legacy_detail.legacy_bonus }} Legacy Bonus</span>{% endif %}
+              </div>
+              {% if legacy_detail and legacy_detail.legacy_top5 %}
+              <div class="acc-legacy-list">
+                {% for s in legacy_detail.legacy_top5 %}
+                <div class="acc-legacy-row">
+                  <a href="/analytics/season?year={{ s.year }}" class="acc-leg-yr">{{ s.year }}</a>
+                  <div class="acc-leg-bar"><i style="width:{{ [100, s.raw_overall | float] | min }}%"></i></div>
+                  <b class="acc-leg-ovr">{{ s.raw_overall }}</b>
+                  <small class="muted">P:{{ s.pnorm }} · W:{{ s.wnorm }} · FL:{{ s.fnorm }}</small>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <p class="muted" style="margin:0;">—</p>
+              {% endif %}
+            </section>
+          </div>
+        </div>
+      </div>
+
+      {# —— All Driver Cards (View & Download Collector / Game PDFs) —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <div class="card no-print toolbar-card" style="margin-bottom:18px;">
+          <div class="toolbar">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <strong style="font-family:'Orbitron',sans-serif;font-size:0.86rem;color:#fde047;">{{ name }} — Complete Card Collection</strong>
+              <span class="badge">{{ (driver_cards | default([])) | length }} Cards</span>
+            </div>
+            <div class="toolbar-actions">
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=collector" target="_blank"><button type="button"><i class="fas fa-file-pdf"></i> Download All Collector PDF</button></a>
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=game" target="_blank"><button type="button" class="btn-secondary"><i class="fas fa-bolt"></i> Download All Game PDF</button></a>
+              <button type="button" class="btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cards-grid print-grid">
+          {% for c in (driver_cards | default([])) %}
+          {% set medal = 'medal-gold' if (c.card_kind == 'alltime' or c.rank == 1) else ('medal-silver' if c.rank == 2 else ('medal-bronze' if c.rank == 3 else '')) %}
+          <article class="exhibit {{ medal }}" style="--team: {{ c.team_color or '#e10600' }}">
+            <div class="career-bar" aria-hidden="true"><span class="career-seg" style="background:{{ c.team_color or '#e10600' }}"></span></div>
+            <header class="exhibit-head">
+              <span class="exhibit-rank">{{ '★' if c.card_kind == 'alltime' else ('#' ~ c.rank) }}</span>
+              {% if c.driver_image %}<img class="exhibit-photo" src="/{{ c.driver_image }}" alt="" loading="lazy"/>{% endif %}
+              <div class="exhibit-id">
+                <span class="exhibit-name">{{ c.card_label }}</span>
+                <span class="exhibit-meta">{{ c.nationality or '' }}{% if c.team %} · {{ c.team }}{% endif %}</span>
+              </div>
+            </header>
+            <div class="exhibit-car">
+              {% if c.car_slug %}
+              <img src="/static/cars/png/{{ c.car_slug }}.png" alt="{{ c.team }} 3D livery" loading="lazy"/>
+              {% endif %}
+              <span class="exhibit-teams">{{ c.team or 'All-Time Career' }}</span>
+            </div>
+            <div class="exhibit-heroes">
+              <div><b>{{ c.overall }}</b><span>overall</span></div>
+              <div><b>{{ c.points }}</b><span>points</span></div>
+              <div><b>{{ c.wins }}</b><span>wins</span></div>
+              <div><b>{{ c.fastest_laps }}</b><span>fastest</span></div>
+            </div>
+            {% if c.badges %}
+            <div class="exhibit-badges">
+              {% for b in c.badges[:4] %}
+              <span class="badge acc-mini-badge">{% with badge_name=b, size=16 %}{% include 'partials/accolade_icon.html' %}{% endwith %}{{ b }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <div class="exhibit-dl-row no-print">
+              {% if c.year %}
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=collector&year={{ c.year }}" target="_blank" class="badge"><i class="fas fa-download"></i> Collector PDF</a>
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=game&year={{ c.year }}" target="_blank" class="badge"><i class="fas fa-bolt"></i> Game PDF</a>
+              {% else %}
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=collector" target="_blank" class="badge"><i class="fas fa-download"></i> Full Deck PDF</a>
+              <a href="/driver/{{ name.replace(' ', '-') }}/cards.pdf?mode=game" target="_blank" class="badge"><i class="fas fa-bolt"></i> Game Deck PDF</a>
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# —— Seasons —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <h2 class="profile-section-title">Season results</h2>
+        <div class="card table-card">
+          <table>
+            <thead><tr><th>Year</th><th>Pos</th><th>Team</th><th>Points</th></tr></thead>
+            <tbody>
+              {% for r in seasons %}
+              <tr>
+                <td><a href="/analytics/season?year={{ r['year'] }}">{{ r["year"] }}</a></td>
+                <td>{{ r["position"] }}</td>
+                <td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td>
+                <td>{{ r["points"] }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {# —— Performance —— #}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <h2 class="profile-section-title">Season attributes</h2>
+        <div class="card table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th><th>Overall</th><th>Legacy</th><th>Experience</th><th>Legacy titles</th><th>Legacy bonus</th><th>Exp bonus</th><th>Wins</th><th>FL</th><th>Teammate W/L</th><th>Badges</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in season_attributes %}
+              <tr>
+                <td><a href="/analytics/season?year={{ r['year'] }}">{{ r["year"] }}</a></td>
+                <td>{{ r["overall"] }}</td><td>{{ r["legacy_overall"] }}</td>
+                <td>{{ r["experience"] }} ({{ r["experience_seasons"] }})</td>
+                <td>{{ r["legacy_world_titles"] }}</td><td>+{{ r["legacy_bonus"] }}</td><td>+{{ r["experience_bonus"] }}</td>
+                <td>{{ r["wins"] }}</td><td>{{ r["fastest_laps"] }}</td>
+                <td>{{ r["team_driver_wins"] or 0 }} / {{ r["teammate_wins"] or 0 }}</td>
+                <td>{% if r["badges"] %}{{ ", ".join(r["badges"]) }}{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="profile-two-col" style="margin-top: 20px;">
+          <div>
+            <h2 class="profile-section-title">Wins by year</h2>
+            <div class="card table-card">
+              <table>
+                <thead><tr><th>Year</th><th>Wins</th></tr></thead>
+                <tbody>
+                  {% for r in wins_by_year %}
+                  <tr><td>{{ r["year"] }}</td><td>{{ r["wins"] }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h2 class="profile-section-title">Fastest laps by year</h2>
+            <div class="card table-card">
+              <table>
+                <thead><tr><th>Year</th><th>Fastest Laps</th></tr></thead>
+                <tbody>
+                  {% for r in fastest_by_year %}
+                  <tr><td>{{ r["year"] }}</td><td>{{ r["fastest"] }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_car_3d.js"></script>
+  <script src="/static/js/museum.js"></script>
+
+<script>
+(function () {
+  var form = document.getElementById('avatar-form');
+  var preview = document.getElementById('avatar-preview-wrap');
+  if (!form || !preview) return;
+  var svg = preview.querySelector('svg');
+
+  function normHex(v) {
+    v = (v || '').trim();
+    if (!v) return '#000000';
+    if (v[0] !== '#') v = '#' + v;
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) return v.toLowerCase();
+    return null;
+  }
+
+  function applyPreview() {
+    if (!svg) return;
+    var map = {
+      suit: document.getElementById('av-suit'),
+      helmet: document.getElementById('av-helmet'),
+      accent: document.getElementById('av-accent'),
+      trim: document.getElementById('av-trim')
+    };
+    Object.keys(map).forEach(function (key) {
+      var hex = normHex(map[key].value);
+      if (hex) svg.style.setProperty('--' + key, hex);
+    });
+  }
+
+  function syncPair(pickerId, textId) {
+    var picker = document.getElementById(pickerId);
+    var text = document.getElementById(textId);
+    if (!picker || !text) return;
+    picker.addEventListener('input', function () {
+      text.value = picker.value;
+      applyPreview();
+    });
+    text.addEventListener('input', function () {
+      var hex = normHex(text.value);
+      if (hex) {
+        picker.value = hex;
+        text.value = hex;
+        applyPreview();
+      }
+    });
+  }
+
+  syncPair('av-suit-picker', 'av-suit');
+  syncPair('av-helmet-picker', 'av-helmet');
+  syncPair('av-accent-picker', 'av-accent');
+  syncPair('av-trim-picker', 'av-trim');
+
+  var useTeam = document.getElementById('avatar-use-team');
+  if (useTeam) {
+    useTeam.addEventListener('click', function () {
+      var fields = [
+        ['av-suit', 'av-suit-picker', useTeam.getAttribute('data-suit')],
+        ['av-helmet', 'av-helmet-picker', useTeam.getAttribute('data-helmet')],
+        ['av-accent', 'av-accent-picker', useTeam.getAttribute('data-accent')],
+        ['av-trim', 'av-trim-picker', useTeam.getAttribute('data-trim')]
+      ];
+      fields.forEach(function (row) {
+        var hex = normHex(row[2]);
+        if (!hex) return;
+        document.getElementById(row[0]).value = hex;
+        document.getElementById(row[1]).value = hex;
+      });
+      applyPreview();
+    });
+  }
+
+  document.querySelectorAll('.suit-preset-chip').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var parts = (btn.getAttribute('data-preset') || '').split(',');
+      var ids = [['av-suit', 'av-suit-picker'], ['av-helmet', 'av-helmet-picker'], ['av-accent', 'av-accent-picker'], ['av-trim', 'av-trim-picker']];
+      ids.forEach(function (pair, idx) {
+        var hex = normHex(parts[idx]);
+        if (!hex) return;
+        document.getElementById(pair[0]).value = hex;
+        document.getElementById(pair[1]).value = hex;
+      });
+      applyPreview();
+    });
+  });
+
+  applyPreview();
+})();
+</script>
+{% endblock %}
+

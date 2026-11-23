@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Team Colors &amp; Race Suits — Local F1{% endblock %}
+{% block head %}
+<script src="/static/vendor/htmx.min.js"></script>
+{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1><i class="fas fa-palette"></i> Constructor Liveries &amp; Race Suits</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → Team Colors ({{ teams | length }} constructors)</p>
+  </div>
+
+  <div class="card no-print toolbar-card" style="margin-bottom: 18px;">
+    <div class="toolbar">
+      <div class="form-inline" style="flex:1;min-width:220px;">
+        <label for="tc-search" class="label-inline"><i class="fas fa-search"></i></label>
+        <input type="text" id="tc-search" placeholder="Filter constructor, year, or driver…" style="max-width:340px;width:100%;" oninput="filterTeamRows()"/>
+        <span id="tc-count" class="muted small">{{ teams | length }} teams</span>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" onclick="saveAllTeams()"><i class="fas fa-save"></i> Save All</button>
+        <span id="save-all-status" class="save-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Constructor</th>
+          <th>Years</th>
+          <th>Notable Drivers</th>
+          <th>Colors (Pri / Sec / Acc)</th>
+          <th>3D Car</th>
+          <th>Race Suit</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tc-tbody">
+        {% for t in teams %}
+        {% set slug = t.slug %}
+        {% set suit_style = '--suit:' ~ t.colors.primary ~ '; --helmet:' ~ t.colors.secondary ~ '; --accent:' ~ t.colors.accent ~ '; --trim:' ~ t.colors.accent ~ ';' %}
+        <tr id="row-{{ loop.index }}" data-team="{{ slug }}" data-search="{{ (t.name ~ ' ' ~ t.years ~ ' ' ~ t.drivers) | lower }}">
+          <td class="team-name">
+            <a href="/team/{{ t.name.replace(' ', '-') }}" style="display:inline-flex;align-items:center;gap:7px;">
+              <span style="width:10px;height:10px;border-radius:3px;background:{{ t.colors.primary }};display:inline-block;flex-shrink:0;"></span>
+              <strong>{{ t.name }}</strong>
+            </a>
+          </td>
+          <td class="team-years muted">{{ t.years }}</td>
+          <td class="team-drivers muted small">{{ t.drivers }}</td>
+          <td>
+            <div style="display:inline-flex;align-items:center;gap:6px;">
+              <input type="color" id="p-{{ loop.index }}" value="{{ t.colors.primary }}" class="color-input" title="Primary" oninput="updatePrev({{ loop.index }})"/>
+              <input type="color" id="s-{{ loop.index }}" value="{{ t.colors.secondary }}" class="color-input" title="Secondary" oninput="updatePrev({{ loop.index }})"/>
+              <input type="color" id="a-{{ loop.index }}" value="{{ t.colors.accent }}" class="color-input" title="Accent" oninput="updatePrev({{ loop.index }})"/>
+            </div>
+          </td>
+          <td>
+            {% if t.car_slug %}
+            <img src="/static/cars/png/{{ t.car_slug }}.png" alt="{{ t.name }} 3D car" loading="lazy" style="height:44px;width:auto;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));"/>
+            {% else %}
+            <span class="muted small">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;justify-content:center;">
+              {% with svg_id='suit-prev-' ~ loop.index, avatar_style=suit_style, width=42, height=62 %}
+              {% include 'partials/f1_driver_avatar.html' %}
+              {% endwith %}
+            </div>
+          </td>
+          <td>
+            <form hx-post="/api/team/{{ slug }}/colors" hx-target="#row-{{ loop.index }} .save-msg" hx-swap="innerHTML" hx-indicator="#row-{{ loop.index }} .spinner" style="display:inline-flex;align-items:center;gap:6px;">
+              <input type="hidden" name="primary" id="hp-{{ loop.index }}" value="{{ t.colors.primary }}"/>
+              <input type="hidden" name="secondary" id="hs-{{ loop.index }}" value="{{ t.colors.secondary }}"/>
+              <input type="hidden" name="accent" id="ha-{{ loop.index }}" value="{{ t.colors.accent }}"/>
+              <button type="submit" onclick="syncHidden({{ loop.index }})">Save</button>
+              <span class="spinner" style="display:none;">…</span>
+              <span class="save-msg muted small"></span>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function updatePrev(idx) {
+      var p = document.getElementById('p-' + idx).value;
+      var s = document.getElementById('s-' + idx).value;
+      var a = document.getElementById('a-' + idx).value;
+      var svg = document.getElementById('suit-prev-' + idx);
+      if (svg) {
+        svg.style.setProperty('--suit', p);
+        svg.style.setProperty('--helmet', s);
+        svg.style.setProperty('--accent', a);
+        svg.style.setProperty('--trim', a);
+      }
+    }
+    function syncHidden(idx) {
+      document.getElementById('hp-' + idx).value = document.getElementById('p-' + idx).value;
+      document.getElementById('hs-' + idx).value = document.getElementById('s-' + idx).value;
+      document.getElementById('ha-' + idx).value = document.getElementById('a-' + idx).value;
+    }
+    function filterTeamRows() {
+      var q = (document.getElementById('tc-search').value || '').trim().toLowerCase();
+      var rows = document.querySelectorAll('#tc-tbody tr[data-team]');
+      var shown = 0;
+      rows.forEach(function (tr) {
+        var match = !q || (tr.getAttribute('data-search') || '').indexOf(q) !== -1;
+        tr.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      document.getElementById('tc-count').textContent = shown + ' / ' + rows.length + ' teams';
+    }
+    async function saveAllTeams() {
+      var rows = document.querySelectorAll('tr[data-team]');
+      var status = document.getElementById('save-all-status');
+      var ok = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var idx = row.id.replace('row-', '');
+        var slug = row.getAttribute('data-team');
+        var fd = new FormData();
+        fd.append('primary', document.getElementById('p-' + idx).value);
+        fd.append('secondary', document.getElementById('s-' + idx).value);
+        fd.append('accent', document.getElementById('a-' + idx).value);
+        try {
+          var res = await fetch('/api/team/' + slug + '/colors', { method: 'POST', body: fd, headers: { 'HX-Request': 'true' } });
+          if (res.ok) {
+            ok++;
+            var target = row.querySelector('.save-msg');
+            if (target) target.textContent = 'Saved';
+          }
+        } catch (e) {}
+      }
+      status.textContent = 'Saved ' + ok + ' / ' + rows.length;
+      status.style.color = '#4ade80';
+      setTimeout(function () { status.textContent = ''; }, 2500);
+    }
+  </script>
+{% endblock %}

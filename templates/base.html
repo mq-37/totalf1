@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Local F1{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="logo">
+        <i class="fas fa-flag-checkered"></i>
+        <span class="logo-text">Local F1</span>
+      </a>
+      <button type="button" class="nav-toggle" id="site-nav-toggle" aria-expanded="false" aria-controls="site-main-nav" aria-label="Toggle navigation menu">
+        <i class="fas fa-bars"></i>
+      </button>
+      <nav class="main-nav" id="site-main-nav" aria-label="Main">
+        {% set path = request.url.path %}
+        <a href="/" class="nav-link{% if path == '/' %} active{% endif %}"><i class="fas fa-home"></i> Home</a>
+
+        <div class="nav-group{% if path.startswith('/cards') %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path.startswith('/cards') %} active{% endif %}" aria-expanded="false">
+            <i class="fas fa-id-card"></i> Cards <i class="fas fa-chevron-down nav-caret"></i>
+          </button>
+          <div class="nav-menu">
+            <a href="/cards" class="nav-sublink{% if path == '/cards' %} active{% endif %}"><i class="fas fa-id-card"></i> Season Cards</a>
+            <a href="/cards/decade" class="nav-sublink{% if path == '/cards/decade' %} active{% endif %}"><i class="fas fa-layer-group"></i> By Decade</a>
+            <a href="/cards/alltime" class="nav-sublink{% if path == '/cards/alltime' %} active{% endif %}"><i class="fas fa-trophy"></i> All-Time Legends</a>
+          </div>
+        </div>
+
+        <div class="nav-group{% if path == '/play' or path == '/sim' %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path == '/play' or path == '/sim' %} active{% endif %}" aria-expanded="false">
+            <i class="fas fa-gamepad"></i> Play <i class="fas fa-chevron-down nav-caret"></i>
+          </button>
+          <div class="nav-menu">
+            <a href="/play" class="nav-sublink{% if path == '/play' %} active{% endif %}"><i class="fas fa-gamepad"></i> F1 Card Arena</a>
+            <a href="/sim" class="nav-sublink{% if path == '/sim' %} active{% endif %}"><i class="fas fa-tv"></i> Full CPU Broadcast Sim</a>
+          </div>
+        </div>
+
+        <a href="/career" class="nav-link{% if path == '/career' %} active{% endif %}"><i class="fas fa-briefcase"></i> Career</a>
+
+        <div class="nav-group{% if path == '/race' or path.startswith('/driver') or path.startswith('/analytics') or path.startswith('/races') or path.startswith('/teams/') %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path == '/race' or path.startswith('/driver') or path.startswith('/analytics') %} active{% endif %}" aria-expanded="false">
+            <i class="fas fa-chart-line"></i> Archive <i class="fas fa-chevron-down nav-caret"></i>
+          </button>
+          <div class="nav-menu">
+            <a href="/race" class="nav-sublink{% if path == '/race' %} active{% endif %}"><i class="fas fa-flag-checkered"></i> Race Calendar</a>
+            <a href="/driver" class="nav-sublink{% if path == '/driver' %} active{% endif %}"><i class="fas fa-search"></i> Driver Search</a>
+            <a href="/analytics/overall" class="nav-sublink{% if path == '/analytics/overall' or path == '/analytics' %} active{% endif %}"><i class="fas fa-chart-line"></i> Overall Analytics</a>
+            <a href="/analytics/season" class="nav-sublink{% if path == '/analytics/season' %} active{% endif %}"><i class="fas fa-calendar-alt"></i> Season Analytics</a>
+            <a href="/analytics/tracks" class="nav-sublink{% if path == '/analytics/tracks' %} active{% endif %}"><i class="fas fa-road"></i> Circuit Analytics</a>
+          </div>
+        </div>
+
+        <div class="nav-group{% if path.startswith('/admin/teams') or path == '/teams/colors' or path == '/team-colors' or path.startswith('/dev/') %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path.startswith('/admin/teams') or path == '/teams/colors' or path == '/team-colors' or path.startswith('/dev/') %} active{% endif %}" aria-expanded="false">
+            <i class="fas fa-palette"></i> Studio <i class="fas fa-chevron-down nav-caret"></i>
+          </button>
+          <div class="nav-menu nav-menu-right">
+            <a href="/admin/teams/colors" class="nav-sublink{% if path == '/admin/teams/colors' or path == '/teams/colors' or path == '/team-colors' %} active{% endif %}"><i class="fas fa-palette"></i> Team Colors &amp; Suits</a>
+            <a href="/dev/car-3d" class="nav-sublink{% if path == '/dev/car-3d' %} active{% endif %}"><i class="fas fa-cube"></i> 3D Livery Studio</a>
+            <a href="/dev/car-liveries" class="nav-sublink{% if path == '/dev/car-liveries' %} active{% endif %}"><i class="fas fa-images"></i> 201 Car Liveries</a>
+          </div>
+        </div>
+      </nav>
+    </div>
+    {% block header_extra %}{% endblock %}
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="site-footer no-print">
+    <div class="footer-inner">
+      <span>Local F1</span>
+      <span class="muted">Data from formula1.com</span>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('[data-tabs]').forEach(function(tabsEl) {
+      var nav = tabsEl.querySelector('[data-tab-nav]');
+      var panels = tabsEl.querySelectorAll('[data-tab-panel]');
+      if (!nav || !panels.length) return;
+      nav.querySelectorAll('[data-tab]').forEach(function(btn, i) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          nav.querySelectorAll('[data-tab]').forEach(function(b) { b.classList.remove('active'); });
+          panels.forEach(function(p) { p.classList.remove('active'); });
+          btn.classList.add('active');
+          if (panels[i]) panels[i].classList.add('active');
+        });
+      });
+      if (nav.querySelector('[data-tab].active')) return;
+      nav.querySelector('[data-tab]').classList.add('active');
+      if (panels[0]) panels[0].classList.add('active');
+    });
+
+    (function() {
+      var nav = document.getElementById('site-main-nav');
+      var toggle = document.getElementById('site-nav-toggle');
+      if (toggle && nav) {
+        toggle.addEventListener('click', function() {
+          var open = nav.classList.toggle('is-open');
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      }
+      var groups = document.querySelectorAll('.nav-group');
+      function closeAll(except) {
+        groups.forEach(function(g) {
+          if (g === except) return;
+          g.classList.remove('is-open');
+          var btn = g.querySelector('.nav-trigger');
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+      }
+      groups.forEach(function(g) {
+        var btn = g.querySelector('.nav-trigger');
+        if (!btn) return;
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var open = !g.classList.contains('is-open');
+          closeAll(g);
+          g.classList.toggle('is-open', open);
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      });
+      document.addEventListener('click', function() { closeAll(null); });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(null); });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,1972 @@
+{
+  "Ferrari": {
+    "primary": "#dc0000",
+    "secondary": "#ffffff",
+    "accent": "#000000"
+  },
+  "Red Bull Racing": {
+    "primary": "#0f2499",
+    "secondary": "#0b3862",
+    "accent": "#ffc300"
+  },
+  "Red Bull Racing Honda RBPT": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "Mercedes": {
+    "primary": "#00d2be",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "McLaren": {
+    "primary": "#FF8000",
+    "secondary": "#000000",
+    "accent": "#FFFFFF"
+  },
+  "McLaren Mercedes": {
+    "primary": "#e66100",
+    "secondary": "#ffffff",
+    "accent": "#ff7800"
+  },
+  "Aston Martin": {
+    "primary": "#006F62",
+    "secondary": "#FFFFFF",
+    "accent": "#F5D000"
+  },
+  "Alpine": {
+    "primary": "#0090FF",
+    "secondary": "#FF2A6D",
+    "accent": "#FFFFFF"
+  },
+  "Williams": {
+    "primary": "#00A0DE",
+    "secondary": "#00294F",
+    "accent": "#FFFFFF"
+  },
+  "Ferrari Marlboro": {
+    "primary": "#DC0000",
+    "secondary": "#FFFFFF",
+    "accent": "#000000"
+  },
+  "Williams Mercedes": {
+    "primary": "#1c71d8",
+    "secondary": "#1a5fb4",
+    "accent": "#ffffff"
+  },
+  "Haas Ferrari": {
+    "primary": "#9a9996",
+    "secondary": "#ffffff",
+    "accent": "#e01b24"
+  },
+  "Aston Martin Aramco Mercedes": {
+    "primary": "#26a269",
+    "secondary": "#8ff0a4",
+    "accent": "#ffffff"
+  },
+  "Kick Sauber Ferrari": {
+    "primary": "#57e389",
+    "secondary": "#ffffff",
+    "accent": "#000000"
+  },
+  "RB Honda RBPT": {
+    "primary": "#1c71d8",
+    "secondary": "#deddda",
+    "accent": "#e01b24"
+  },
+  "Force India Mercedes": {
+    "primary": "#c061cb",
+    "secondary": "#dc8add",
+    "accent": "#ffffff"
+  },
+  "Lotus Mercedes": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Aston Martin Mercedes": {
+    "primary": "#26a269",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "AlphaTauri Honda": {
+    "primary": "#1c2c58",
+    "secondary": "#0c1b37",
+    "accent": "#241f31"
+  },
+  "Toro Rosso": {
+    "primary": "#0c1b37",
+    "secondary": "#1c2c58",
+    "accent": "#f66151"
+  },
+  "Renault": {
+    "primary": "#f5c211",
+    "secondary": "#dddddd",
+    "accent": "#1c71d8"
+  },
+  "Sauber Ferrari": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "Alpine Renault": {
+    "primary": "#0090ff",
+    "secondary": "#dc2aa8",
+    "accent": "#ffffff"
+  },
+  "Sauber BMW": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Super Aguri Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#dc0000"
+  },
+  "RBR Renault": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "STR Renault": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "Brawn Mercedes": {
+    "primary": "#ffffff",
+    "secondary": "#c0bfbc",
+    "accent": "#fcff00"
+  },
+  "Red Bull Renault": {
+    "primary": "#1c71d8",
+    "secondary": "#f6d32d",
+    "accent": "#e01b24"
+  },
+  "Scuderia Toro Rosso Honda": {
+    "primary": "#1a5fb4",
+    "secondary": "#dddddd",
+    "accent": "#ed333b"
+  },
+  "Alfa Romeo Ferrari": {
+    "primary": "#e01b24",
+    "secondary": "#a51d2d",
+    "accent": "#111111"
+  },
+  "Red Bull Racing RBPT": {
+    "primary": "#05042b",
+    "secondary": "#e01b24",
+    "accent": "#f6d32d"
+  },
+  "AlphaTauri RBPT": {
+    "primary": "#363652",
+    "secondary": "#3584e4",
+    "accent": "#111111"
+  },
+  "AGS Ford": {
+    "primary": "#c0bfbc",
+    "secondary": "#e01b24",
+    "accent": "#111111"
+  },
+  "ATS Ford": {
+    "primary": "#f5c211",
+    "secondary": "#e5a50a",
+    "accent": "#111111"
+  },
+  "Alfa Romeo": {
+    "primary": "#e01b24",
+    "secondary": "#a51d2d",
+    "accent": "#111111"
+  },
+  "Alfa Romeo Racing Ferrari": {
+    "primary": "#a51d2d",
+    "secondary": "#c01c28",
+    "accent": "#111111"
+  },
+  "AlphaTauri Honda RBPT": {
+    "primary": "#1c2c58",
+    "secondary": "#0c1b37",
+    "accent": "#241f31"
+  },
+  "Arrows": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Arrows Asiatech": {
+    "primary": "#e66100",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Arrows BMW": {
+    "primary": "#bbb694",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "Arrows Cosworth": {
+    "primary": "#e66100",
+    "secondary": "#241f31",
+    "accent": "#111111"
+  },
+  "Arrows Ford": {
+    "primary": "#92835e",
+    "secondary": "#f6f5f4",
+    "accent": "#111111"
+  },
+  "Arrows Megatron": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "Arrows Supertec": {
+    "primary": "#ff7800",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Arrows Yamaha": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#c01c28"
+  },
+  "BAR Honda": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "BRM": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "BRM Climax": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "BRP BRM": {
+    "primary": "#26a269",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Benetton BMW": {
+    "primary": "#1c71d8",
+    "secondary": "#8ff0a4",
+    "accent": "#111111"
+  },
+  "Benetton Ford": {
+    "primary": "#62a0ea",
+    "secondary": "#33d17a",
+    "accent": "#111111"
+  },
+  "Benetton Playlife": {
+    "primary": "#1a5fb4",
+    "secondary": "#8ff0a4",
+    "accent": "#111111"
+  },
+  "Benetton Renault": {
+    "primary": "#1c71d8",
+    "secondary": "#33d17a",
+    "accent": "#111111"
+  },
+  "Brabham Alfa Romeo": {
+    "primary": "#c01c28",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Brabham BMW": {
+    "primary": "#777777",
+    "secondary": "#000000",
+    "accent": "#111111"
+  },
+  "Brabham BRM": {
+    "primary": "#153a04",
+    "secondary": "#6f6007",
+    "accent": "#111111"
+  },
+  "Brabham Climax": {
+    "primary": "#18706b",
+    "secondary": "#f5c211",
+    "accent": "#111111"
+  },
+  "Brabham Ford": {
+    "primary": "#777777",
+    "secondary": "#3584e4",
+    "accent": "#f66151"
+  },
+  "Brabham Judd": {
+    "primary": "#111111",
+    "secondary": "#1a5fb4",
+    "accent": "#111111"
+  },
+  "Brabham Repco": {
+    "primary": "#153a04",
+    "secondary": "#e5a50a",
+    "accent": "#111111"
+  },
+  "Brabham Yamaha": {
+    "primary": "#0d2d7c",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Caterham Renault": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#f6d32d"
+  },
+  "Connaught Alta": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Connaught Lea Francis": {
+    "primary": "#18706b",
+    "secondary": "#f9f06b",
+    "accent": "#111111"
+  },
+  "Cooper BRM": {
+    "primary": "#1c520f",
+    "secondary": "#f5c211",
+    "accent": "#111111"
+  },
+  "Cooper Bristol": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Cooper Castellotti": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Cooper Climax": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Cooper Maserati": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Dallara Ferrari": {
+    "primary": "#a51d2d",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Dallara Ford": {
+    "primary": "#c01c28",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Dallara Judd": {
+    "primary": "#ed333b",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Deidt Offenhauser": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#f66151"
+  },
+  "Eagle Climax": {
+    "primary": "#050649",
+    "secondary": "#dddddd",
+    "accent": "#9c8d48"
+  },
+  "Eagle Weslake": {
+    "primary": "#050649",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ensign Ford": {
+    "primary": "#e01b24",
+    "secondary": "#1c71d8",
+    "accent": "#111111"
+  },
+  "Epperly Offenhauser": {
+    "primary": "#f9f06b",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Fittipaldi Ford": {
+    "primary": "#3584e4",
+    "secondary": "#1a5fb4",
+    "accent": "#e01b24"
+  },
+  "Footwork Ford": {
+    "primary": "#1c71d8",
+    "secondary": "#1c71d8",
+    "accent": "#111111"
+  },
+  "Footwork Hart": {
+    "primary": "#1a5fb4",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "Footwork Mugen Honda": {
+    "primary": "#9a9996",
+    "secondary": "#ffffff",
+    "accent": "#111111"
+  },
+  "Force India Ferrari": {
+    "primary": "#c061cb",
+    "secondary": "#dc8add",
+    "accent": "#ffffff"
+  },
+  "Gordini": {
+    "primary": "#62a0ea",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "HRT Cosworth": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#f9f06b"
+  },
+  "Hesketh Ford": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#3584e4"
+  },
+  "Hill Ford": {
+    "primary": "#9a9996",
+    "secondary": "#dddddd",
+    "accent": "#f66151"
+  },
+  "Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Iso Marlboro Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jaguar Cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Hart": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Mugen Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Peugeot": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Jordan Yamaha": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Kurtis Kraft Novi": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Kurtis Kraft Offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lancia": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Larrousse Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lesovsky Offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Leyton House Ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Leyton House Judd": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ligier Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ligier Matra": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ligier Megatron": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ligier Mugen Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Ligier Renault": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lola Climax": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lola Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lola Lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lotus BRM": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Lotus Climax": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Lotus Cosworth": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Lotus Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lotus Honda": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Lotus Judd": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "Lotus Lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lotus Mugen Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Lotus Renault": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "MF1 Toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "MRT Mercedes": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "March Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "March Ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "March Judd": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Marussia Cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Marussia Ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Maserati": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Matra": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Matra Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "McLaren BRM": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "McLaren Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "McLaren Honda": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "McLaren Peugeot": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "McLaren Renault": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "McLaren TAG": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "Mclaren BRM": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "Mercedes Benz": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Milano Speluzzi": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Asiatech": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Fondmetal": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Minardi Lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Osella Alfa Romeo": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Osella Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Parnelli Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Penske Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Porsche": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Prost Acer": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Prost Mugen Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Prost Peugeot": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "RBR Cosworth": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "RBR Ferrari": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "Racing Point BWT Mercedes": {
+    "primary": "#2c3688",
+    "secondary": "#ed333b",
+    "accent": "#f6d32d"
+  },
+  "Red Bull Racing Honda": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "Red Bull Racing Renault": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "Red Bull Racing TAG Heuer": {
+    "primary": "#2c3688",
+    "secondary": "#f9f06b",
+    "accent": "#ed333b"
+  },
+  "Rial Ford": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#f6d32d"
+  },
+  "STR Cosworth": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "STR Ferrari": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "Sauber": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "Sauber Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Sauber Mercedes": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "Sauber Petronas": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Shadow Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Spyker Ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Stewart Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Surtees Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Talbot Lago": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tecno": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Theodore Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Toleman Hart": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Toro Rosso Ferrari": {
+    "primary": "#0c1b37",
+    "secondary": "#1c2c58",
+    "accent": "#f66151"
+  },
+  "Toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tyrrell Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tyrrell Honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tyrrell Ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tyrrell Renault": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Tyrrell Yamaha": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Vanwall": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Venturi Lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Virgin Cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Watson Offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Williams BMW": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Cosworth": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Williams Honda": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Judd": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Mecachrome": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Renault": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "Williams Supertec": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Williams Toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Wolf Ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Wolf Williams": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Zakspeed": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ags ford": {
+    "primary": "#c0bfbc",
+    "secondary": "#e01b24",
+    "accent": "#111111"
+  },
+  "ats ford": {
+    "primary": "#f5c211",
+    "secondary": "#e5a50a",
+    "accent": "#111111"
+  },
+  "alfa romeo": {
+    "primary": "#e01b24",
+    "secondary": "#a51d2d",
+    "accent": "#111111"
+  },
+  "alfa romeo ferrari": {
+    "primary": "#e01b24",
+    "secondary": "#a51d2d",
+    "accent": "#111111"
+  },
+  "alfa romeo racing ferrari": {
+    "primary": "#a51d2d",
+    "secondary": "#c01c28",
+    "accent": "#111111"
+  },
+  "alphatauri honda": {
+    "primary": "#1c2c58",
+    "secondary": "#0c1b37",
+    "accent": "#241f31"
+  },
+  "alphatauri honda rbpt": {
+    "primary": "#1c2c58",
+    "secondary": "#0c1b37",
+    "accent": "#241f31"
+  },
+  "alphatauri rbpt": {
+    "primary": "#363652",
+    "secondary": "#3584e4",
+    "accent": "#111111"
+  },
+  "alpine renault": {
+    "primary": "#0090ff",
+    "secondary": "#dc2aa8",
+    "accent": "#ffffff"
+  },
+  "arrows": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "arrows asiatech": {
+    "primary": "#e66100",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "arrows bmw": {
+    "primary": "#bbb694",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "arrows cosworth": {
+    "primary": "#e66100",
+    "secondary": "#241f31",
+    "accent": "#111111"
+  },
+  "arrows ford": {
+    "primary": "#92835e",
+    "secondary": "#f6f5f4",
+    "accent": "#111111"
+  },
+  "arrows megatron": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "arrows supertec": {
+    "primary": "#ff7800",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "arrows yamaha": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#c01c28"
+  },
+  "aston martin aramco mercedes": {
+    "primary": "#26a269",
+    "secondary": "#8ff0a4",
+    "accent": "#ffffff"
+  },
+  "aston martin mercedes": {
+    "primary": "#26a269",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "bar honda": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "brm": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "brm climax": {
+    "primary": "#111111",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "brp brm": {
+    "primary": "#26a269",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "benetton bmw": {
+    "primary": "#1c71d8",
+    "secondary": "#8ff0a4",
+    "accent": "#111111"
+  },
+  "benetton ford": {
+    "primary": "#62a0ea",
+    "secondary": "#33d17a",
+    "accent": "#111111"
+  },
+  "benetton playlife": {
+    "primary": "#1a5fb4",
+    "secondary": "#8ff0a4",
+    "accent": "#111111"
+  },
+  "benetton renault": {
+    "primary": "#1c71d8",
+    "secondary": "#33d17a",
+    "accent": "#111111"
+  },
+  "brabham alfa romeo": {
+    "primary": "#c01c28",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "brabham bmw": {
+    "primary": "#777777",
+    "secondary": "#000000",
+    "accent": "#111111"
+  },
+  "brabham brm": {
+    "primary": "#153a04",
+    "secondary": "#6f6007",
+    "accent": "#111111"
+  },
+  "brabham climax": {
+    "primary": "#18706b",
+    "secondary": "#f5c211",
+    "accent": "#111111"
+  },
+  "brabham ford": {
+    "primary": "#777777",
+    "secondary": "#3584e4",
+    "accent": "#f66151"
+  },
+  "brabham judd": {
+    "primary": "#111111",
+    "secondary": "#1a5fb4",
+    "accent": "#111111"
+  },
+  "brabham repco": {
+    "primary": "#153a04",
+    "secondary": "#e5a50a",
+    "accent": "#111111"
+  },
+  "brabham yamaha": {
+    "primary": "#0d2d7c",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "brawn mercedes": {
+    "primary": "#ffffff",
+    "secondary": "#c0bfbc",
+    "accent": "#fcff00"
+  },
+  "caterham renault": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#f6d32d"
+  },
+  "connaught alta": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "connaught lea francis": {
+    "primary": "#18706b",
+    "secondary": "#f9f06b",
+    "accent": "#111111"
+  },
+  "cooper brm": {
+    "primary": "#1c520f",
+    "secondary": "#f5c211",
+    "accent": "#111111"
+  },
+  "cooper bristol": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "cooper castellotti": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "cooper climax": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "cooper maserati": {
+    "primary": "#1c520f",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "dallara ferrari": {
+    "primary": "#a51d2d",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "dallara ford": {
+    "primary": "#c01c28",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "dallara judd": {
+    "primary": "#ed333b",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "deidt offenhauser": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#f66151"
+  },
+  "eagle climax": {
+    "primary": "#050649",
+    "secondary": "#dddddd",
+    "accent": "#9c8d48"
+  },
+  "eagle weslake": {
+    "primary": "#050649",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ensign ford": {
+    "primary": "#e01b24",
+    "secondary": "#1c71d8",
+    "accent": "#111111"
+  },
+  "epperly offenhauser": {
+    "primary": "#f9f06b",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ferrari": {
+    "primary": "#dc0000",
+    "secondary": "#ffffff",
+    "accent": "#000000"
+  },
+  "fittipaldi ford": {
+    "primary": "#3584e4",
+    "secondary": "#1a5fb4",
+    "accent": "#e01b24"
+  },
+  "footwork ford": {
+    "primary": "#1c71d8",
+    "secondary": "#1c71d8",
+    "accent": "#111111"
+  },
+  "footwork hart": {
+    "primary": "#1a5fb4",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "footwork mugen honda": {
+    "primary": "#9a9996",
+    "secondary": "#ffffff",
+    "accent": "#111111"
+  },
+  "force india ferrari": {
+    "primary": "#c061cb",
+    "secondary": "#dc8add",
+    "accent": "#ffffff"
+  },
+  "force india mercedes": {
+    "primary": "#c061cb",
+    "secondary": "#dc8add",
+    "accent": "#ffffff"
+  },
+  "frank williams racing cars williams": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "gordini": {
+    "primary": "#62a0ea",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "hrt cosworth": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#f9f06b"
+  },
+  "haas ferrari": {
+    "primary": "#9a9996",
+    "secondary": "#ffffff",
+    "accent": "#e01b24"
+  },
+  "hesketh ford": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#3584e4"
+  },
+  "hill ford": {
+    "primary": "#9a9996",
+    "secondary": "#dddddd",
+    "accent": "#f66151"
+  },
+  "honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "iso marlboro ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jaguar cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan hart": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan mugen honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan peugeot": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "jordan yamaha": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "kick sauber ferrari": {
+    "primary": "#57e389",
+    "secondary": "#ffffff",
+    "accent": "#000000"
+  },
+  "kurtis kraft novi": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "kurtis kraft offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lancia": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "larrousse ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lesovsky offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "leyton house ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "leyton house judd": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ligier ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ligier matra": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ligier megatron": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ligier mugen honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "ligier renault": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lola climax": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lola ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lola lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lotus brm": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus climax": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus cosworth": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lotus honda": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus judd": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lotus mercedes": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "lotus mugen honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "lotus renault": {
+    "primary": "#111111",
+    "secondary": "#f6d32d",
+    "accent": "#ffffff"
+  },
+  "mf1 toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "mrt mercedes": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "march ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "march ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "march judd": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "marussia cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "marussia ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "maserati": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "matra": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "matra ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "mclaren brm": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "mclaren ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "mclaren honda": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "mclaren mercedes": {
+    "primary": "#e66100",
+    "secondary": "#ffffff",
+    "accent": "#ff7800"
+  },
+  "mclaren peugeot": {
+    "primary": "#9a9996",
+    "secondary": "#f66151",
+    "accent": "#111111"
+  },
+  "mclaren renault": {
+    "primary": "#ff8000",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "mclaren tag": {
+    "primary": "#f66151",
+    "secondary": "#ffffff",
+    "accent": "#5e5c64"
+  },
+  "mercedes": {
+    "primary": "#00d2be",
+    "secondary": "#000000",
+    "accent": "#ffffff"
+  },
+  "mercedes benz": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "milano speluzzi": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "minardi asiatech": {
+    "primary": "#000000",
+    "secondary": "#f9f06b",
+    "accent": "#f66151"
+  },
+  "minardi cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "minardi ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "minardi fondmetal": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "minardi ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "minardi lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "osella alfa romeo": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "osella ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "parnelli ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "penske ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "porsche": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "prost acer": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "prost mugen honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "prost peugeot": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "rb honda rbpt": {
+    "primary": "#1c71d8",
+    "secondary": "#deddda",
+    "accent": "#e01b24"
+  },
+  "rbr cosworth": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "rbr ferrari": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "rbr renault": {
+    "primary": "#1c71d8",
+    "secondary": "#e01b24",
+    "accent": "#f5c211"
+  },
+  "racing point bwt mercedes": {
+    "primary": "#2c3688",
+    "secondary": "#ed333b",
+    "accent": "#f6d32d"
+  },
+  "red bull racing honda": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "red bull racing honda rbpt": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "red bull racing rbpt": {
+    "primary": "#1328c3",
+    "secondary": "#e01b24",
+    "accent": "#f6d32d"
+  },
+  "red bull racing renault": {
+    "primary": "#1e41ff",
+    "secondary": "#dc0000",
+    "accent": "#ffc300"
+  },
+  "red bull racing tag heuer": {
+    "primary": "#2c3688",
+    "secondary": "#f9f06b",
+    "accent": "#ed333b"
+  },
+  "red bull renault": {
+    "primary": "#1c71d8",
+    "secondary": "#f6d32d",
+    "accent": "#e01b24"
+  },
+  "renault": {
+    "primary": "#f5c211",
+    "secondary": "#dddddd",
+    "accent": "#1c71d8"
+  },
+  "rial ford": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#f6d32d"
+  },
+  "str cosworth": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "str ferrari": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "str renault": {
+    "primary": "#3584e4",
+    "secondary": "#dddddd",
+    "accent": "#e01b24"
+  },
+  "sauber": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "sauber bmw": {
+    "primary": "#1c71d8",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "sauber ferrari": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "sauber ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "sauber mercedes": {
+    "primary": "#777777",
+    "secondary": "#e01b24",
+    "accent": "#000000"
+  },
+  "sauber petronas": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "scuderia toro rosso honda": {
+    "primary": "#1a5fb4",
+    "secondary": "#dddddd",
+    "accent": "#ed333b"
+  },
+  "shadow ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "spyker ferrari": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "stewart ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "super aguri honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#dc0000"
+  },
+  "surtees ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "talbot lago": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tecno": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "theodore ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "toleman hart": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "toro rosso": {
+    "primary": "#0c1b37",
+    "secondary": "#1c2c58",
+    "accent": "#f66151"
+  },
+  "toro rosso ferrari": {
+    "primary": "#0c1b37",
+    "secondary": "#1c2c58",
+    "accent": "#f66151"
+  },
+  "toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tyrrell ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tyrrell honda": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tyrrell ilmor": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tyrrell renault": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "tyrrell yamaha": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "vanwall": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "venturi lamborghini": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "virgin cosworth": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "watson offenhauser": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "williams bmw": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams cosworth": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "williams honda": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams judd": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams mecachrome": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams mercedes": {
+    "primary": "#1c71d8",
+    "secondary": "#1a5fb4",
+    "accent": "#ffffff"
+  },
+  "williams renault": {
+    "primary": "#00a0de",
+    "secondary": "#00294f",
+    "accent": "#ffffff"
+  },
+  "williams supertec": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "williams toyota": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "wolf ford": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "wolf williams": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "zakspeed": {
+    "primary": "#777777",
+    "secondary": "#dddddd",
+    "accent": "#111111"
+  },
+  "Audi": {
+    "primary": "#c0c4cc",
+    "secondary": "#141418",
+    "accent": "#e10600"
+  },
+  "Cadillac": {
+    "primary": "#161922",
+    "secondary": "#e8ecf2",
+    "accent": "#d4af37"
+  },
+  "Racing Bulls": {
+    "primary": "#1e41ff",
+    "secondary": "#ffffff",
+    "accent": "#e10600"
+  },
+  "Haas F1 Team": {
+    "primary": "#141418",
+    "secondary": "#e8ecf2",
+    "accent": "#e10600"
+  }
+}

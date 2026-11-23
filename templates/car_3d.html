@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}3D F1 Car Studio — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <p class="wall-kicker">Interactive Showroom · Live 5-Slot Livery</p>
+    <h1>3D F1 Car Studio</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/dev/car-liveries">Car Liveries</a> → 3D Studio</p>
+  </div>
+
+  <div class="card studio-shell">
+    <div class="studio-stage">
+      <div class="studio-canvas-wrap">
+        <canvas id="studio-canvas" aria-label="Interactive 3D F1 Car"></canvas>
+        <div class="plinth-angles" id="studio-angles">
+          <button type="button" class="plinth-angle-btn active" data-preset="hero">3/4 Hero</button>
+          <button type="button" class="plinth-angle-btn" data-preset="side">Side</button>
+          <button type="button" class="plinth-angle-btn" data-preset="front">Front</button>
+          <button type="button" class="plinth-angle-btn" data-preset="top">Top</button>
+          <button type="button" class="plinth-angle-btn" data-preset="rear">Rear</button>
+        </div>
+        <span class="plinth-hint">drag to orbit · scroll to zoom</span>
+      </div>
+    </div>
+
+    <div class="studio-controls">
+      <label class="studio-label" for="studio-team">Team Livery ({{ teams|length }} teams)</label>
+      <select id="studio-team" style="width:100%; margin-bottom: 12px;">
+        {% for t in teams %}
+        <option value="{{ t.name }}" {% if t.name == selected_team %}selected{% endif %}>{{ t.name }} ({{ t.era }})</option>
+        {% endfor %}
+      </select>
+
+      <label class="studio-label" for="studio-era">Car Era / Chassis Generation (8 Decades)</label>
+      <select id="studio-era" style="width:100%; margin-bottom: 12px;">
+        {% set era_labels = {
+          '1950s': '1950s — Front-Engine Torpedo Cigar',
+          '1960s': '1960s — Wingless Rear-Engine Cigar',
+          '1970s': '1970s — Wedge & Ground-Effect Wing',
+          '1980s': '1980s — Low-Line Turbo Era',
+          '1990s': '1990s — High Airbox Active-Aero',
+          '2000s': '2000s — Grooved-Tyre V10 Sculpted',
+          '2010s': '2010s — Turbo-Hybrid Halo + Shark Fin',
+          '2020s': '2020s — Ground-Effect 18" Aero Covers'
+        } %}
+        {% for er in car_eras %}
+        <option value="{{ er }}" {% if er == selected_era %}selected{% endif %}>{{ era_labels.get(er, er) }}</option>
+        {% endfor %}
+      </select>
+
+      <label class="studio-label" for="studio-style">Livery Pattern Style</label>
+      <select id="studio-style" style="width:100%; margin-bottom: 16px;">
+        {% for st in livery_styles %}
+        <option value="{{ st }}">{{ st | replace('-', ' ') | title }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="studio-swatches">
+        <label><span>Main</span><input type="color" id="col-main" class="color-input"/></label>
+        <label><span>Secondary</span><input type="color" id="col-secondary" class="color-input"/></label>
+        <label><span>Accent</span><input type="color" id="col-accent" class="color-input"/></label>
+        <label><span>Pop</span><input type="color" id="col-pop" class="color-input"/></label>
+        <label><span>Detail</span><input type="color" id="col-detail" class="color-input"/></label>
+      </div>
+
+      <p class="muted small" style="margin-top: 14px;">
+        The same 3D model powers the Home, Driver, and Team plinths and batch-renders transparent studio PNGs
+        for Cards and PDFs via <code>python3 scripts/render_3d_cars.py</code>.
+      </p>
+      <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" id="studio-download">Download Transparent PNG</button>
+        <a href="/dev/car-liveries" class="badge" style="padding: 8px 14px;">All 201 Liveries →</a>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .studio-shell { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.9fr); gap: 24px; align-items: start; }
+    @media (max-width: 960px) { .studio-shell { grid-template-columns: 1fr; } }
+    .studio-canvas-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: radial-gradient(ellipse at 50% 45%, #192030, #090b10 75%); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--edge); }
+    .studio-canvas-wrap canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    .studio-canvas-wrap canvas:active { cursor: grabbing; }
+    .studio-label { display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .studio-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .studio-swatches label { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); font-size: 0.85rem; }
+  </style>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_car_3d.js"></script>
+  <script>
+    (function () {
+      var TEAMS = {{ teams | tojson }};
+      var byName = {};
+      TEAMS.forEach(function (t) { byName[t.name] = t; });
+
+      var canvas = document.getElementById('studio-canvas');
+      var sel = document.getElementById('studio-team');
+      var eraSel = document.getElementById('studio-era');
+      var styleSel = document.getElementById('studio-style');
+      var inputs = {
+        main: document.getElementById('col-main'),
+        secondary: document.getElementById('col-secondary'),
+        accent: document.getElementById('col-accent'),
+        pop: document.getElementById('col-pop'),
+        detail: document.getElementById('col-detail')
+      };
+
+      var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      var scene = new THREE.Scene();
+      scene.environment = F1Car3D.createStudioEnvironment(renderer);
+      var lights = F1Car3D.addStudioLights(scene, '#ff8000');
+
+      var plinth = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.25, 3.48, 0.16, 64),
+        new THREE.MeshStandardMaterial({ color: 0x141822, roughness: 0.45, metalness: 0.35 })
+      );
+      plinth.position.y = -0.08;
+      scene.add(plinth);
+      var ringMat = new THREE.MeshBasicMaterial({ color: 0xff8000, transparent: true, opacity: 0.8 });
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(3.26, 0.028, 12, 84), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.002;
+      scene.add(ring);
+
+      var initTeam = byName[sel.value] || { palette: {}, style: 'modern', era: '2020s' };
+      var activeEra = eraSel.value || initTeam.era || '2020s';
+      var car = F1Car3D.createCar(initTeam.palette, initTeam.style, activeEra);
+      scene.add(car);
+      scene.add(F1Car3D.createContactShadow());
+
+      var camera = new THREE.PerspectiveCamera(32, 16 / 9, 0.1, 100);
+      var pr = F1Car3D.CAMERA_PRESETS.hero;
+      var theta = pr.theta, phi = pr.phi, radius = pr.radius, targetY = pr.targetY;
+      var tTheta = theta, tPhi = phi, tRadius = radius, tTargetY = targetY;
+      var dragging = false, lx = 0, ly = 0, autoSpin = true, idle = 0;
+
+      function currentPaletteFromInputs() {
+        var p = {};
+        Object.keys(inputs).forEach(function (kk) { p[kk] = inputs[kk].value; });
+        return p;
+      }
+
+      function rebuildCarForEra(era, pal, st) {
+        if (era === activeEra && car) {
+          car.userData.setPalette(pal, st);
+          return;
+        }
+        if (car) {
+          scene.remove(car);
+        }
+        activeEra = era;
+        car = F1Car3D.createCar(pal, st, era);
+        scene.add(car);
+      }
+
+      function applyTeam(teamEntry, keepEra) {
+        var pal = (teamEntry && teamEntry.palette) || {};
+        var st = (teamEntry && teamEntry.style) || 'modern';
+        var er = keepEra ? eraSel.value : ((teamEntry && teamEntry.era) || '2020s');
+        styleSel.value = st;
+        eraSel.value = er;
+        rebuildCarForEra(er, pal, st);
+        if (pal.main) {
+          ringMat.color.set(pal.main);
+          lights.rim.color.set(pal.main);
+        }
+        Object.keys(inputs).forEach(function (k) {
+          if (pal[k]) inputs[k].value = pal[k];
+        });
+      }
+
+      applyTeam(initTeam, true);
+      sel.addEventListener('change', function () { applyTeam(byName[sel.value], false); });
+      eraSel.addEventListener('change', function () {
+        rebuildCarForEra(eraSel.value, currentPaletteFromInputs(), styleSel.value);
+      });
+      styleSel.addEventListener('change', function () {
+        car.userData.setPalette(currentPaletteFromInputs(), styleSel.value);
+      });
+      Object.keys(inputs).forEach(function (k) {
+        inputs[k].addEventListener('input', function () {
+          var p = currentPaletteFromInputs();
+          car.userData.setPalette(p, styleSel.value);
+          ringMat.color.set(p.main);
+          lights.rim.color.set(p.main);
+        });
+      });
+
+      document.querySelectorAll('#studio-angles button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var p = F1Car3D.CAMERA_PRESETS[btn.getAttribute('data-preset')];
+          if (!p) return;
+          tTheta = p.theta; tPhi = p.phi; tRadius = p.radius; tTargetY = p.targetY;
+          autoSpin = (btn.getAttribute('data-preset') === 'hero');
+          idle = 0;
+          document.querySelectorAll('#studio-angles button').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+        });
+      });
+
+      document.getElementById('studio-download').addEventListener('click', function () {
+        plinth.visible = false; ring.visible = false;
+        renderer.render(scene, camera);
+        var url = canvas.toDataURL('image/png');
+        plinth.visible = true; ring.visible = true;
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (sel.value || 'f1-car').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-3d.png';
+        a.click();
+      });
+
+      canvas.addEventListener('pointerdown', function (e) { dragging = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+      canvas.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        tTheta -= (e.clientX - lx) * 0.007;
+        tPhi = Math.min(1.46, Math.max(0.06, tPhi + (e.clientY - ly) * 0.005));
+        lx = e.clientX; ly = e.clientY; idle = 0;
+      });
+      canvas.addEventListener('pointerup', function () { dragging = false; });
+      canvas.addEventListener('wheel', function (e) { e.preventDefault(); tRadius = Math.min(8.5, Math.max(3.0, tRadius + e.deltaY * 0.004)); }, { passive: false });
+
+      function resize() {
+        var wrap = canvas.parentElement;
+        var w = wrap.clientWidth || 720, h = wrap.clientHeight || 405;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      new ResizeObserver(resize).observe(canvas.parentElement);
+      resize();
+
+      function tick() {
+        if (!dragging) {
+          idle += 1 / 60;
+          if (autoSpin && idle > 2.2) tTheta += 0.0038;
+        }
+        theta += (tTheta - theta) * 0.1;
+        phi += (tPhi - phi) * 0.1;
+        radius += (tRadius - radius) * 0.1;
+        targetY += (tTargetY - targetY) * 0.1;
+        var y = radius * Math.sin(phi) + targetY;
+        var r = radius * Math.cos(phi);
+        camera.position.set(r * Math.sin(theta), y, r * Math.cos(theta));
+        camera.lookAt(0, targetY, 0);
+        renderer.render(scene, camera);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  </script>
+{% endblock %}

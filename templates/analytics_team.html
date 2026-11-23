@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Analytics · Team — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Team Analytics</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/analytics">Analytics</a> → Per Team</p>
+  </div>
+
+  <nav class="sub-nav" aria-label="Analytics sections">
+    <a href="/analytics/overall" class="nav-link">Overall</a>
+    <a href="/analytics/season" class="nav-link">Per Season</a>
+    <a href="/analytics/team" class="nav-link active">Per Team</a>
+    <a href="/analytics/tracks" class="nav-link">Per Track</a>
+  </nav>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <form method="get" action="/analytics/team" class="form-inline">
+      <label for="team" class="label-inline">Team</label>
+      <select id="team" name="team" onchange="this.form.submit()">
+        {% for t in teams %}
+        <option value="{{ t }}" {% if t == team %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  {% if team %}
+  <div class="card">
+    <h2>{{ team }} — Points by Season</h2>
+    <table>
+      <thead><tr><th>Year</th><th>Points</th></tr></thead>
+      <tbody>
+        {% for r in seasons %}
+        <tr><td><a href="/analytics/season?year={{ r['year'] }}">{{ r["year"] }}</a></td><td>{{ r["points"] }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endblock %}

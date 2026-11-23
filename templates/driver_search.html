@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Driver Search — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1><i class="fas fa-search"></i> Driver Search</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → Driver Search (1950–Present)</p>
+  </div>
+
+  <div class="card toolbar-card" style="margin-bottom: 20px;">
+    <form method="get" action="/driver" class="form-inline" style="gap:10px;">
+      <input type="text" id="q" name="q" placeholder="Search any F1 driver from 1950 to today (e.g. Senna, Fangio, Verstappen)…" value="{{ q or '' }}" class="input-search" style="flex:1;min-width:240px;" autofocus/>
+      <button type="submit"><i class="fas fa-search"></i> Search</button>
+    </form>
+    <div class="link-list" style="margin-top:12px;">
+      <span class="muted small" style="align-self:center;">Legends &amp; Stars:</span>
+      <a href="/driver?q=Verstappen" class="badge">Max Verstappen</a>
+      <a href="/driver?q=Hamilton" class="badge">Lewis Hamilton</a>
+      <a href="/driver?q=Senna" class="badge">Ayrton Senna</a>
+      <a href="/driver?q=Schumacher" class="badge">Michael Schumacher</a>
+      <a href="/driver?q=Fangio" class="badge">Juan Manuel Fangio</a>
+      <a href="/driver?q=Ascari" class="badge">Alberto Ascari</a>
+      <a href="/driver?q=Leclerc" class="badge">Charles Leclerc</a>
+      <a href="/driver?q=Norris" class="badge">Lando Norris</a>
+    </div>
+  </div>
+
+  {% if q %}
+  <div class="card table-card">
+    <div class="head">
+      <h3><i class="fas fa-users"></i> Results for "{{ q }}" ({{ results | length }})</h3>
+    </div>
+    <table>
+      <thead><tr><th>Driver</th><th>Last Season</th><th>Profile</th></tr></thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td><a href="/driver/{{ r['name'].replace(' ', '-') }}"><strong>{{ r['name'] }}</strong></a></td>
+          <td class="muted">{{ r['last_year'] }}</td>
+          <td><a href="/driver/{{ r['name'].replace(' ', '-') }}" class="badge">Open Dossier →</a></td>
+        </tr>
+        {% endfor %}
+        {% if results|length == 0 %}
+        <tr><td colspan="3" class="muted">No matching drivers found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endblock %}

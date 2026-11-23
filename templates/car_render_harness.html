@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>F1 3D Studio Render Harness</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="640" height="320"></canvas>
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_car_3d.js"></script>
+  <script>
+    (function () {
+      var canvas = document.getElementById('c');
+      var renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true
+      });
+      renderer.setPixelRatio(1);
+      renderer.setClearColor(0x000000, 0);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.24;
+      if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) {
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+      }
+
+      var scene = new THREE.Scene();
+      scene.environment = F1Car3D.createStudioEnvironment(renderer);
+      var lights = F1Car3D.addStudioLights(scene, '#ffffff');
+      /* Boost studio fill slightly so transparent PNGs read brightly on both dark web cards and white print PDFs */
+      lights.key.intensity = 2.6;
+      lights.fill.intensity = 1.35;
+      lights.rim.intensity = 1.25;
+
+      var carsByEra = {};
+      function getCarForEra(eraName) {
+        var er = eraName || '2020s';
+        if (!carsByEra[er]) {
+          var c = F1Car3D.createCar({}, 'modern', er);
+          c.visible = false;
+          scene.add(c);
+          carsByEra[er] = c;
+        }
+        return carsByEra[er];
+      }
+      var activeCar = getCarForEra('2020s');
+      activeCar.visible = true;
+      var shadow = F1Car3D.createContactShadow();
+      shadow.material.opacity = 0.55;
+      scene.add(shadow);
+
+      var camera = new THREE.PerspectiveCamera(26, 2, 0.1, 100);
+
+      function setCamera(presetName, width, height) {
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        var pr = F1Car3D.CAMERA_PRESETS[presetName] || { theta: 0.88, phi: 0.22, radius: 6.75, targetY: 0.44 };
+        /* Card/PDF 2:1 framing: centered dynamic 3/4 front-side angle filling the frame cleanly */
+        if (presetName === 'card') {
+          pr = { theta: 0.92, phi: 0.22, radius: 6.75, targetY: 0.44 };
+        }
+        var y = pr.radius * Math.sin(pr.phi) + pr.targetY;
+        var r = pr.radius * Math.cos(pr.phi);
+        camera.position.set(r * Math.sin(pr.theta), y, r * Math.cos(pr.theta));
+        camera.lookAt(0, pr.targetY, 0.12);
+      }
+
+      window.renderLiveryPng = function (palette, presetName, width, height, styleName, eraName) {
+        width = width || 640;
+        height = height || 320;
+        var nextCar = getCarForEra(eraName || '2020s');
+        if (activeCar !== nextCar) {
+          activeCar.visible = false;
+          nextCar.visible = true;
+          activeCar = nextCar;
+        }
+        activeCar.userData.setPalette(palette, styleName || 'modern');
+        if (palette && palette.main) {
+          lights.rim.color.set(palette.main);
+        }
+        setCamera(presetName || 'card', width, height);
+        renderer.render(scene, camera);
+        return canvas.toDataURL('image/png');
+      };
+
+      window.__HARNESS_READY__ = true;
+    })();
+  </script>
+</body>
+</html>

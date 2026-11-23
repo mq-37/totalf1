@@ -1,0 +1,10 @@
+<tr id="row-{{ r['position'] }}">
+  <td>{{ r["position"] }}</td>
+  <td><a href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r["driver"] }}</a></td>
+  <td>{{ r["nationality"] }}</td>
+  <td>{{ r["team"] }}</td>
+  <td>{{ r["points"] }}</td>
+  <td>
+    <button hx-get="/drivers/{{ r['year'] }}/edit/{{ r['position'] }}" hx-target="#row-{{ r['position'] }}" hx-swap="outerHTML">Edit</button>
+  </td>
+</tr>

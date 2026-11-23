@@ -1,0 +1,400 @@
+{#
+  Side-view F1 car — realistic hybrid-era elevation (left side).
+  Expects: symbol_id (required), car_style (CSS vars string).
+  Optional: width, height, extra_class, svg_id, preview_id.
+
+  Colour tokens: --primary, --secondary, --accent, --tyre, --ink
+
+  Z-order: ground → rear wing stack → rear tyre → floor/diffuser →
+    main body / sidepod → cockpit/halo → airbox/fin → front suspension →
+    front tyre → front wing / endplate
+#}
+<svg {% if svg_id %}id="{{ svg_id }}"{% endif %}
+     {% if preview_id %}id="{{ preview_id }}"{% endif %}
+     class="car-silhouette car-side-view {{ extra_class | default('') }}"
+     viewBox="0 0 560 168"
+     width="{{ width | default(560) }}"
+     height="{{ height | default(168) }}"
+     preserveAspectRatio="xMidYMid meet"
+     xmlns="http://www.w3.org/2000/svg"
+     style="{{ car_style }}">
+  <defs>
+    <linearGradient id="paint-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.38"/>
+      <stop offset="28%" stop-color="#fff" stop-opacity="0.08"/>
+      <stop offset="62%" stop-color="#000" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.42"/>
+    </linearGradient>
+    <linearGradient id="paint-long-{{ symbol_id }}" x1="0" y1="0" x2="1" y2="0.08">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.22"/>
+      <stop offset="35%" stop-color="#fff" stop-opacity="0.12"/>
+      <stop offset="70%" stop-color="#000" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.28"/>
+    </linearGradient>
+    <linearGradient id="carbon-{{ symbol_id }}" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0%" stop-color="#2a3036"/>
+      <stop offset="45%" stop-color="#0a0d10"/>
+      <stop offset="100%" stop-color="#161a1e"/>
+    </linearGradient>
+    <linearGradient id="wing-face-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0efe8" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#d8d6cc"/>
+      <stop offset="100%" stop-color="#9a9890"/>
+    </linearGradient>
+    <linearGradient id="wing-dark-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a4046"/>
+      <stop offset="100%" stop-color="#12161a"/>
+    </linearGradient>
+    <radialGradient id="tyre-side-{{ symbol_id }}" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#2c3236"/>
+      <stop offset="40%" stop-color="#14171a"/>
+      <stop offset="100%" stop-color="#030405"/>
+    </radialGradient>
+    <linearGradient id="tyre-v-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+      <stop offset="22%" stop-color="#fff" stop-opacity="0.05"/>
+      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.7"/>
+    </linearGradient>
+    <radialGradient id="hub-{{ symbol_id }}" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#c8cdd2"/>
+      <stop offset="55%" stop-color="#6a7278"/>
+      <stop offset="100%" stop-color="#1a1e22"/>
+    </radialGradient>
+    <linearGradient id="ground-ao-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="glass-{{ symbol_id }}" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0%" stop-color="#1a2430" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#0a1018" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#05080c" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <symbol id="{{ symbol_id }}" viewBox="0 0 560 168">
+      <g id="fills">
+
+        {# —— Ground contact shadow —— #}
+        <ellipse cx="280" cy="158" rx="248" ry="6" fill="url(#ground-ao-{{ symbol_id }})"/>
+
+        {# —— Rear wing endplate + elements (behind rear tyre partly) —— #}
+        <g id="rear-wing">
+          {# endplate #}
+          <path d="M448 28 L472 26 L476 30 L478 118 L470 122 L446 118 Z"
+                fill="url(#wing-face-{{ symbol_id }})"/>
+          <path d="M450 30 L470 28.5 L472 116 L448 114 Z" fill="#000" opacity="0.22"/>
+          {# main plane #}
+          <path d="M430 30 L472 28 L474 38 L432 40 Z" fill="var(--accent)"/>
+          <path d="M430 30 L472 28 L474 38 L432 40 Z" fill="url(#paint-{{ symbol_id }})"/>
+          {# DRS / upper flap #}
+          <path d="M434 42 L470 40 L471 48 L435 50 Z" fill="var(--secondary)"/>
+          <path d="M434 42 L470 40 L471 48 L435 50 Z" fill="url(#paint-{{ symbol_id }})"/>
+          {# lower beam / support #}
+          <path d="M438 54 L466 52 L467 58 L439 60 Z" fill="var(--primary)" opacity="0.9"/>
+          {# central pillar #}
+          <rect x="452" y="58" width="6" height="52" rx="1.5" fill="url(#carbon-{{ symbol_id }})"/>
+          <rect x="453.5" y="60" width="3" height="48" rx="1" fill="var(--accent)" opacity="0.55"/>
+          {# lower rear wing element #}
+          <path d="M440 78 L468 76 L469 84 L441 86 Z" fill="var(--accent)" opacity="0.85"/>
+        </g>
+
+        {# —— Rear tyre —— #}
+        <g id="rear-tyre" transform="translate(418 118)">
+          <ellipse cx="0" cy="0" rx="42" ry="42" fill="var(--tyre, #111)"/>
+          <ellipse cx="0" cy="0" rx="42" ry="42" fill="url(#tyre-side-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="42" ry="42" fill="url(#tyre-v-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="42" ry="42" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="2.5"/>
+          {# sidewall rings #}
+          <ellipse cx="0" cy="0" rx="30" ry="30" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
+          <ellipse cx="0" cy="0" rx="22" ry="22" fill="#080a0c"/>
+          <ellipse cx="0" cy="0" rx="14" ry="14" fill="url(#hub-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="6" ry="6" fill="#12161a"/>
+          <ellipse cx="-6" cy="-8" rx="10" ry="7" fill="#fff" opacity="0.06"/>
+          {# Pirelli-ish gold stripe hint #}
+          <path d="M-2 -38 Q4 -40 6 -36" fill="none" stroke="#B8962E" stroke-width="1.6" opacity="0.55"/>
+        </g>
+
+        {# —— Diffuser / rear floor —— #}
+        <g id="diffuser">
+          <path d="M360 128
+                   C390 124 420 122 448 124
+                   L450 136
+                   C420 140 390 142 360 140 Z"
+                fill="url(#carbon-{{ symbol_id }})"/>
+          <path d="M368 130 L372 138 M380 129 L384 137 M392 128 L396 136 M404 128 L408 136 M416 128 L420 136"
+                stroke="rgba(255,255,255,0.12)" stroke-width="1.2" fill="none"/>
+        </g>
+
+        {# —— Floor / bargeboard / skirts —— #}
+        <g id="floor">
+          <path d="M78 118
+                   C120 108 170 102 230 100
+                   C290 98 340 100 390 108
+                   L392 122
+                   C340 116 290 114 230 116
+                   C170 118 120 122 80 130 Z"
+                fill="url(#carbon-{{ symbol_id }})"/>
+          <path d="M78 118
+                   C120 108 170 102 230 100
+                   C290 98 340 100 390 108
+                   L392 122
+                   C340 116 290 114 230 116
+                   C170 118 120 122 80 130 Z"
+                fill="var(--accent)" opacity="0.28"/>
+          {# bargeboard vanes #}
+          <path d="M118 104 L128 118" stroke="url(#carbon-{{ symbol_id }})" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M132 102 L140 116" stroke="#2a3036" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M146 100 L152 114" stroke="#1a1e22" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M110 108 C124 106 138 106 152 108" fill="none" stroke="var(--accent)" stroke-width="1.4" opacity="0.7"/>
+        </g>
+
+        {# —— Main body: nose → chassis → sidepod → engine cover —— #}
+        <g id="body">
+          {# long nose #}
+          <path d="M42 102
+                   C58 90 78 84 102 82
+                   C130 80 158 80 178 82
+                   L182 108
+                   C150 112 118 114 88 116
+                   C68 116 52 112 42 106 Z"
+                fill="var(--primary)"/>
+          <path d="M42 102
+                   C58 90 78 84 102 82
+                   C130 80 158 80 178 82
+                   L182 108
+                   C150 112 118 114 88 116
+                   C68 116 52 112 42 106 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# nose tip tip #}
+          <path d="M28 106 C34 98 40 96 46 98 L48 108 C40 110 32 110 28 108 Z"
+                fill="var(--primary)"/>
+          <path d="M28 106 C34 98 40 96 46 98 L48 108 C40 110 32 110 28 108 Z"
+                fill="url(#paint-long-{{ symbol_id }})"/>
+          {# accent stripe along nose #}
+          <path d="M48 100 C72 92 110 88 150 88 L152 94 C112 94 74 98 50 104 Z"
+                fill="var(--accent)" opacity="0.88"/>
+          <path d="M52 102 C78 96 112 92 148 92" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.25"/>
+
+          {# chassis / cockpit tub rail #}
+          <path d="M170 80
+                   C186 72 200 68 218 66
+                   L230 66
+                   L236 104
+                   C210 108 188 110 170 108 Z"
+                fill="var(--primary)"/>
+          <path d="M170 80
+                   C186 72 200 68 218 66
+                   L230 66
+                   L236 104
+                   C210 108 188 110 170 108 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+
+          {# sidepod — undercut hybrid-era volume #}
+          <path d="M210 78
+                   C228 58 258 48 300 46
+                   C340 44 372 52 392 70
+                   L400 112
+                   C360 118 310 120 260 118
+                   C230 116 214 104 210 90 Z"
+                fill="var(--primary)"/>
+          <path d="M210 78
+                   C228 58 258 48 300 46
+                   C340 44 372 52 392 70
+                   L400 112
+                   C360 118 310 120 260 118
+                   C230 116 214 104 210 90 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# secondary shoulder panel #}
+          <path d="M230 72
+                   C250 56 280 50 312 50
+                   C344 50 368 58 382 70
+                   L384 86
+                   C360 76 330 70 298 70
+                   C268 70 244 74 230 82 Z"
+                fill="var(--secondary)" opacity="0.82"/>
+          <path d="M230 72
+                   C250 56 280 50 312 50
+                   C344 50 368 58 382 70
+                   L384 86
+                   C360 76 330 70 298 70
+                   C268 70 244 74 230 82 Z"
+                fill="url(#paint-long-{{ symbol_id }})"/>
+          {# sidepod intake scoop #}
+          <path d="M236 86
+                   C248 78 268 74 288 76
+                   C278 92 260 100 242 102
+                   C236 96 234 90 236 86 Z"
+                fill="#050708"/>
+          <path d="M242 88 C252 82 268 80 280 82 C274 90 262 96 248 98 C244 94 242 90 242 88 Z"
+                fill="#1a2228" opacity="0.9"/>
+          {# cooling louvre hints #}
+          <path d="M300 78 L318 76 M304 84 L322 82 M308 90 L324 88"
+                stroke="#000" stroke-width="1.4" opacity="0.35" stroke-linecap="round"/>
+
+          {# engine cover taper to rear #}
+          <path d="M360 58
+                   C380 56 400 62 412 78
+                   L416 108
+                   C400 112 380 114 360 112 Z"
+                fill="var(--primary)"/>
+          <path d="M360 58
+                   C380 56 400 62 412 78
+                   L416 108
+                   C400 112 380 114 360 112 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+        </g>
+
+        {# —— Mirror —— #}
+        <g id="mirror">
+          <path d="M196 70 L214 68 L216 74 L198 76 Z" fill="var(--primary)"/>
+          <rect x="212" y="64" width="10" height="8" rx="1.5" fill="#0a0a0c"/>
+          <rect x="213.5" y="65.5" width="7" height="5" rx="1" fill="#2a3540" opacity="0.7"/>
+        </g>
+
+        {# —— Cockpit / halo / helmet —— #}
+        <g id="cockpit">
+          <ellipse cx="228" cy="72" rx="28" ry="16" fill="url(#glass-{{ symbol_id }})"/>
+          <ellipse cx="228" cy="72" rx="28" ry="16" fill="var(--secondary)" opacity="0.35"/>
+          {# helmet #}
+          <ellipse cx="222" cy="70" rx="11" ry="9" fill="var(--secondary)"/>
+          <path d="M214 68 C218 62 226 60 232 64 L230 72 C226 70 218 70 214 72 Z" fill="#1a2430"/>
+          <path d="M218 60 L228 60 L229 64 L217 64 Z" fill="var(--accent)"/>
+          {# halo ring + pillar #}
+          <path d="M204 74
+                   C204 56 214 46 228 46
+                   C242 46 252 56 252 72"
+                fill="none" stroke="#1c2428" stroke-width="5.5" stroke-linecap="round"/>
+          <path d="M204 74
+                   C204 56 214 46 228 46
+                   C242 46 252 56 252 72"
+                fill="none" stroke="#3a4448" stroke-width="1.6" stroke-linecap="round" opacity="0.5"/>
+          <line x1="228" y1="46" x2="228" y2="64" stroke="#1c2428" stroke-width="3.2" stroke-linecap="round"/>
+          <line x1="228" y1="46" x2="228" y2="64" stroke="#4a5458" stroke-width="1" stroke-linecap="round" opacity="0.45"/>
+        </g>
+
+        {# —— Airbox + shark fin —— #}
+        <g id="airbox-fin">
+          <path d="M268 30
+                   C274 22 294 20 306 28
+                   C314 34 316 44 312 52
+                   L278 58
+                   C270 48 266 38 268 30 Z"
+                fill="var(--secondary)"/>
+          <path d="M268 30
+                   C274 22 294 20 306 28
+                   C314 34 316 44 312 52
+                   L278 58
+                   C270 48 266 38 268 30 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# intake throat #}
+          <path d="M280 34
+                   C286 28 298 28 304 34
+                   C308 38 306 46 300 50
+                   L284 52
+                   C278 46 276 38 280 34 Z"
+                fill="#050708"/>
+          {# shark fin #}
+          <path d="M308 50
+                   L400 48
+                   L410 72
+                   L318 68 Z"
+                fill="var(--primary)"/>
+          <path d="M308 50
+                   L400 48
+                   L410 72
+                   L318 68 Z"
+                fill="url(#paint-long-{{ symbol_id }})"/>
+          <path d="M320 52 L392 50 L396 60 L324 60 Z" fill="var(--accent)" opacity="0.8"/>
+        </g>
+
+        {# —— Exhaust / camera bulge hint —— #}
+        <ellipse cx="404" cy="96" rx="8" ry="5" fill="#0a0c0e"/>
+        <ellipse cx="404" cy="96" rx="4" ry="2.5" fill="#2a3036"/>
+
+        {# —— Front suspension wishbones —— #}
+        <g id="front-suspension" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M150 100 L108 112 L152 116 Z" stroke="#181c1f" stroke-width="2"/>
+          <path d="M148 94 L106 100" stroke="#181c1f" stroke-width="1.6"/>
+          <path d="M150 108 L108 118" stroke="#2a3034" stroke-width="1.3"/>
+          <path d="M146 102 L110 108" stroke="#4b5358" stroke-width="1.1"/>
+          <path d="M104 98 L104 120" stroke="#181c1f" stroke-width="2"/>
+        </g>
+
+        {# —— Front tyre (in front of nose tip / wing junction) —— #}
+        <g id="front-tyre" transform="translate(104 120)">
+          <ellipse cx="0" cy="0" rx="38" ry="38" fill="var(--tyre, #111)"/>
+          <ellipse cx="0" cy="0" rx="38" ry="38" fill="url(#tyre-side-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="38" ry="38" fill="url(#tyre-v-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="38" ry="38" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="2.2"/>
+          <ellipse cx="0" cy="0" rx="26" ry="26" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="4"/>
+          <ellipse cx="0" cy="0" rx="18" ry="18" fill="#080a0c"/>
+          <ellipse cx="0" cy="0" rx="11" ry="11" fill="url(#hub-{{ symbol_id }})"/>
+          <ellipse cx="0" cy="0" rx="4.5" ry="4.5" fill="#12161a"/>
+          <ellipse cx="-5" cy="-7" rx="8" ry="5.5" fill="#fff" opacity="0.06"/>
+          <path d="M-2 -34 Q3 -36 5 -32" fill="none" stroke="#B8962E" stroke-width="1.4" opacity="0.5"/>
+        </g>
+
+        {# —— Front wing multi-element + endplate —— #}
+        <g id="front-wing">
+          {# endplate #}
+          <path d="M8 96 L22 92 L26 96 L28 138 L16 142 L6 136 Z"
+                fill="url(#wing-face-{{ symbol_id }})"/>
+          <path d="M10 98 L22 95 L24 136 L10 138 Z" fill="#000" opacity="0.25"/>
+          {# upper flap #}
+          <path d="M22 104
+                   C40 96 62 92 86 92
+                   L90 100
+                   C66 100 44 104 26 110 Z"
+                fill="url(#wing-dark-{{ symbol_id }})"/>
+          {# mid flap #}
+          <path d="M20 112
+                   C42 104 66 100 92 100
+                   L94 108
+                   C68 108 44 112 24 118 Z"
+                fill="var(--accent)" opacity="0.75"/>
+          <path d="M20 112
+                   C42 104 66 100 92 100
+                   L94 108
+                   C68 108 44 112 24 118 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# main plane #}
+          <path d="M18 120
+                   C44 112 70 108 96 108
+                   L98 118
+                   C72 118 46 122 22 128 Z"
+                fill="var(--primary)"/>
+          <path d="M18 120
+                   C44 112 70 108 96 108
+                   L98 118
+                   C72 118 46 122 22 128 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# footplate / cascade #}
+          <path d="M22 128
+                   C48 124 72 122 96 122
+                   L94 132
+                   C70 132 48 134 24 136 Z"
+                fill="url(#wing-face-{{ symbol_id }})"/>
+          {# nose–wing junction #}
+          <path d="M86 108 L102 106 L104 118 L88 120 Z" fill="#6a7074"/>
+          <path d="M88 110 L100 108 L101 116 L90 118 Z" fill="#e0ded4" opacity="0.7"/>
+        </g>
+
+      </g>
+
+      <g id="lines" fill="none" stroke="var(--ink)" stroke-width="0.7" opacity="0.28"
+         stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+        <path d="M42 102 C78 84 130 80 178 82"/>
+        <path d="M210 78 C258 48 340 44 392 70"/>
+        <path d="M204 74 C204 56 214 46 228 46 C242 46 252 56 252 72"/>
+        <path d="M268 30 C274 22 294 20 306 28"/>
+        <path d="M308 50 L400 48 L410 72"/>
+        <path d="M22 104 C62 92 86 92"/>
+        <ellipse cx="104" cy="120" rx="38" ry="38"/>
+        <ellipse cx="418" cy="118" rx="42" ry="42"/>
+      </g>
+    </symbol>
+  </defs>
+  <g transform="translate(280 84) scale(var(--s, 1)) translate(-280 -84)">
+    <use href="#{{ symbol_id }}"/>
+  </g>
+</svg>

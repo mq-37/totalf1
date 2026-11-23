@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Fastest Laps {{ year }} — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Fastest Laps {{ year }}</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/">Seasons</a> → {{ year }}</p>
+  </div>
+
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Rnd</th>
+          <th>Grand Prix</th>
+          <th>Winner</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r["round"] }}</td>
+          <td>{{ r["grand_prix"] }}</td>
+          <td><a href="/driver/{{ r['winner'].replace(' ', '-') }}">{{ r["winner"] }}</a></td>
+          <td>{{ r["time"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,266 @@
+{#
+  Front-view F1 car — visual copy of f1_front_vector_reference.png (ignore dots).
+  Expects: symbol_id, car_style.
+  Optional: preview_id, width, height, extra_class, preserve_aspect_ratio
+  viewBox 272×160 · livery --primary --accent --secondary --tyre
+#}
+<svg class="car-silhouette car-front-view {{ extra_class | default('') }}" viewBox="0 0 272 160" width="{{ width | default(340) }}" height="{{ height | default(200) }}"
+     {% if preview_id %}id="{{ preview_id }}"{% endif %}
+     preserveAspectRatio="{{ preserve_aspect_ratio | default('xMidYMid meet') }}"
+     xmlns="http://www.w3.org/2000/svg"
+     style="{{ car_style }}">
+  <defs>
+    <linearGradient id="paint-{{ symbol_id }}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.2"/>
+      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="tyre-face-{{ symbol_id }}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0a0c0e"/>
+      <stop offset="38%" stop-color="#2c3236"/>
+      <stop offset="100%" stop-color="#08090a"/>
+    </linearGradient>
+    <radialGradient id="hub-{{ symbol_id }}" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#555"/>
+      <stop offset="100%" stop-color="#111"/>
+    </radialGradient>
+    <radialGradient id="ground-ao-{{ symbol_id }}" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+
+    <symbol id="{{ symbol_id }}" viewBox="0 0 272 160">
+      <g id="fills">
+
+        {# rear wing #}
+        <g id="rear-aero">
+          <rect x="86" y="20" width="100" height="4" rx="0.5" fill="var(--primary)"/>
+          <rect x="88" y="24" width="96" height="2.2" fill="#1a1e22"/>
+          <rect x="90" y="26.2" width="92" height="3" rx="0.3" fill="var(--primary)"/>
+          <path d="M82 17 L90 17 L90 31 L84 31 Z" fill="#1a1e22"/>
+          <path d="M190 17 L182 17 L182 31 L188 31 Z" fill="#1a1e22"/>
+          <path d="M122 26 L124 46" stroke="#1a1e22" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M150 26 L148 46" stroke="#1a1e22" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
+
+        <g id="rear-wheels" opacity="0.55">
+          <rect x="14" y="70" width="30" height="40" rx="8" fill="#16181a"/>
+          <rect x="228" y="70" width="30" height="40" rx="8" fill="#16181a"/>
+        </g>
+
+        <g id="main-body">
+          {# airbox #}
+          <path d="M126 48 C128 32 132 18 136 16 C140 18 144 32 146 48 L142 52 L130 52 Z"
+                fill="var(--primary)"/>
+          <path d="M129 40 L143 40 L141 50 L131 50 Z" fill="var(--accent)"/>
+          <ellipse cx="136" cy="28" rx="5" ry="2.8" fill="#0a0a0a"/>
+          <rect x="131.5" y="10" width="9" height="3" rx="0.4" fill="#1a1e22"/>
+          <rect x="133.5" y="7" width="5" height="2.6" rx="0.3" fill="var(--accent)"/>
+
+          {# sidepods — rounded, leave open bay to tyres #}
+          <path d="M118 70
+                   C104 66 90 70 76 82
+                   C66 94 64 110 72 122
+                   C78 130 98 132 114 128
+                   L118 126
+                   C120 100 120 80 118 70 Z"
+                fill="var(--primary)"/>
+          <path d="M118 70
+                   C104 66 90 70 76 82
+                   C66 94 64 110 72 122
+                   C78 130 98 132 114 128
+                   L118 126
+                   C120 100 120 80 118 70 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          <path d="M154 70
+                   C168 66 182 70 196 82
+                   C206 94 208 110 200 122
+                   C194 130 174 132 158 128
+                   L154 126
+                   C152 100 152 80 154 70 Z"
+                fill="var(--primary)"/>
+          <path d="M154 70
+                   C168 66 182 70 196 82
+                   C206 94 208 110 200 122
+                   C194 130 174 132 158 128
+                   L154 126
+                   C152 100 152 80 154 70 Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+
+          {# curved intakes + gold lip (Fanatic) #}
+          <path d="M112 78
+                   C98 74 82 78 70 90
+                   C66 100 70 114 82 118
+                   C94 120 106 114 112 104 Z"
+                fill="#0a0c0e"/>
+          <path d="M110 76 C96 72 80 76 72 86" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M160 78
+                   C174 74 190 78 202 90
+                   C206 100 202 114 190 118
+                   C178 120 166 114 160 104 Z"
+                fill="#0a0c0e"/>
+          <path d="M162 76 C176 72 192 76 200 86" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+
+          {# slim tapering nose #}
+          <path d="M150 76
+                   L146 58 L140 50 L136 46 L132 50 L126 58
+                   L122 76
+                   L124 116
+                   L130 132
+                   L136 136
+                   L142 132
+                   L148 116
+                   Z"
+                fill="var(--primary)"/>
+          <path d="M150 76
+                   L146 58 L140 50 L136 46 L132 50 L126 58
+                   L122 76
+                   L124 116
+                   L130 132
+                   L136 136
+                   L142 132
+                   L148 116
+                   Z"
+                fill="url(#paint-{{ symbol_id }})"/>
+          {# gold stripe: wider at cockpit, narrow at tip #}
+          <path d="M129 50 L143 50 L138 132 L134 132 Z" fill="var(--accent)"/>
+          <path d="M132 132 L140 132 L138 138 L134 138 Z" fill="var(--accent)"/>
+          <ellipse cx="136" cy="136" rx="4" ry="2.2" fill="var(--primary)"/>
+          <path d="M133 136 L129 146" stroke="#1a1e22" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M139 136 L143 146" stroke="#1a1e22" stroke-width="1.2" stroke-linecap="round"/>
+
+          <rect x="90" y="56" width="12" height="2.8" rx="0.5" fill="var(--accent)"/>
+          <rect x="86" y="54.5" width="5.5" height="5" rx="0.7" fill="#0a0a0a"/>
+          <rect x="170" y="56" width="12" height="2.8" rx="0.5" fill="var(--accent)"/>
+          <rect x="180.5" y="54.5" width="5.5" height="5" rx="0.7" fill="#0a0a0a"/>
+        </g>
+
+        {# white halo #}
+        <g id="driver-and-halo">
+          <ellipse cx="136" cy="64" rx="13" ry="9.5" fill="#050708"/>
+          <path d="M123 74 C123 56 129 46 136 46 C143 46 149 56 149 74"
+                fill="none" stroke="var(--primary)" stroke-width="3.4" stroke-linecap="round"/>
+          <line x1="136" y1="46" x2="136" y2="58" stroke="var(--primary)" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="136" cy="62" rx="8" ry="6.5" fill="var(--secondary)"/>
+        </g>
+
+        {# V wishbones #}
+        <g id="front-suspension" fill="none" stroke-linecap="round">
+          <path d="M122 86 L40 100" stroke="#181c1f" stroke-width="1.55"/>
+          <path d="M122 100 L42 104" stroke="#181c1f" stroke-width="1.4"/>
+          <path d="M124 92 L52 102" stroke="#3a4044" stroke-width="0.9"/>
+          <path d="M150 86 L232 100" stroke="#181c1f" stroke-width="1.55"/>
+          <path d="M150 100 L230 104" stroke="#181c1f" stroke-width="1.4"/>
+          <path d="M148 92 L220 102" stroke="#3a4044" stroke-width="0.9"/>
+          <path d="M124 110 L46 120 L126 122" stroke="#181c1f" stroke-width="1.25"/>
+          <path d="M148 110 L226 120 L146 122" stroke="#181c1f" stroke-width="1.25"/>
+        </g>
+
+        {# white multi-flap wing + upsweep #}
+        <g id="front-wing-centre">
+          <path d="M48 124
+                   C82 120 112 118.5 136 118.5
+                   C160 118.5 190 120 224 124
+                   C236 116 248 110 256 108
+                   L254 114
+                   C248 116 240 120 232 124
+                   C198 120.5 166 119 136 119
+                   C106 119 74 120.5 40 124
+                   C32 120 24 116 16 114
+                   L14 108
+                   C22 110 36 116 48 124 Z"
+                fill="var(--primary)"/>
+          <path d="M50 122 C100 119.5 136 118.5 222 122" fill="none" stroke="#1a1e22" stroke-width="0.65" opacity="0.5"/>
+
+          <path d="M46 130
+                   C82 126.5 112 125 136 125
+                   C160 125 190 126.5 226 130
+                   C238 122 250 116 258 114
+                   L256 120
+                   C250 122 242 126 234 130
+                   C198 126.5 166 125 136 125
+                   C106 125 74 126.5 38 130
+                   C30 126 22 122 14 120
+                   L12 114
+                   C20 116 34 122 46 130 Z"
+                fill="#f4f2ea"/>
+          <path d="M48 128 C100 125.5 136 125 224 128" fill="none" stroke="#1a1e22" stroke-width="0.6" opacity="0.45"/>
+
+          <path d="M44 136
+                   C82 133 112 131.5 136 131.5
+                   C160 131.5 190 133 228 136
+                   C240 128 252 122 260 120
+                   L258 128
+                   C252 130 244 134 236 138
+                   C198 134.5 166 133 136 133
+                   C106 133 74 134.5 36 138
+                   C28 134 20 130 12 128
+                   L10 120
+                   C18 122 32 128 44 136 Z"
+                fill="var(--primary)"/>
+          <path d="M46 134 C100 132 136 131.5 226 134" fill="none" stroke="#1a1e22" stroke-width="0.65" opacity="0.45"/>
+
+          <path d="M42 142
+                   C82 139.5 112 138.5 136 138.5
+                   C160 138.5 190 139.5 230 142
+                   C242 134 254 128 262 126
+                   L260 136
+                   C254 138 246 142 238 146
+                   C198 142.5 166 141 136 141
+                   C106 141 74 142.5 34 146
+                   C26 142 18 138 10 136
+                   L8 126
+                   C16 128 30 134 42 142 Z"
+                fill="#ebe9e1"/>
+          <path d="M44 140 C100 138.5 136 138.5 228 140" fill="none" stroke="#1a1e22" stroke-width="0.7" opacity="0.5"/>
+
+          <path d="M48 148
+                   C90 146.5 116 146 136 146
+                   C156 146 182 146.5 224 148
+                   L222 152
+                   C182 150.5 156 150 136 150
+                   C116 150 90 150.5 50 152 Z"
+                fill="var(--primary)"/>
+          <path d="M128 132 L144 132 L142 140 L130 140 Z" fill="#d0cec6"/>
+          <ellipse cx="136" cy="156" rx="114" ry="1.8" fill="url(#ground-ao-{{ symbol_id }})"/>
+        </g>
+
+        {# tyres — C1/C5, gold rim ring #}
+        <g id="front-wheels">
+          <g transform="translate(28 108)">
+            <rect x="-24" y="-40" width="48" height="80" rx="11" ry="10"
+                  fill="var(--tyre, #111)"/>
+            <rect x="-24" y="-40" width="48" height="80" rx="11" ry="10"
+                  fill="url(#tyre-face-{{ symbol_id }})"/>
+            <rect x="10" y="-28" width="8" height="56" rx="2" fill="#000" opacity="0.32"/>
+            <ellipse cx="2" cy="0" rx="8" ry="9" fill="#020202"/>
+            <ellipse cx="2" cy="0" rx="6" ry="7" fill="none" stroke="var(--accent)" stroke-width="2"/>
+            <ellipse cx="2" cy="0" rx="3.5" ry="4" fill="url(#hub-{{ symbol_id }})"/>
+          </g>
+          <g transform="translate(244 108)">
+            <rect x="-24" y="-40" width="48" height="80" rx="11" ry="10"
+                  fill="var(--tyre, #111)"/>
+            <rect x="-24" y="-40" width="48" height="80" rx="11" ry="10"
+                  fill="url(#tyre-face-{{ symbol_id }})"/>
+            <rect x="-18" y="-28" width="8" height="56" rx="2" fill="#000" opacity="0.32"/>
+            <ellipse cx="-2" cy="0" rx="8" ry="9" fill="#020202"/>
+            <ellipse cx="-2" cy="0" rx="6" ry="7" fill="none" stroke="var(--accent)" stroke-width="2"/>
+            <ellipse cx="-2" cy="0" rx="3.5" ry="4" fill="url(#hub-{{ symbol_id }})"/>
+          </g>
+        </g>
+
+        {# WHITE endplates with gold top (Fanatic) #}
+        <g id="front-wing-endplates">
+          <path d="M4 112 L16 108 L18 110 L20 150 L10 152 L4 148 Z" fill="var(--primary)"/>
+          <path d="M4 112 L16 108 L18 110 L17 116 L5 118 Z" fill="var(--accent)"/>
+          <path d="M268 112 L256 108 L254 110 L252 150 L262 152 L268 148 Z" fill="var(--primary)"/>
+          <path d="M268 112 L256 108 L254 110 L255 116 L267 118 Z" fill="var(--accent)"/>
+        </g>
+
+      </g>
+    </symbol>
+  </defs>
+  <g transform="translate(136 80) scale(var(--s, 1)) translate(-136 -80)">
+    <use href="#{{ symbol_id }}"/>
+  </g>
+</svg>

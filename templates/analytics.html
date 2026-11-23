@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Analytics — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Analytics</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → Analytics</p>
+  </div>
+
+  <nav class="sub-nav" aria-label="Analytics sections">
+    <a href="/analytics/overall" class="nav-link{% if request.url.path == '/analytics/overall' or request.url.path == '/analytics' %} active{% endif %}">Overall</a>
+    <a href="/analytics/season" class="nav-link{% if request.url.path == '/analytics/season' %} active{% endif %}">Per Season</a>
+    <a href="/analytics/team" class="nav-link{% if request.url.path == '/analytics/team' %} active{% endif %}">Per Team</a>
+    <a href="/analytics/tracks" class="nav-link{% if request.url.path == '/analytics/tracks' %} active{% endif %}">Per Track</a>
+  </nav>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <form method="get" action="/analytics" class="form-inline">
+      <label for="year" class="label-inline">Season</label>
+      <select id="year" name="year" onchange="this.form.submit()">
+        {% for y in seasons %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="analytics-grid">
+    <section class="card">
+      <h2>Driver Champions</h2>
+      <table>
+        <thead><tr><th>Year</th><th>Driver</th><th>Team</th><th>Pts</th></tr></thead>
+        <tbody>
+          {% for r in driver_champions %}
+          <tr><td>{{ r["year"] }}</td><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["points"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Constructor Champions</h2>
+      <table>
+        <thead><tr><th>Year</th><th>Team</th><th>Pts</th></tr></thead>
+        <tbody>
+          {% for r in constructor_champions %}
+          <tr><td>{{ r["year"] }}</td><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["points"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Top Driver Totals (All-time)</h2>
+      <table>
+        <thead><tr><th>Driver</th><th>Total Points</th><th>Seasons</th></tr></thead>
+        <tbody>
+          {% for r in driver_totals %}
+          <tr><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td>{{ r["total_points"] }}</td><td>{{ r["seasons_count"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>{{ year }} Leaders</h2>
+      <h3>Wins (Drivers)</h3>
+      <table>
+        <thead><tr><th>Driver</th><th>Wins</th></tr></thead>
+        <tbody>
+          {% for r in wins %}
+          <tr><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td>{{ r["wins"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h3>Wins (Teams)</h3>
+      <table>
+        <thead><tr><th>Team</th><th>Wins</th></tr></thead>
+        <tbody>
+          {% for r in team_wins %}
+          <tr><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["wins"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h3>Fastest Laps</h3>
+      <table>
+        <thead><tr><th>Driver</th><th>Fastest Laps</th></tr></thead>
+        <tbody>
+          {% for r in fastest %}
+          <tr><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td>{{ r["fastest_laps"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h3>Team Points</h3>
+      <table>
+        <thead><tr><th>Team</th><th>Points</th></tr></thead>
+        <tbody>
+          {% for r in team_points %}
+          <tr><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["total_points"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+{% endblock %}

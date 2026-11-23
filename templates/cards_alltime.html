@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Driver Cards · All-Time — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <p class="wall-kicker">The Collection · 1950 — Present</p>
+    <h1>Driver Cards · All-Time</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/cards">Cards</a> → All-Time</p>
+    <p class="sub-nav muted"><a href="/cards">By season</a> · <a href="/cards/decade">By Decade</a> · <a href="/cards/alltime">All-Time</a></p>
+  </div>
+
+  <div class="card no-print info-card method-card">
+    <div class="head">
+      <h3><i class="fas fa-calculator"></i> How we normalize points</h3>
+    </div>
+    <div class="section">
+      <p>Historical point systems changed often (e.g. only top 5 scored, then top 6, top 8, top 10; different values for 1st–10th). To compare drivers across all eras fairly, we use a single modern scheme for the <strong>All-Time</strong> ranking.</p>
+      <ul class="method-list">
+        <li><strong>Primary method:</strong> Every race result is re-scored with the <strong>2025 points system</strong>: 1st = 25, 2nd = 18, 3rd = 15, 4th = 12, 5th = 10, 6th = 8, 7th = 6, 8th = 4, 9th = 2, 10th = 1. Only finish position is used (no fastest-lap bonus).</li>
+        <li><strong>Fallback for older seasons:</strong> We apply this <strong>per season</strong>. For any year where we don’t have per-race finish positions (e.g. 1950s–1960s), we scale that season’s championship points so the champion’s total equals &ldquo;races × 25&rdquo;, then sum across seasons. So drivers like Jack Brabham get a fair normalized total for their whole career, including eras with no per-race data.</li>
+        <li><strong>World championship bonus:</strong> Drivers are rewarded for world titles. We add <strong>+200 points per world championship</strong> to the ranking total. Ranking order uses this adjusted total; the &ldquo;Points&rdquo; on each card is the raw re-scored total, with &ldquo;Title bonus&rdquo; shown separately.</li>
+      </ul>
+      <p class="muted small">Ranking uses (normalized points + title bonus), then wins, fastest laps, podiums, and starts as tie-breakers.</p>
+    </div>
+  </div>
+
+  <div class="card no-print toolbar-card">
+    <div class="toolbar">
+      <span class="toolbar-label">All-time driver rankings</span>
+      <span class="toolbar-tally muted">{{ ratings|length }} drivers · Total points (normalized): {{ "{:,.0f}".format(total_points_tally) }}</span>
+      <div class="toolbar-actions">
+        <button type="button" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <a href="/cards/alltime.pdf" target="_blank"><button type="button"><i class="fas fa-file-pdf"></i> Collector PDF</button></a>
+        <a href="/cards/alltime.pdf?mode=game" target="_blank"><button type="button"><i class="fas fa-bolt"></i> Game PDF</button></a>
+        <a href="/cards/tracks.pdf" target="_blank"><button type="button"><i class="fas fa-flag-checkered"></i> Tracks PDF</button></a>
+        <a href="/play?deck=alltime:80"><button type="button"><i class="fas fa-gamepad"></i> Play</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards-grid cards-decade-grid print-grid">
+    {% for r in ratings %}
+    {% set medal = 'medal-gold' if r['rank']==1 else ('medal-silver' if r['rank']==2 else ('medal-bronze' if r['rank']==3 else '')) %}
+    <article class="exhibit {{ medal }}"{% if r.get('teams') %} style="--team: {{ (request.app.state.get_team_colors(r['teams'][0]) or {}).get('primary', '#5a6472') }}"{% endif %}>
+      {% if r.get('teams') %}
+      <div class="career-bar" aria-hidden="true">{% for t in r['teams'] %}{% set tcx = request.app.state.get_team_colors(t) if (request and request.app and request.app.state and request.app.state.get_team_colors) else {} %}<span class="career-seg" style="background: {{ tcx.get('primary', '#5a6472') }}" title="{{ t }}"></span>{% endfor %}</div>
+      {% endif %}
+      <header class="exhibit-head">
+        <span class="exhibit-rank">#{{ r['rank'] }}</span>
+        {% if r.get('driver_image') %}<img class="exhibit-photo" src="/{{ r['driver_image'] }}" alt="" loading="lazy"/>{% endif %}
+        <div class="exhibit-id">
+          <a class="exhibit-name" href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r['driver'] }}</a>
+          <span class="exhibit-meta">{{ r['nationality'] }} · {{ r.get('years_active', '—') }} · {{ r['seasons'] }} seasons</span>
+        </div>
+      </header>
+
+      <div class="exhibit-heroes">
+        <div><b>{{ r['overall'] }}</b><span>overall</span></div>
+        <div><b>{{ "{:,.0f}".format(r['points']|float) }}</b><span>pts norm</span></div>
+        <div><b>{{ r['wins'] }}</b><span>wins</span></div>
+        <div><b>{{ r['championships'] }}</b><span>titles</span></div>
+      </div>
+
+      <div class="exhibit-car">
+        {% set first_team = r['teams'][0] if r.get('teams') else '' %}
+        {% set car_slug = r.get('car_png_slug') or (car_slugs.get(first_team) if car_slugs and first_team else none) %}
+        {% if car_slug %}
+        <img src="/static/cars/png/{{ car_slug }}.png" alt="{{ first_team }} 3D livery" loading="lazy"/>
+        {% endif %}
+        <span class="exhibit-teams">{% if r.get('teams') %}{{ r['teams'] | join(' · ') }}{% else %}—{% endif %}</span>
+      </div>
+
+      <dl class="exhibit-grid">
+        <div><dt>Legacy</dt><dd>{{ r['legacy_overall'] }}</dd></div>
+        <div><dt>Experience</dt><dd>{{ r['experience'] }}</dd></div>
+        <div><dt>Podiums</dt><dd>{{ r.get('podiums', '—') }}</dd></div>
+        <div><dt>Fastest laps</dt><dd>{{ r['fastest_laps'] }}</dd></div>
+        <div><dt>Starts</dt><dd>{{ r.get('starts', '—') }}</dd></div>
+        <div><dt>Teammate W/L</dt><dd>{{ r['team_driver_wins'] }} / {{ r['teammate_wins'] }}</dd></div>
+        <div><dt>Career pts</dt><dd>{{ "{:,.0f}".format(r.get('total_points', 0)|float) }}</dd></div>
+        {% if r.get('title_bonus_pts', 0) %}<div><dt>Title bonus</dt><dd>+{{ "{:,.0f}".format(r['title_bonus_pts']|float) }}</dd></div>{% endif %}
+      </dl>
+
+      {% if r.get('badges') %}
+      <div class="exhibit-badges">{% for b in r['badges'] %}<span class="badge">{{ b }}</span>{% endfor %}</div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/museum.js"></script>
+{% endblock %}

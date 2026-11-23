@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Races {{ year }} — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Races {{ year }}</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/">Seasons</a> → {{ year }}</p>
+  </div>
+
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Rnd</th>
+          <th>Grand Prix</th>
+          <th>Date</th>
+          <th>Winner</th>
+          <th>Team</th>
+          <th>Laps</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r["round"] }}</td>
+          <td>{{ r["grand_prix"] }}</td>
+          <td>{{ r["date"] }}</td>
+          <td><a href="/driver/{{ r['winner'].replace(' ', '-') }}">{{ r["winner"] }}</a></td>
+          <td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td>
+          <td>{{ r["laps"] or '' }}</td>
+          <td>{{ r["time"] or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

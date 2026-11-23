@@ -1,0 +1,1073 @@
+/* ---- F1 Grand Prix Track Simulator (Universal One-Screen Zero-Scroll Pit Wall Cockpit) ---- */
+body.sim-cockpit-active {
+  --sim-hdr-h: clamp(32px, 4dvh, 42px);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+body.sim-cockpit-active.sim-focus-mode .site-header {
+  display: none !important;
+}
+body.sim-cockpit-active .site-header {
+  height: var(--sim-hdr-h);
+  min-height: 0;
+  padding: 0;
+}
+body.sim-cockpit-active .header-inner {
+  max-width: 100%;
+  height: 100%;
+  padding: 0 clamp(8px, 1vw, 16px);
+  flex-wrap: nowrap;
+}
+body.sim-cockpit-active .main-nav {
+  flex-wrap: nowrap;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+body.sim-cockpit-active .main-nav::-webkit-scrollbar { display: none; }
+body.sim-cockpit-active .nav-link {
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+body.sim-cockpit-active .page-header,
+body.sim-cockpit-active #tutorial-welcome,
+body.sim-cockpit-active .site-footer {
+  display: none !important;
+}
+body.sim-cockpit-active .main-content {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+body.sim-cockpit-active .container {
+  max-width: 100%;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: clamp(4px, 0.6dvh, 6px) clamp(6px, 0.8vw, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 0.6dvh, 6px);
+  overflow: hidden;
+}
+body.sim-cockpit-active .arena-top-row {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+body.sim-cockpit-active .arena-tab {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+body.sim-cockpit-active .btn-util {
+  padding: 4px 10px;
+  font-size: 0.76rem;
+}
+body.sim-cockpit-active #panel-sim.active {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 0.6dvh, 6px);
+  position: relative;
+  overflow: hidden;
+}
+@media (max-width: 1380px) {
+  body.sim-cockpit-active .nav-link i { display: none; }
+}
+@media (max-width: 1360px) {
+  .sim-dir-specs { display: none; }
+  .sim-dir-btn .sim-lbl-md { display: none; }
+  .sim-dir-btn { padding: 4px 8px; gap: 4px; }
+  .sim-dir-left, .sim-dir-center, .sim-dir-right { gap: 6px; }
+}
+@media (max-width: 1160px) {
+  .cr-radar-pill { display: none; }
+  .sim-wet-meter { display: none; }
+  .sim-lap-box { padding: 3px 8px; }
+  .sim-weather-pill { padding: 3px 8px; font-size: 0.68rem; }
+}
+
+.sim-cockpit-root { position: relative; }
+
+/* 1. Top Race Director Bar */
+.sim-director-bar {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 5px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(9, 14, 26, 0.96));
+  border: 1px solid var(--edge-hi);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  z-index: 25;
+}
+.sim-dir-left, .sim-dir-center, .sim-dir-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sim-flag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.sim-flag-pill.flag-green { background: rgba(22, 163, 74, 0.22); border: 1px solid #22c55e; color: #86efac; }
+.sim-flag-pill.flag-sc { background: #facc15; border: 1px solid #fef08a; color: #0f172a; animation: simPulse 1.1s infinite; }
+.sim-flag-pill.flag-fin { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; }
+@keyframes simPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18); box-shadow: 0 0 14px rgba(250, 204, 21, 0.6); } }
+
+.sim-dir-circuit {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.sim-dir-circuit strong {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.92rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sim-dir-specs {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-lap-box {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--edge);
+}
+.sim-lap-box small { font-size: 0.64rem; color: #94a3b8; font-weight: 800; letter-spacing: 0.08em; }
+.sim-lap-box strong { font-family: 'Orbitron', sans-serif; font-size: 0.98rem; color: #fff; font-variant-numeric: tabular-nums; }
+
+.sim-weather-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.sim-weather-pill.w-dry { background: rgba(250, 204, 21, 0.14); border: 1px solid #facc15; color: #fef08a; }
+.sim-weather-pill.w-damp { background: rgba(56, 189, 248, 0.16); border: 1px solid #38bdf8; color: #bae6fd; }
+.sim-weather-pill.w-wet { background: rgba(37, 99, 235, 0.28); border: 1px solid #60a5fa; color: #dbeafe; }
+.sim-weather-pill.w-warn { background: rgba(245, 158, 11, 0.22); border: 1px solid #f59e0b; color: #fde68a; }
+.sim-wet-meter {
+  width: 38px; height: 5px; border-radius: 99px; background: rgba(15, 23, 42, 0.7); overflow: hidden; display: inline-block;
+}
+.sim-wet-meter i { display: block; height: 100%; background: #38bdf8; transition: width 0.3s ease; }
+
+.sim-speed-btns {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(2, 6, 23, 0.72);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+}
+.sim-speed-btn {
+  padding: 4px 9px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sim-speed-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.sim-speed-btn.active { background: #e10600; color: #fff; }
+
+.sim-dir-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--edge-hi);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sim-dir-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.sim-dir-btn.is-open { border-color: #fbbf24; color: #fde047; background: rgba(251, 191, 36, 0.14); }
+.sim-dir-icon { padding: 5px 8px; }
+
+/* Setup Popover Drawer */
+.sim-setup-drawer {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(720px, 96vw);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(9, 14, 26, 0.97);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid #fbbf24;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.72);
+  z-index: 45;
+}
+.sim-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fde047;
+}
+.sim-drawer-close {
+  background: transparent; border: none; color: #94a3b8; font-size: 1.35rem; line-height: 1; cursor: pointer;
+}
+.sim-drawer-close:hover { color: #fff; }
+.sim-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.sim-setup-grid .arena-control-group { display: flex; flex-direction: column; gap: 4px; }
+.sim-setup-grid select { width: 100%; }
+.sim-setup-actions { display: flex; }
+.sim-start-full { width: 100%; justify-content: center; padding: 9px 14px; }
+.sim-drawer-circuit-meta {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--edge);
+  font-size: 0.74rem;
+  color: #94a3b8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+.sim-drawer-circuit-meta b { color: #e2e8f0; }
+
+/* 2. Main 3-Column Fluid One-Screen Cockpit Grid */
+.sim-cockpit-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(224px, 19.5vw, 324px) minmax(0, 1fr) clamp(256px, 21.5vw, 344px);
+  gap: clamp(6px, 0.7vw, 10px);
+  overflow: hidden;
+}
+.sim-mobile-dock { display: none; }
+.sim-dock-tab {
+  flex: 1;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--edge-hi);
+  background: rgba(15, 23, 42, 0.88);
+  color: #94a3b8;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.sim-dock-tab.active {
+  background: rgba(225, 6, 0, 0.24);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+/* Left Column: Broadcast Timing Tower */
+.sim-tower-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 10px;
+  background: rgba(11, 17, 29, 0.94);
+  border: 1px solid var(--edge-hi);
+  overflow: hidden;
+}
+.sim-panel-head {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--edge);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #e2e8f0;
+}
+.sim-gap-toggle {
+  display: inline-flex;
+  background: rgba(2, 6, 23, 0.7);
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  padding: 1px;
+}
+.sim-gap-btn {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.sim-gap-btn.active { background: #e10600; color: #fff; }
+
+.sim-timing-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sim-timing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+.sim-timing-table th {
+  text-align: left;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--edge);
+  background: rgba(15, 23, 42, 0.85);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.sim-timing-table td {
+  padding: 4px 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.sim-timing-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.sim-timing-table tbody tr:hover { background: rgba(255, 255, 255, 0.06); }
+.sim-timing-table tr.is-player-row {
+  background: rgba(250, 204, 21, 0.14);
+  box-shadow: inset 3px 0 0 #fde047;
+}
+.sim-timing-table tr.is-inspected-row {
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: inset 3px 0 0 #38bdf8;
+}
+.sim-timing-table tr.is-dnf-row { opacity: 0.45; }
+
+.st-pos {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  width: 28px;
+}
+.st-pos.p1 { color: #fbbf24; }
+.st-pos.p2 { color: #e2e8f0; }
+.st-pos.p3 { color: #d97706; }
+.st-delta-up { color: #4ade80; font-size: 0.58rem; margin-left: 1px; }
+.st-delta-dn { color: #f87171; font-size: 0.58rem; margin-left: 1px; }
+
+.st-drv { display: flex; align-items: center; gap: 5px; }
+.st-bar { width: 3.5px; height: 17px; border-radius: 2px; flex-shrink: 0; }
+.st-code { font-weight: 800; color: #f8fafc; letter-spacing: 0.02em; }
+.st-name-full { display: none; color: #94a3b8; font-size: 0.68rem; max-width: 78px; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 1760px) { .st-name-full { display: inline; } }
+.sim-fl-pill { font-size: 0.54rem; font-weight: 900; background: #9333ea; color: #fff; padding: 1px 4px; border-radius: 3px; }
+.sim-drs-pill { font-size: 0.54rem; font-weight: 900; background: rgba(34, 197, 94, 0.22); border: 1px solid #22c55e; color: #86efac; padding: 0 3px; border-radius: 3px; }
+
+.st-gap { font-family: ui-monospace, monospace; font-size: 0.72rem; color: #cbd5e1; }
+.st-gap.is-drs-range { color: #4ade80; font-weight: 700; }
+.st-gap.is-pit { color: #fbbf24; font-weight: 800; }
+
+.st-tyre-cell { display: flex; align-items: center; gap: 4px; }
+.st-wear-col { display: flex; flex-direction: column; gap: 2px; min-width: 28px; }
+.st-wear-col small { font-size: 0.64rem; line-height: 1; color: #cbd5e1; }
+.st-wear-bar { width: 28px; height: 3px; border-radius: 99px; background: #1e293b; overflow: hidden; }
+.st-wear-bar i { display: block; height: 100%; }
+
+.st-stops { font-size: 0.68rem; color: #94a3b8; text-align: center; }
+.st-ers-sliver { width: 16px; height: 3px; border-radius: 99px; background: #1e293b; margin: 2px auto 0; overflow: hidden; }
+.st-ers-sliver i { display: block; height: 100%; background: #38bdf8; }
+
+.sim-tower-foot {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid var(--edge);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  color: #64748b;
+}
+.sim-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.dot-drs { background: #22c55e; }
+.dot-fl { background: #9333ea; }
+
+/* Center Stage: Hero Realistic Track Map */
+.sim-stage-panel {
+  position: relative;
+  min-height: 0;
+  border-radius: 10px;
+  border: 1px solid var(--edge-hi);
+  background: #060a12;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.sim-track-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+.sim-alert-toast {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(9, 14, 26, 0.92);
+  border: 1.5px solid #fbbf24;
+  color: #fde047;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  z-index: 15;
+  white-space: nowrap;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.sim-alert-toast.toast-win { border-color: #22c55e; color: #86efac; }
+.sim-alert-toast.toast-warn { border-color: #f59e0b; color: #fde68a; background: rgba(69, 26, 3, 0.92); }
+
+.sim-map-toggles {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  z-index: 12;
+}
+.sim-cam-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(9, 14, 26, 0.88);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  backdrop-filter: blur(6px);
+}
+.sim-cam-chip {
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.64rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sim-cam-chip:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.sim-cam-chip.active { background: #e10600; color: #fff; }
+.sim-layer-chip {
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(9, 14, 26, 0.82);
+  backdrop-filter: blur(6px);
+  color: #94a3b8;
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sim-layer-chip.active {
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  background: rgba(2, 132, 199, 0.25);
+}
+
+.sim-map-legend {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(9, 14, 26, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  pointer-events: none;
+  z-index: 12;
+}
+.sim-map-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 3px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* Floating Rival Inspector Card */
+.sim-inspector-card {
+  position: absolute;
+  bottom: 42px;
+  left: 10px;
+  width: 248px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: rgba(9, 14, 26, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid #38bdf8;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65);
+  z-index: 18;
+}
+.sim-insp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #7dd3fc;
+  margin-bottom: 6px;
+}
+.sim-insp-head button {
+  background: transparent; border: none; color: #94a3b8; font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.sim-insp-body {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sim-insp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 3px;
+}
+.sim-insp-grid div {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  padding: 3px 5px;
+  text-align: center;
+}
+.sim-insp-grid small { display: block; font-size: 0.56rem; color: #64748b; }
+.sim-insp-grid b { font-size: 0.74rem; color: #fff; }
+
+/* Floating Finish Overlay */
+.sim-finish-overlay {
+  position: absolute;
+  inset: auto 16px 46px 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(9, 14, 26, 0.95);
+  backdrop-filter: blur(10px);
+  border: 2px solid #fbbf24;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.75);
+  z-index: 22;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #f8fafc;
+}
+
+/* Right Column: Race Engineer Pit Wall Console */
+.sim-strategy-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sim-card {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(11, 17, 29, 0.94);
+  border: 1px solid var(--edge-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sim-driver-card { border-top: 3px solid var(--drv-col, #e10600); }
+.sim-drv-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.sim-drv-ident { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sim-drv-code {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fde047;
+  flex-shrink: 0;
+}
+.sim-drv-meta { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.sim-drv-meta strong { font-size: 0.84rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-drv-meta small { font-size: 0.66rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-drv-pos-wrap { text-align: right; line-height: 1.05; flex-shrink: 0; }
+.sim-drv-pos { font-family: 'Orbitron', sans-serif; font-size: 1.25rem; color: #fbbf24; display: block; }
+.sim-drv-pos-wrap small { font-family: ui-monospace, monospace; font-size: 0.66rem; color: #94a3b8; }
+
+.sim-drv-deltas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sim-delta-pill {
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--edge);
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-telem-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.sim-telem-label { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; font-weight: 800; color: #94a3b8; letter-spacing: 0.04em; }
+.sim-telem-label b { font-size: 0.82rem; color: #fff; display: inline-flex; align-items: center; gap: 5px; }
+.sim-cliff-tag { font-size: 0.66rem; font-weight: 700; color: #94a3b8; }
+.sim-cliff-tag.is-cliff { color: #f87171; animation: simPulse 1s infinite; }
+.sim-ers-flow { font-family: ui-monospace, monospace; font-size: 0.66rem; color: #38bdf8; font-weight: 700; }
+.sim-ers-row-gap { margin-top: 3px; }
+
+.sim-bar-track {
+  position: relative;
+  width: 100%;
+  height: 9px;
+  border-radius: 99px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  overflow: hidden;
+}
+.sim-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: #22c55e;
+  transition: width 0.25s ease, background 0.25s ease;
+}
+.sim-ers-fill { background: linear-gradient(90deg, #0284c7, #38bdf8, #fde047); }
+.sim-cliff-tick {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 22%;
+  width: 2px;
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+.sim-crossover-alert {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.sim-mode-block { display: flex; flex-direction: column; gap: 4px; }
+.sim-mode-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #fbbf24;
+}
+.sim-mode-head small { color: #94a3b8; font-weight: 600; letter-spacing: 0; }
+.sim-seg-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.sim-tac-btn {
+  padding: 6px 4px;
+  border-radius: 7px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.sim-tac-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.sim-tac-btn.active { background: #e10600; border-color: #f87171; color: #fff; }
+.sim-tac-btn.is-ers-hot { background: linear-gradient(135deg, #0284c7, #38bdf8); border-color: #7dd3fc; color: #0f172a; }
+.sim-tac-btn kbd, .sim-box-cta kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.56rem;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.sim-comp-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.sim-comp-btn {
+  position: relative;
+  padding: 5px 4px;
+  border-radius: 7px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+}
+.sim-comp-btn.active { border-color: #fbbf24; background: rgba(251, 191, 36, 0.18); }
+.sim-comp-btn.is-rec::after {
+  content: "";
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+.sim-rejoin-pred {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--edge);
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #86efac;
+  text-align: center;
+}
+.sim-rejoin-pred.is-traffic { color: #fde68a; border-color: rgba(245, 158, 11, 0.45); }
+.sim-rejoin-pred.is-sc-cheap { background: rgba(250, 204, 21, 0.16); border-color: #facc15; color: #fef08a; }
+.sim-box-cta { padding: 8px 10px; font-size: 0.73rem; }
+
+.sim-tbadge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  font-size: 0.66rem; font-weight: 900; background: #0f172a; border: 2px solid #94a3b8; color: #fff;
+}
+.sim-tbadge.t-soft { border-color: #ef4444; color: #fca5a5; }
+.sim-tbadge.t-medium { border-color: #facc15; color: #fef08a; }
+.sim-tbadge.t-hard { border-color: #f8fafc; color: #fff; }
+.sim-tbadge.t-inter { border-color: #22c55e; color: #86efac; }
+.sim-tbadge.t-wet { border-color: #3b82f6; color: #93c5fd; }
+
+/* 3. Bottom Live Race Radio Ticker & History Drawer */
+.sim-radio-bar {
+  position: relative;
+  flex: 0 0 auto;
+  height: clamp(38px, 4.5vh, 44px);
+  padding: 0 12px;
+  border-radius: 9px;
+  background: rgba(11, 17, 29, 0.95);
+  border: 1px solid var(--edge-hi);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 20;
+}
+.sim-radio-live {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+.sim-radio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(225, 6, 0, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.64rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.sim-radio-latest {
+  font-size: 0.78rem;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sim-radio-latest.radio-win { color: #86efac; }
+.sim-radio-latest.radio-warn { color: #fde68a; }
+.sim-radio-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.sim-hotkey-hint {
+  font-size: 0.66rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+@media (max-width: 1320px) { .sim-hotkey-hint { display: none; } }
+
+.sim-radio-drawer {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: min(460px, 94vw);
+  max-height: 290px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: rgba(9, 14, 26, 0.97);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid #38bdf8;
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+}
+.sim-radio-list { max-height: 220px; overflow-y: auto; }
+.sim-radio-item.radio-win { border-left: 3px solid #22c55e; }
+.sim-radio-item.radio-warn { border-left: 3px solid #f59e0b; color: #fde68a; }
+
+/* True One-Screen Zero-Scroll Mode on Narrow / Split-Screen / Tablet (< 1024px) */
+@media (max-width: 1023px) {
+  .sim-director-bar { min-height: 36px; padding: 4px 8px; gap: 6px; }
+  .sim-dir-circuit strong { font-size: 0.78rem; max-width: 130px; }
+  .sim-flag-pill { padding: 3px 6px; font-size: 0.6rem; }
+  .sim-setup-grid { grid-template-columns: 1fr; }
+  .sim-cockpit-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto minmax(200px, 43dvh);
+    gap: 5px;
+  }
+  .sim-stage-panel { order: 0; min-height: 0; height: 100%; }
+  .sim-mobile-dock {
+    order: 1;
+    display: flex;
+    gap: 6px;
+  }
+  .sim-tower-panel,
+  .sim-strategy-panel {
+    order: 2;
+    min-height: 0;
+    height: 100%;
+    max-height: none;
+  }
+  .sim-cockpit-grid[data-dock-pane="strategy"] .sim-tower-panel { display: none; }
+  .sim-cockpit-grid[data-dock-pane="tower"] .sim-strategy-panel { display: none; }
+  .sim-cockpit-grid[data-dock-pane="strategy"] .sim-strategy-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: min-content;
+    align-content: start;
+    gap: 5px;
+    overflow-y: auto;
+  }
+  .sim-cockpit-grid[data-dock-pane="strategy"] .cr-dual-switcher,
+  .sim-cockpit-grid[data-dock-pane="strategy"] .cr-team-orders { grid-column: 1 / -1; }
+  .sim-radio-bar { height: 30px; padding: 0 8px; gap: 6px; }
+  .sim-radio-latest { font-size: 0.7rem; }
+  .sim-hotkey-hint { display: none; }
+}
+
+/* Fluid Full-Height 24-Car Tower + Height-Responsive Zero-Scroll Density Scaling (720p / 768p / 900p / 1080p) */
+.cr-full-tower { height: 100%; }
+.sim-timing-wrap { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.sim-strategy-panel { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.sim-card { min-width: 0; }
+.sim-live-telem-strip { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+@media (max-width: 1360px) {
+  .sim-live-telem-strip { gap: 3px; padding: 3px 4px; }
+  .sim-speed-read { font-size: 0.68rem; gap: 1px; }
+  .sim-speed-read small { display: none; }
+  .sim-gear-pill { padding: 1px 4px; font-size: 0.6rem; }
+  .cr-fuel-pill { font-size: 0.56rem; padding: 1px 3px; }
+  .sim-sector-dots { gap: 2px; }
+  .sim-sector-dots i { font-size: 0.48rem; padding: 1px 2.5px; }
+  .sim-rule-pill { font-size: 0.5rem; padding: 1px 3px; }
+}
+
+@media (max-height: 850px) {
+  .sim-director-bar { min-height: 38px; padding: 4px 10px; }
+  .sim-radio-bar { height: 34px; }
+  .sim-panel-head { height: 24px; font-size: 0.62rem; }
+  .cr-full-tower th { padding: 2px 4px; font-size: 0.56rem; }
+  .cr-full-tower td { padding: 1.5px 4px; font-size: 0.67rem; line-height: 1.05; }
+  .cr-full-tower .sim-tbadge { width: 15px; height: 15px; font-size: 0.56rem; border-width: 1.5px; }
+  .cr-full-tower .st-bar { height: 11px; }
+  .cr-full-tower .st-wear-bar { display: none; }
+  .cr-full-tower .st-wear-col { min-width: 24px; }
+
+  .sim-strategy-panel { gap: 4px; justify-content: space-between; }
+  .sim-card { padding: 6px 9px; gap: 4px; border-radius: 8px; }
+  .cr-car-tab { padding: 4px 6px; font-size: 0.68rem; }
+  .cr-team-orders { padding: 3px 5px; }
+  .sim-drv-pos { font-size: 1.08rem; }
+  .sim-delta-pill { padding: 2px 6px; font-size: 0.64rem; }
+  .sim-live-telem-strip { padding: 3px 6px; }
+  .sim-bar-track { height: 7px; }
+  .sim-ers-row-gap { margin-top: 1px; }
+  .sim-mode-head { font-size: 0.61rem; }
+  .sim-tac-btn { padding: 4px 3px; font-size: 0.66rem; }
+  .sim-comp-btn { padding: 3px 3px; }
+  .sim-rejoin-pred { padding: 3px 6px; font-size: 0.64rem; }
+  .sim-box-cta { padding: 6px 8px; font-size: 0.7rem; }
+}
+
+@media (max-height: 750px) {
+  body.sim-cockpit-active { --sim-hdr-h: 32px; }
+  .sim-director-bar { min-height: 34px; padding: 3px 8px; }
+  .sim-dir-circuit strong { font-size: 0.8rem; }
+  .sim-dir-specs { display: none; }
+  .sim-lap-box { padding: 2px 8px; }
+  .sim-lap-box strong { font-size: 0.84rem; }
+  .sim-weather-pill { padding: 2px 8px; font-size: 0.68rem; }
+  .sim-radio-bar { height: 28px; padding: 0 8px; }
+  .sim-radio-latest { font-size: 0.7rem; }
+  .sim-panel-head { height: 21px; padding: 0 7px; font-size: 0.58rem; }
+  .cr-full-tower th { padding: 1.5px 4px; font-size: 0.52rem; }
+  .cr-full-tower td { padding: 0.5px 4px; font-size: 0.61rem; line-height: 1.0; }
+  .cr-full-tower .sim-tbadge { width: 13px; height: 13px; font-size: 0.5rem; }
+  .cr-full-tower .st-bar { height: 9px; width: 3px; }
+  .cr-full-tower .sim-drs-pill, .cr-full-tower .sim-fl-pill { font-size: 0.48rem; padding: 0 2px; }
+  .cr-full-tower .st-pos { font-size: 0.62rem; width: 20px; }
+  .cr-full-tower .st-gap { font-size: 0.61rem; }
+
+  .sim-strategy-panel { gap: 3px; }
+  .sim-card { padding: 4px 8px; gap: 3px; }
+  .cr-car-tab { padding: 3px 5px; font-size: 0.64rem; }
+  .cr-order-btn { padding: 2px 4px; font-size: 0.58rem; }
+  .sim-drv-code { font-size: 0.72rem; padding: 2px 5px; }
+  .sim-drv-meta strong { font-size: 0.76rem; }
+  .sim-drv-meta small { font-size: 0.58rem; }
+  .sim-drv-pos { font-size: 0.96rem; }
+  .sim-drv-pos-wrap small { font-size: 0.58rem; }
+  .sim-delta-pill { padding: 1px 5px; font-size: 0.6rem; }
+  .sim-live-telem-strip { padding: 2px 5px; gap: 4px; }
+  .sim-speed-read { font-size: 0.72rem; }
+  .sim-telem-label { font-size: 0.62rem; }
+  .sim-telem-label b { font-size: 0.72rem; }
+  .sim-bar-track { height: 6px; }
+  .sim-mode-block { gap: 2px; }
+  .sim-mode-head { font-size: 0.58rem; }
+  .sim-tac-btn { padding: 3px 2px; font-size: 0.61rem; }
+  .sim-comp-btn { padding: 2px; }
+  .sim-comp-btn .sim-tbadge { width: 16px; height: 16px; font-size: 0.56rem; }
+  .sim-rejoin-pred { padding: 2px 5px; font-size: 0.6rem; }
+  .sim-box-cta { padding: 4px 8px; font-size: 0.66rem; }
+}
+
+/* Instant Replay, Voice Commentary & Replayable Clip Badges */
+#fsim-replay-btn.is-replaying {
+  background: #dc2626 !important;
+  border-color: #f87171 !important;
+  color: #ffffff !important;
+  font-weight: 800;
+}
+#fsim-voice-btn.is-on {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: #22c55e;
+  color: #86efac;
+}
+.fsim-clip-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(220, 38, 38, 0.2);
+  color: #fca5a5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+.fsim-clip-btn:hover { background: #dc2626; color: #fff; }
+

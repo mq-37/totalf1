@@ -1,0 +1,143 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<style>body{margin:0;background:#9aa1aa}.row{display:flex}.panel{flex:1}
+.head{padding:8px 12px;font:700 12px system-ui;background:#bbb}
+.stage{position:relative;width:100%;aspect-ratio:272/160;background:#9aa1aa;overflow:hidden}
+.stage img,.stage svg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}
+.grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,rgba(0,0,0,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(0,0,0,.2) 1px,transparent 1px);background-size:20% 20%}
+.vline{position:absolute;left:50%;top:0;bottom:0;border-left:2px dashed rgba(200,0,0,.75)}
+</style></head><body><div class=row>
+<div class=panel><div class=head>PHOTO REFERENCE</div><div class=stage>
+<img src="file:///home/martin-quinn/Documents/Projects/f1%20sim/traf1/static/ref/f1_front_photo_sf90.png"/>
+<div class=grid></div><div class=vline></div></div></div>
+<div class=panel><div class=head>SVG V2 (minimal rewrite)</div><div class=stage>
+
+<svg class="car-silhouette car-front-view car-front-v2 " viewBox="0 0 272 160" width="544" height="320"
+     
+     preserveAspectRatio="none"
+     xmlns="http://www.w3.org/2000/svg"
+     style="--s:1; --primary:#DC0000; --secondary:#111111; --accent:#FFD100; --tyre:#111111;">
+  <defs>
+    <linearGradient id="paint-qa-v2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.12"/>
+      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="tyre-face-qa-v2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#060708"/>
+      <stop offset="42%" stop-color="#22262a"/>
+      <stop offset="100%" stop-color="#0a0c0e"/>
+    </linearGradient>
+
+    <symbol id="qa-v2" viewBox="0 0 272 160">
+      <g id="fills">
+
+        <g id="t-cam">
+          <rect x="132.5" y="10" width="7" height="2.4" rx="0.3" fill="#0e1012"/>
+          <rect x="134.5" y="12" width="3" height="5" rx="0.2" fill="#0e1012"/>
+        </g>
+
+        <g id="rear-aero">
+          <rect x="90" y="35" width="92" height="8" rx="0.4" fill="var(--primary)"/>
+          <rect x="94" y="39" width="84" height="1.5" fill="#0e1012"/>
+          <path d="M86 34 L95 34 L95 45 L88 45 Z" fill="var(--primary)"/>
+          <path d="M186 34 L177 34 L177 45 L184 45 Z" fill="var(--primary)"/>
+        </g>
+
+        <g id="main-body">
+          <path d="M136 34
+                   C141 37 145 47 146 55
+                   L151 60
+                   L155 72
+                   L155 98
+                   L150 116
+                   L144 128
+                   L138 134
+                   L136 136
+                   L134 134
+                   L128 128
+                   L122 116
+                   L117 98
+                   L117 72
+                   L121 60
+                   L126 55
+                   C127 47 131 37 136 34 Z"
+                fill="var(--primary)"/>
+          <path d="M136 34
+                   C141 37 145 47 146 55
+                   L151 60
+                   L155 72
+                   L155 98
+                   L150 116
+                   L144 128
+                   L138 134
+                   L136 136
+                   L134 134
+                   L128 128
+                   L122 116
+                   L117 98
+                   L117 72
+                   L121 60
+                   L126 55
+                   C127 47 131 37 136 34 Z"
+                fill="url(#paint-qa-v2)"/>
+          <ellipse cx="136" cy="90" rx="5" ry="2.8" fill="var(--accent)" opacity="0.85"/>
+        </g>
+
+        <g id="driver-and-halo">
+          <ellipse cx="136" cy="66" rx="10" ry="7.5" fill="#050708"/>
+          <path d="M124 74 C124 55 129 47 136 47 C143 47 148 55 148 74"
+                fill="none" stroke="#0e1012" stroke-width="2.6" stroke-linecap="round"/>
+          <line x1="136" y1="47" x2="136" y2="60" stroke="#0e1012" stroke-width="2.1" stroke-linecap="round"/>
+        </g>
+
+        <g id="front-suspension" fill="none" stroke-linecap="round">
+          <path d="M118 84 L60 98" stroke="#0e1012" stroke-width="1.7"/>
+          <path d="M118 96 L62 106" stroke="#0e1012" stroke-width="1.35"/>
+          <path d="M154 84 L212 98" stroke="#0e1012" stroke-width="1.7"/>
+          <path d="M154 96 L210 106" stroke="#0e1012" stroke-width="1.35"/>
+        </g>
+
+        <g id="front-wing">
+          <path d="M10 108 C66 128 108 132 136 132 C164 132 206 128 262 108
+                   L260 113 C206 132 164 136 136 136 C108 136 66 132 12 113 Z"
+                fill="var(--primary)"/>
+          <path d="M8 116 C64 134 108 138 136 138 C164 138 208 134 264 116
+                   L262 121 C208 138 164 142 136 142 C108 142 64 138 10 121 Z"
+                fill="var(--primary)"/>
+          <path d="M7 124 C62 140 108 144 136 144 C164 144 210 140 265 124
+                   L263 129 C210 144 164 148 136 148 C108 148 62 144 9 129 Z"
+                fill="var(--primary)"/>
+          <path d="M6 132 C60 146 108 150 136 150 C164 150 212 146 266 132
+                   L264 137 C212 150 164 154 136 154 C108 154 60 150 8 137 Z"
+                fill="var(--primary)"/>
+          <path d="M8 140 C58 152 108 155 136 155 C164 155 214 152 264 140
+                   L262 145 C214 156 164 158 136 158 C108 158 58 156 10 145 Z"
+                fill="var(--primary)"/>
+          <path d="M128 132 L144 132 L142 150 L130 150 Z" fill="#12161a"/>
+        </g>
+
+        <g id="front-wheels">
+          <rect x="6" y="74" width="58" height="54" rx="8" ry="6"
+                fill="var(--tyre, #111)"/>
+          <rect x="6" y="74" width="58" height="54" rx="8" ry="6"
+                fill="url(#tyre-face-qa-v2)"/>
+          <rect x="208" y="74" width="58" height="54" rx="8" ry="6"
+                fill="var(--tyre, #111)"/>
+          <rect x="208" y="74" width="58" height="54" rx="8" ry="6"
+                fill="url(#tyre-face-qa-v2)"/>
+        </g>
+
+        <g id="front-wing-endplates">
+          <rect x="2" y="100" width="8" height="56" rx="0.5" fill="#0e1012"/>
+          <rect x="262" y="100" width="8" height="56" rx="0.5" fill="#0e1012"/>
+        </g>
+
+      </g>
+    </symbol>
+  </defs>
+  <g transform="translate(136 80) scale(var(--s, 1)) translate(-136 -80)">
+    <use href="#qa-v2"/>
+  </g>
+</svg>
+<div class=grid></div><div class=vline></div></div></div>
+</div></body></html>

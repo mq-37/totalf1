@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Driver Cards · {{ decade }}s — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <p class="wall-kicker">The Collection · The {{ decade }}s</p>
+    <h1>Driver Cards · Decade</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/cards">Cards</a> → By Decade</p>
+    <p class="sub-nav muted"><a href="/cards">By season</a> · <a href="/cards/decade">By Decade</a> · <a href="/cards/alltime">All-Time</a></p>
+  </div>
+
+  <div class="card no-print toolbar-card">
+    <div class="toolbar">
+      <form method="get" action="/cards/decade" class="form-inline">
+        <label for="decade" class="label-inline">Decade</label>
+        <select id="decade" name="decade" onchange="this.form.submit()">
+          {% for d in decades %}
+          <option value="{{ d }}" {% if d == decade %}selected{% endif %}>{{ d }}s</option>
+          {% endfor %}
+        </select>
+      </form>
+      <div class="toolbar-actions">
+        <button type="button" onclick="window.print()">Print</button>
+        <a href="/cards/decade.pdf?decade={{ decade }}" target="_blank"><button type="button"><i class="fas fa-file-pdf"></i> Collector PDF</button></a>
+        <a href="/cards/decade.pdf?decade={{ decade }}&mode=game" target="_blank"><button type="button"><i class="fas fa-bolt"></i> Game PDF</button></a>
+        <a href="/cards/tracks.pdf" target="_blank"><button type="button"><i class="fas fa-flag-checkered"></i> Tracks PDF</button></a>
+        <a href="/play?deck=decade:{{ decade }}"><button type="button"><i class="fas fa-gamepad"></i> Play</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards-grid cards-decade-grid print-grid">
+    {% for r in ratings %}
+    {% set medal = 'medal-gold' if r['rank']==1 else ('medal-silver' if r['rank']==2 else ('medal-bronze' if r['rank']==3 else '')) %}
+    <article class="exhibit {{ medal }}"{% if r.get('teams') %} style="--team: {{ (request.app.state.get_team_colors(r['teams'][-1]) or {}).get('primary', '#5a6472') }}"{% endif %}>
+      {% if r.get('teams') %}
+      <div class="career-bar" aria-hidden="true">{% for t in r['teams'] %}{% set tcx = request.app.state.get_team_colors(t) if (request and request.app and request.app.state and request.app.state.get_team_colors) else {} %}<span class="career-seg" style="background: {{ tcx.get('primary', '#5a6472') }}" title="{{ t }}"></span>{% endfor %}</div>
+      {% endif %}
+      <header class="exhibit-head">
+        <span class="exhibit-rank">#{{ r['rank'] }}</span>
+        {% if r.get('driver_image') %}<img class="exhibit-photo" src="/{{ r['driver_image'] }}" alt="" loading="lazy"/>{% endif %}
+        <div class="exhibit-id">
+          <a class="exhibit-name" href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r['driver'] }}</a>
+          <span class="exhibit-meta">{{ r['nationality'] }} · {{ r.get('years_active', '—') }}</span>
+        </div>
+      </header>
+
+      <div class="exhibit-car">
+        {% set car_slug = car_slugs.get(r['team']) if car_slugs and r.get('team') else none %}
+        {% if car_slug %}
+        <img src="/static/cars/png/{{ car_slug }}.png" alt="{{ r['team'] }} 3D livery" loading="lazy"/>
+        {% endif %}
+        <span class="exhibit-teams">{% if r.get('teams') %}{{ r['teams'] | join(' · ') }}{% else %}—{% endif %}</span>
+      </div>
+
+      <div class="exhibit-heroes">
+        <div><b>{{ r['overall'] }}</b><span>overall</span></div>
+        <div><b>{{ r['points'] }}</b><span>points</span></div>
+        <div><b>{{ r['wins'] }}</b><span>wins</span></div>
+        <div><b>{{ r['titles_decade'] }}</b><span>titles</span></div>
+      </div>
+
+      <dl class="exhibit-grid">
+        <div><dt>Legacy</dt><dd>{{ r['legacy_overall'] }}</dd></div>
+        <div><dt>Experience</dt><dd>{{ r['experience'] }}</dd></div>
+        <div><dt>Fastest laps</dt><dd>{{ r['fastest_laps'] }}</dd></div>
+        {% if r['top10'] is defined %}<div><dt>Top 10s</dt><dd>{{ r['top10'] }}</dd></div>{% endif %}
+        <div><dt>Seasons</dt><dd>{{ r['seasons'] }}</dd></div>
+        <div><dt>Teammate W/L</dt><dd>{{ r['team_driver_wins'] }} / {{ r['teammate_wins'] }}</dd></div>
+      </dl>
+
+      {% if r.get('badges') %}
+      <div class="exhibit-badges">{% for b in r['badges'] %}<span class="badge">{{ b }}</span>{% endfor %}</div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/museum.js"></script>
+{% endblock %}

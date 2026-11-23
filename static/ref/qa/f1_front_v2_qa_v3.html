@@ -1,0 +1,232 @@
+<!DOCTYPE html><html><head><meta charset=utf-8><style>
+body{margin:0;background:#d0d0d0}.row{display:flex;gap:6px;padding:6px}.panel{flex:1}.head{padding:5px 8px;font:700 12px system-ui;background:#aaa}
+.stage{position:relative;width:100%;aspect-ratio:272/160;background:#bdbdbd;overflow:hidden}
+.stage img,.stage svg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}
+.grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,rgba(0,0,0,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(0,0,0,.2) 1px,transparent 1px);background-size:20% 20%}
+.vline{position:absolute;left:50%;top:0;bottom:0;border-left:2px dashed rgba(200,0,0,.75)}
+</style></head><body><div class=row>
+<div class=panel><div class=head>PHOTO</div><div class=stage><img src="file:///home/martin-quinn/Documents/Projects/f1%20sim/traf1/static/ref/f1_front_photo_sf90.png"/><div class=grid></div><div class=vline></div></div></div>
+<div class=panel><div class=head>SVG V2</div><div class=stage>
+<svg class="car-silhouette car-front-view car-front-v2 " viewBox="0 0 272 160" width="544" height="320"
+     
+     preserveAspectRatio="none"
+     xmlns="http://www.w3.org/2000/svg"
+     style="--s:1; --primary:#DC0000; --secondary:#111111; --accent:#FFD100; --tyre:#111111;">
+  <defs>
+    <linearGradient id="paint-qa-v2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.14"/>
+      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="tyre-face-qa-v2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#060708"/>
+      <stop offset="40%" stop-color="#24282c"/>
+      <stop offset="100%" stop-color="#0a0c0e"/>
+    </linearGradient>
+    <radialGradient id="hub-qa-v2" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#3a3a3a"/>
+      <stop offset="100%" stop-color="#0c0c0c"/>
+    </radialGradient>
+    <radialGradient id="ground-ao-qa-v2" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+
+    <symbol id="qa-v2" viewBox="0 0 272 160">
+      <g id="fills">
+
+        
+        <g id="t-cam">
+          <rect x="132.5" y="10" width="7" height="2.4" rx="0.3" fill="#0e1012"/>
+          <rect x="134.5" y="12" width="3" height="4.5" rx="0.2" fill="#0e1012"/>
+        </g>
+
+        
+        <g id="rear-aero">
+          <rect x="100" y="40" width="72" height="2.2" rx="0.2" fill="var(--primary)"/>
+          <rect x="102" y="42.2" width="68" height="1.15" fill="#0e1012"/>
+          <rect x="104" y="43.35" width="64" height="1.8" rx="0.2" fill="var(--primary)"/>
+          <path d="M96 38.5 L102 38.5 L102 46.5 L98 46.5 Z" fill="var(--primary)"/>
+          <path d="M176 38.5 L170 38.5 L170 46.5 L174 46.5 Z" fill="var(--primary)"/>
+          <path d="M128 43 L129 53" stroke="#0e1012" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M144 43 L143 53" stroke="#0e1012" stroke-width="1.2" stroke-linecap="round"/>
+        </g>
+
+        <g id="rear-wheels" opacity="0.2">
+          <rect x="26" y="100" width="15" height="18" rx="3.5" fill="#121416"/>
+          <rect x="231" y="100" width="15" height="18" rx="3.5" fill="#121416"/>
+        </g>
+
+        <g id="main-body">
+          
+          <path d="M131 56 C132.2 46 134.2 41 136 39.5 C137.8 41 139.8 46 141 56 L138.5 58 L133.5 58 Z"
+                fill="var(--primary)"/>
+          <path d="M131 56 C132.2 46 134.2 41 136 39.5 C137.8 41 139.8 46 141 56 L138.5 58 L133.5 58 Z"
+                fill="url(#paint-qa-v2)"/>
+          <ellipse cx="136" cy="47" rx="4" ry="1.7" fill="#0a0a0a"/>
+
+          
+          <path d="M116 56
+                   L156 56
+                   L158 72
+                   L158 94
+                   L156 108
+                   L150 118
+                   L144 124
+                   L136 126
+                   L128 124
+                   L122 118
+                   L116 108
+                   L114 94
+                   L114 72
+                   Z"
+                fill="var(--primary)"/>
+          <path d="M116 56
+                   L156 56
+                   L158 72
+                   L158 94
+                   L156 108
+                   L150 118
+                   L144 124
+                   L136 126
+                   L128 124
+                   L122 118
+                   L116 108
+                   L114 94
+                   L114 72
+                   Z"
+                fill="url(#paint-qa-v2)"/>
+
+          
+          <rect x="125" y="122" width="22" height="8" rx="3.5" fill="var(--primary)"/>
+          <ellipse cx="136" cy="129" rx="12" ry="3.2" fill="var(--primary)"/>
+
+          <path d="M114 90 L106 93 L104 102 L112 104 L116 98 Z" fill="#050607"/>
+          <path d="M158 90 L166 93 L168 102 L160 104 L156 98 Z" fill="#050607"/>
+
+          <path d="M124 116 L148 116 L146 121 L126 121 Z" fill="#0c0c0c"/>
+
+          <path d="M130 129 L129 141" stroke="#0e1012" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M142 129 L143 141" stroke="#0e1012" stroke-width="1.8" stroke-linecap="round"/>
+
+          <ellipse cx="136" cy="88" rx="6" ry="2.8" fill="var(--accent)" opacity="0.9"/>
+
+          <path d="M112 59 L121 60.5" stroke="#0e1012" stroke-width="1.05" stroke-linecap="round"/>
+          <rect x="101" y="56.5" width="10.5" height="4" rx="0.7" fill="var(--primary)"/>
+          <path d="M160 59 L151 60.5" stroke="#0e1012" stroke-width="1.05" stroke-linecap="round"/>
+          <rect x="160.5" y="56.5" width="10.5" height="4" rx="0.7" fill="var(--primary)"/>
+        </g>
+
+        <g id="driver-and-halo">
+          <ellipse cx="136" cy="69" rx="10" ry="7" fill="#050708"/>
+          <path d="M126 76 C126 59 131 53 136 53 C141 53 146 59 146 76"
+                fill="none" stroke="#0e1012" stroke-width="3.2" stroke-linecap="round"/>
+          <line x1="136" y1="53" x2="136" y2="65" stroke="#0e1012" stroke-width="2.2" stroke-linecap="round"/>
+          <ellipse cx="136" cy="65" rx="6" ry="5" fill="var(--secondary)"/>
+        </g>
+
+        <g id="front-suspension" fill="none" stroke-linecap="round">
+          <path d="M116 94 L44 108" stroke="#0e1012" stroke-width="2"/>
+          <path d="M116 104 L46 112" stroke="#0e1012" stroke-width="1.5"/>
+          <path d="M118 99 L56 110" stroke="#2a3034" stroke-width="1"/>
+          <path d="M156 94 L228 108" stroke="#0e1012" stroke-width="2"/>
+          <path d="M156 104 L226 112" stroke="#0e1012" stroke-width="1.5"/>
+          <path d="M154 99 L216 110" stroke="#2a3034" stroke-width="1"/>
+          <path d="M118 112 L48 122 L120 120" stroke="#0e1012" stroke-width="1.3"/>
+          <path d="M154 112 L224 122 L152 120" stroke="#0e1012" stroke-width="1.3"/>
+        </g>
+
+        
+        <g id="front-wheels">
+          <g transform="translate(30 108)">
+            <rect x="-26" y="-36" width="52" height="72" rx="12" ry="11"
+                  fill="var(--tyre, #111)"/>
+            <rect x="-26" y="-36" width="52" height="72" rx="12" ry="11"
+                  fill="url(#tyre-face-qa-v2)"/>
+            <rect x="11" y="-24" width="8" height="46" rx="1.5" fill="#000" opacity="0.35"/>
+            <rect x="-23" y="-2.2" width="2" height="5" rx="0.3" fill="var(--accent)" opacity="0.75"/>
+            <ellipse cx="1" cy="0" rx="5" ry="4.8" fill="#050505"/>
+            <ellipse cx="1" cy="0" rx="2.6" ry="2.6" fill="url(#hub-qa-v2)"/>
+          </g>
+          <g transform="translate(242 108)">
+            <rect x="-26" y="-36" width="52" height="72" rx="12" ry="11"
+                  fill="var(--tyre, #111)"/>
+            <rect x="-26" y="-36" width="52" height="72" rx="12" ry="11"
+                  fill="url(#tyre-face-qa-v2)"/>
+            <rect x="-19" y="-24" width="8" height="46" rx="1.5" fill="#000" opacity="0.35"/>
+            <rect x="21" y="-2.2" width="2" height="5" rx="0.3" fill="var(--accent)" opacity="0.75"/>
+            <ellipse cx="-1" cy="0" rx="5" ry="4.8" fill="#050505"/>
+            <ellipse cx="-1" cy="0" rx="2.6" ry="2.6" fill="url(#hub-qa-v2)"/>
+          </g>
+        </g>
+
+        
+        <g id="front-wing">
+          <path d="M48 138
+                   C82 132 112 130.5 136 131
+                   C160 130.5 190 132 224 138
+                   C238 124 252 112 260 106
+                   L258 113
+                   C252 117 242 126 232 136
+                   C198 131.5 166 130.5 136 131
+                   C106 130.5 74 131.5 40 136
+                   C30 126 20 117 12 113
+                   L10 106
+                   C18 112 32 124 48 138 Z"
+                fill="var(--primary)"/>
+
+          <path d="M46 143
+                   C82 136.5 112 135 136 135.5
+                   C160 135 190 136.5 226 143
+                   C240 129 254 116 262 110
+                   L260 118
+                   C254 122 244 131 234 142
+                   C198 136.5 166 135.5 136 136
+                   C106 135.5 74 136.5 38 142
+                   C28 132 18 123 10 118
+                   L8 110
+                   C16 116 30 129 46 143 Z"
+                fill="var(--primary)"/>
+
+          <path d="M44 148
+                   C82 141 112 139.5 136 140
+                   C160 139.5 190 141 228 148
+                   C242 134 256 122 264 116
+                   L262 125
+                   C256 129 246 138 236 148
+                   C198 142 166 141 136 141.5
+                   C106 141 74 142 36 148
+                   C26 138 16 129 8 125
+                   L6 116
+                   C14 122 28 134 44 148 Z"
+                fill="var(--primary)"/>
+
+          <path d="M50 152.5
+                   C90 148.5 116 147.5 136 148
+                   C156 147.5 182 148.5 222 152.5
+                   L220 156
+                   C182 152.5 156 152 136 152.5
+                   C116 152 90 152.5 52 156 Z"
+                fill="var(--primary)"/>
+
+          <path d="M124 136 L148 136 L146 150 L126 150 Z" fill="#12161a"/>
+          <path d="M54 140 C100 134.5 136 134 218 140" fill="none" stroke="#0e1012" stroke-width="0.65" opacity="0.4"/>
+          <path d="M52 145 C100 139.5 136 139 220 145" fill="none" stroke="#0e1012" stroke-width="0.65" opacity="0.35"/>
+
+          <ellipse cx="136" cy="157.5" rx="120" ry="1.3" fill="url(#ground-ao-qa-v2)"/>
+        </g>
+
+        <g id="front-wing-endplates">
+          <path d="M1 104 L13 98 L15.5 101 L17 154 L6.5 156 L1 152 Z" fill="#0e1012"/>
+          <path d="M271 104 L259 98 L256.5 101 L255 154 L265.5 156 L271 152 Z" fill="#0e1012"/>
+        </g>
+
+      </g>
+    </symbol>
+  </defs>
+  <g transform="translate(136 80) scale(var(--s, 1)) translate(-136 -80)">
+    <use href="#qa-v2"/>
+  </g>
+</svg>
+<div class=grid></div><div class=vline></div></div></div>
+</div></body></html>

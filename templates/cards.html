@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Driver Cards {{ year }} — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <p class="wall-kicker">The Collection · Season {{ year }}</p>
+    <h1>Driver Cards {{ year }}</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → Cards</p>
+    <p class="sub-nav muted"><a href="/cards">By season</a> · <a href="/cards/decade">By Decade</a> · <a href="/cards/alltime">All-Time</a></p>
+  </div>
+
+  <div class="card no-print toolbar-card">
+    <div class="toolbar">
+      <form method="get" action="/cards" class="form-inline">
+        <label for="year" class="label-inline">Season:</label>
+        <select id="year" name="year" onchange="this.form.submit()">
+          {% for y in seasons %}
+          <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <div class="toolbar-actions">
+        <button type="button" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+        <a href="/cards.pdf?year={{ year }}" target="_blank"><button type="button"><i class="fas fa-file-pdf"></i> Collector PDF</button></a>
+        <a href="/cards.pdf?year={{ year }}&mode=game" target="_blank"><button type="button"><i class="fas fa-bolt"></i> Game PDF</button></a>
+        <a href="/cards/tracks.pdf" target="_blank"><button type="button"><i class="fas fa-flag-checkered"></i> Tracks PDF</button></a>
+        <a href="/play?deck=season:{{ year }}"><button type="button"><i class="fas fa-gamepad"></i> Play</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards-grid print-grid">
+    {% for r in ratings %}
+    {% set medal = 'medal-gold' if r['rank']==1 else ('medal-silver' if r['rank']==2 else ('medal-bronze' if r['rank']==3 else '')) %}
+    <article class="exhibit {{ medal }}"{% if r['team'] %} style="--team: {{ (request.app.state.get_team_colors(r['team']) or {}).get('primary', '#5a6472') }}"{% endif %}>
+      {% if r['team'] %}
+      {% set tcx = request.app.state.get_team_colors(r['team']) if (request and request.app and request.app.state and request.app.state.get_team_colors) else {} %}
+      <div class="career-bar" aria-hidden="true"><span class="career-seg" style="background: {{ tcx.get('primary', '#5a6472') }}" title="{{ r['team'] }}"></span></div>
+      {% endif %}
+      <header class="exhibit-head">
+        <span class="exhibit-rank">#{{ r['rank'] }}</span>
+        {% if r.get('driver_image') %}<img class="exhibit-photo" src="/{{ r['driver_image'] }}" alt="" loading="lazy"/>{% endif %}
+        <div class="exhibit-id">
+          <a class="exhibit-name" href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r['driver'] }}</a>
+          <span class="exhibit-meta">{{ r['nationality'] }} · {{ r.get('years_active', '—') }}</span>
+        </div>
+      </header>
+
+      <div class="exhibit-car">
+        {% set car_slug = car_slugs.get(r['team']) if car_slugs and r['team'] else none %}
+        {% if car_slug %}
+        <img src="/static/cars/png/{{ car_slug }}.png" alt="{{ r['team'] }} 3D livery" loading="lazy"/>
+        {% endif %}
+        <span class="exhibit-teams">{{ r['team'] }}</span>
+      </div>
+
+      <div class="exhibit-heroes">
+        <div><b>{{ r['overall'] }}</b><span>overall</span></div>
+        <div><b>{{ r['points'] }}</b><span>points</span></div>
+        <div><b>{{ r['wins'] }}</b><span>wins</span></div>
+        <div><b>{{ r['fastest_laps'] }}</b><span>fastest</span></div>
+      </div>
+
+      <dl class="exhibit-grid">
+        <div><dt>Legacy</dt><dd>{{ r['legacy_overall'] }}</dd></div>
+        <div><dt>Speed index</dt><dd>{{ r['speed_index'] }}</dd></div>
+        <div><dt>Teammate W/L</dt><dd>{{ r['team_driver_wins'] }} / {{ r['teammate_wins'] }}</dd></div>
+        <div><dt>Champion</dt><dd>{{ 'Yes' if r['rank']==1 else 'No' }}</dd></div>
+      </dl>
+
+      {% if r.get('badges') %}
+      <div class="exhibit-badges">{% for b in r['badges'] %}<span class="badge">{{ b }}</span>{% endfor %}</div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="/static/js/museum.js"></script>
+{% endblock %}

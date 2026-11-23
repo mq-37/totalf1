@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Per-Track Championship — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Per-Track Championship</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/analytics">Analytics</a> → Per Track</p>
+    <p class="muted" style="margin-top: 8px;">Points at each track: 1st = 10 pts, 2nd = 9, …, 10th = 1. Champion = driver with most points at that circuit (all-time).</p>
+  </div>
+
+  <nav class="sub-nav" aria-label="Analytics sections">
+    <a href="/analytics/overall" class="nav-link">Overall</a>
+    <a href="/analytics/season" class="nav-link">Per Season</a>
+    <a href="/analytics/team" class="nav-link">Per Team</a>
+    <a href="/analytics/tracks" class="nav-link active">Per Track</a>
+  </nav>
+
+  <div class="card table-card" style="margin-bottom: 32px;">
+    <h2>Champion per track</h2>
+    <p class="muted small">Track championships = number of circuits where the driver has the most points (1st=10, 2nd=9, … 10th=1). One track = 1 track championship.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Track</th>
+          <th>Champion</th>
+          <th>Track titles</th>
+          <th>Points</th>
+          <th>Races</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in champions %}
+        <tr>
+          <td><a href="/analytics/tracks?track={{ r['grand_prix'] | urlencode }}">{{ r["grand_prix"] }}</a></td>
+          <td><a href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r["driver"] }}</a></td>
+          <td>{{ track_championship_counts.get(r['driver'], 0) }}</td>
+          <td>{{ r["points"] }}</td>
+          <td>{{ r["races"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if selected_track %}
+  <div class="card" style="margin-bottom: 24px;">
+    <h2>{{ selected_track }} — full standings</h2>
+    <p class="muted">Same scoring: 1st = 10 pts down to 10th = 1 pt.</p>
+    <table>
+      <thead><tr><th>Rank</th><th>Driver</th><th>Points</th><th>Races</th></tr></thead>
+      <tbody>
+        {% for r in track_standings %}
+        <tr>
+          <td>{{ r["rank"] }}</td>
+          <td><a href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r["driver"] }}</a></td>
+          <td>{{ r["points"] }}</td>
+          <td>{{ r["races"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p><a href="/analytics/tracks">← Back to all tracks</a></p>
+  </div>
+  {% else %}
+  <div class="card">
+    <h2>View standings at a track</h2>
+    <form method="get" action="/analytics/tracks" class="form-inline">
+      <label for="track" class="label-inline">Track</label>
+      <select id="track" name="track" onchange="this.form.submit()">
+        <option value="">— Select track —</option>
+        {% for t in tracks %}
+        <option value="{{ t }}">{{ t }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% endif %}
+{% endblock %}

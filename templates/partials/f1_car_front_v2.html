@@ -1,0 +1,180 @@
+{# Front-elevation F1 car — Inkport-adapted proportions (3/4 Aston purple ref → orthographic front).
+   Geometry cues: tall BOSS-height endplates, multi-element wing, blunt nose tip,
+   T-cam airbox, red rim accents, darker carbon flanks. Palette still driven by CSS vars. #}
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 272 160"
+     width="{{ width | default(340) }}"
+     height="{{ height | default(200) }}"
+     class="car-silhouette car-front-view car-front-v2"
+     role="img"
+     aria-label="{{ aria_label | default('Formula 1 car — front elevation') }}"
+     style="{{ car_style }}">
+  <defs>
+    <radialGradient id="{{ symbol_id }}-tyre-grad" cx="38%" cy="36%" r="62%">
+      <stop offset="0%" stop-color="color-mix(in srgb, var(--tyre) 62%, white)"/>
+      <stop offset="55%" stop-color="var(--tyre)"/>
+      <stop offset="100%" stop-color="#050607"/>
+    </radialGradient>
+    <linearGradient id="{{ symbol_id }}-rim-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9aa3a3"/>
+      <stop offset="45%" stop-color="#5b615e"/>
+      <stop offset="100%" stop-color="#232524"/>
+    </linearGradient>
+    <linearGradient id="{{ symbol_id }}-wing-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#313331"/>
+      <stop offset="55%" stop-color="#161818"/>
+      <stop offset="100%" stop-color="#0a0c0e"/>
+    </linearGradient>
+    <symbol id="{{ symbol_id }}" viewBox="0 0 272 160" overflow="visible">
+
+        {# ── Airbox + T-cam (Inkport upright scoop) ── #}
+        <g id="airbox">
+          <path d="M124 18
+                   C124 10 128 6 136 6
+                   C144 6 148 10 148 18
+                   L146 38 L126 38 Z"
+                fill="#161818"/>
+          <path d="M128 16
+                   C128 12 131 9 136 9
+                   C141 9 144 12 144 16
+                   L142 34 L130 34 Z"
+                fill="var(--primary)"/>
+          <ellipse cx="136" cy="12" rx="7" ry="3.2" fill="#0e1012"/>
+          <rect x="133.5" y="6.5" width="5" height="1.8" rx="0.3" fill="color-mix(in srgb, var(--accent) 70%, white)"/>
+        </g>
+
+        {# ── Sidepods (front-on undercut cue) ── #}
+        <g id="sidepods">
+          <path d="M72 78
+                   C64 72 60 82 62 94
+                   L72 108 L100 100 L98 82 Z"
+                fill="var(--primary)"/>
+          <path d="M200 78
+                   C208 72 212 82 210 94
+                   L200 108 L172 100 L174 82 Z"
+                fill="var(--primary)"/>
+          <path d="M74 86 C68 84 66 92 68 98 L76 104 L96 98 L94 88 Z"
+                fill="color-mix(in srgb, var(--primary) 55%, #1a253c)"/>
+          <path d="M198 86 C204 84 206 92 204 98 L196 104 L176 98 L178 88 Z"
+                fill="color-mix(in srgb, var(--primary) 55%, #1a253c)"/>
+        </g>
+
+        {# ── Halo ── #}
+        <g id="halo">
+          <path d="M108 58
+                   C108 50 118 46 136 46
+                   C154 46 164 50 164 58"
+                fill="none" stroke="#161818" stroke-width="4.2" stroke-linecap="round"/>
+          <path d="M108 58
+                   C108 50 118 46 136 46
+                   C154 46 164 50 164 58"
+                fill="none" stroke="#232524" stroke-width="2.4" stroke-linecap="round"/>
+          <line x1="136" y1="46" x2="136" y2="62" stroke="#161818" stroke-width="3.2" stroke-linecap="round"/>
+          <line x1="136" y1="46" x2="136" y2="62" stroke="#313331" stroke-width="1.6" stroke-linecap="round"/>
+          <ellipse cx="136" cy="66" rx="18" ry="8" fill="#0a0c0e"/>
+          <ellipse cx="136" cy="64" rx="10" ry="5" fill="#161818"/>
+        </g>
+
+        {# ── Chassis / nose (blunt tip, purple top, dark flanks) ── #}
+        <g id="nose">
+          <path d="M116 62
+                   L156 62
+                   L154 118
+                   C152 132 144 138 136 138
+                   C128 138 120 132 118 118 Z"
+                fill="var(--primary)"/>
+          <path d="M128 64 L144 64 L142 118 L130 118 Z"
+                fill="color-mix(in srgb, var(--primary) 65%, white)" opacity="0.35"/>
+          <path d="M116 70 L124 72 L122 120 L118 116 Z" fill="#161818" opacity="0.55"/>
+          <path d="M156 70 L148 72 L150 120 L154 116 Z" fill="#161818" opacity="0.55"/>
+          <path d="M133 64 L139 64 L138 128 L134 128 Z" fill="var(--accent)" opacity="0.85"/>
+          <ellipse cx="136" cy="136" rx="9" ry="4.5" fill="var(--primary)"/>
+          <ellipse cx="136" cy="135" rx="6.5" ry="3" fill="color-mix(in srgb, var(--primary) 70%, #1a253c)"/>
+          <ellipse cx="136" cy="137.5" rx="4" ry="1.8" fill="#0e1012"/>
+        </g>
+
+        {# ── Mirror stalks ── #}
+        <g id="mirrors">
+          <rect x="88" y="54" width="14" height="3.2" rx="0.6" fill="#161818"/>
+          <rect x="90" y="52.5" width="10" height="2" rx="0.4" fill="var(--accent)"/>
+          <rect x="170" y="54" width="14" height="3.2" rx="0.6" fill="#161818"/>
+          <rect x="172" y="52.5" width="10" height="2" rx="0.4" fill="var(--accent)"/>
+        </g>
+
+        {# ── Front suspension (wishbones) ── #}
+        <g id="suspension" fill="none" stroke="#313331" stroke-width="1.6" stroke-linecap="round">
+          <path d="M108 100 C88 98 70 104 52 112"/>
+          <path d="M110 108 C90 110 72 116 54 122"/>
+          <path d="M164 100 C184 98 202 104 220 112"/>
+          <path d="M162 108 C182 110 200 116 218 122"/>
+        </g>
+        <g fill="none" stroke="#161818" stroke-width="0.7" stroke-linecap="round" opacity="0.7">
+          <path d="M108 100 C88 98 70 104 52 112"/>
+          <path d="M164 100 C184 98 202 104 220 112"/>
+        </g>
+
+        {# ── Front wing — multi-element (Inkport 3–4 planes) ── #}
+        <g id="front-wing">
+          <path d="M48 142 L224 142 L222 146 L50 146 Z" fill="url(#{{ symbol_id }}-wing-grad)"/>
+          <path d="M52 138 L220 138 L218 141.5 L54 141.5 Z" fill="#161818"/>
+          <path d="M56 134 L216 134 L214 137.5 L58 137.5 Z"
+                fill="color-mix(in srgb, var(--primary) 40%, #161818)"/>
+          <path d="M60 130.5 L212 130.5 L210 133.5 L62 133.5 Z" fill="#232524"/>
+          <rect x="118" y="130" width="3" height="16" rx="0.3" fill="#0e1012"/>
+          <rect x="151" y="130" width="3" height="16" rx="0.3" fill="#0e1012"/>
+          <rect x="100" y="136" width="2" height="10" rx="0.2" fill="#161818"/>
+          <rect x="170" y="136" width="2" height="10" rx="0.2" fill="#161818"/>
+        </g>
+
+        {# ── Tip stacks / cascade (upswept outer elements) ── #}
+        <g id="tip-stacks">
+          <path d="M48 130 L58 128 L56 142 L46 144 Z" fill="#161818"/>
+          <path d="M50 126 L60 124 L58 132 L50 134 Z" fill="#232524"/>
+          <path d="M52 122 L62 120 L60 128 L52 130 Z" fill="#313331"/>
+          <path d="M224 130 L214 128 L216 142 L226 144 Z" fill="#161818"/>
+          <path d="M222 126 L212 124 L214 132 L222 134 Z" fill="#232524"/>
+          <path d="M220 122 L210 120 L212 128 L220 130 Z" fill="#313331"/>
+        </g>
+
+        {# ── Tall carbon endplates (Inkport BOSS-height) ── #}
+        <g id="endplates">
+          <path d="M40 118 L50 116 L52 148 L38 150 Z" fill="#0e1012"/>
+          <path d="M42 120 L48 119 L49.5 146 L40.5 147.5 Z" fill="#161818"/>
+          <rect x="43" y="124" width="4" height="18" rx="0.4" fill="#232524"/>
+          <path d="M43 126 L47 128 L46 140 L42 138 Z" fill="var(--accent)" opacity="0.55"/>
+          <path d="M232 118 L222 116 L220 148 L234 150 Z" fill="#0e1012"/>
+          <path d="M230 120 L224 119 L222.5 146 L231.5 147.5 Z" fill="#161818"/>
+          <rect x="225" y="124" width="4" height="18" rx="0.4" fill="#232524"/>
+          <path d="M225 126 L229 128 L228 140 L224 138 Z" fill="var(--accent)" opacity="0.55"/>
+        </g>
+
+        {# ── Front wheels — outer-flush, squat, red rim stripe ── #}
+        <g id="wheel-left" transform="translate(28,113)">
+          <ellipse cx="16" cy="20" rx="20" ry="24" fill="url(#{{ symbol_id }}-tyre-grad)"/>
+          <ellipse cx="16" cy="20" rx="20" ry="24" fill="none" stroke="#050607" stroke-width="1.4"/>
+          <ellipse cx="16" cy="20" rx="11" ry="13" fill="url(#{{ symbol_id }}-rim-grad)"/>
+          <ellipse cx="16" cy="20" rx="11" ry="13" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+          <ellipse cx="16" cy="20" rx="5.5" ry="6.5" fill="#161818"/>
+          <ellipse cx="13" cy="16" rx="4" ry="3" fill="#ffffff" opacity="0.12"/>
+        </g>
+        <g id="wheel-right" transform="translate(208,113)">
+          <ellipse cx="16" cy="20" rx="20" ry="24" fill="url(#{{ symbol_id }}-tyre-grad)"/>
+          <ellipse cx="16" cy="20" rx="20" ry="24" fill="none" stroke="#050607" stroke-width="1.4"/>
+          <ellipse cx="16" cy="20" rx="11" ry="13" fill="url(#{{ symbol_id }}-rim-grad)"/>
+          <ellipse cx="16" cy="20" rx="11" ry="13" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+          <ellipse cx="16" cy="20" rx="5.5" ry="6.5" fill="#161818"/>
+          <ellipse cx="13" cy="16" rx="4" ry="3" fill="#ffffff" opacity="0.12"/>
+        </g>
+
+        {# ── Floor / bargeboard hint ── #}
+        <g id="floor" opacity="0.85">
+          <path d="M100 118 L172 118 L168 126 L104 126 Z" fill="#0e1012"/>
+          <path d="M108 120 L164 120 L162 124 L110 124 Z" fill="#161818"/>
+        </g>
+
+    </symbol>
+  </defs>
+  <g transform="translate(136 80) scale(var(--s, 1)) translate(-136 -80)">
+    <use href="#{{ symbol_id }}"/>
+  </g>
+</svg>

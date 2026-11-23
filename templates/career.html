@@ -1,0 +1,893 @@
+{% extends "base.html" %}
+{% block title %}F1 Team Principal Career · Local F1{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="/static/css/sim.css">
+  <link rel="stylesheet" href="/static/css/career.css">
+{% endblock %}
+{% block content %}
+<div id="career-app" class="car-app">
+  <!-- ==================== NEW CAREER WIZARD ==================== -->
+  <section id="career-wizard" class="car-wizard hidden">
+    <div class="car-wiz-card">
+      <div class="car-wiz-head">
+        <span class="tut-pill">F1 TEAM PRINCIPAL CAREER MODE</span>
+        <h1>Build Your Formula 1 Dynasty</h1>
+        <p class="muted">Manage a real 2026 constructor, draft an All-Time Legends super-grid, or launch your own 12th works team. Upgrade HQ facilities, develop aero &amp; power units, scout hidden gems with Fog-of-War, negotiate driver contracts, and command BOTH cars live on all 24 GPS circuits.</p>
+      </div>
+
+      <div class="car-wiz-grid">
+        <div class="car-wiz-field">
+          <label for="wiz-era">Championship Era &amp; Driver Pool</label>
+          <select id="wiz-era">
+            <option value="2026" selected>{{ latest_year }} Modern Grid (11 Teams · Real Lineups + Free Agents)</option>
+            <option value="legends">All-Time Legends Super-Season (10 Iconic Constructors)</option>
+          </select>
+        </div>
+
+        <div class="car-wiz-field">
+          <label for="wiz-calendar">Season Calendar Length</label>
+          <select id="wiz-calendar">
+            <option value="8">8-Round Highlights Championship</option>
+            <option value="12" selected>12-Round World Tour</option>
+            <option value="24">Full 24-Round 2026 FIA Calendar (incl. Madring)</option>
+          </select>
+        </div>
+
+        <div class="car-wiz-field">
+          <label for="wiz-team">Take Over Constructor</label>
+          <select id="wiz-team">
+            {% for t in starter_teams %}
+            <option value="{{ t.name }}">{{ t.name }}</option>
+            {% endfor %}
+            <option value="__custom__">★ Create My Own Team (12th Grid Entry)</option>
+          </select>
+        </div>
+
+        <div id="wiz-custom-box" class="car-wiz-custom hidden">
+          <div class="car-wiz-field">
+            <label for="wiz-custom-name">Custom Team Name</label>
+            <input type="text" id="wiz-custom-name" value="Apex Racing GP" maxlength="32">
+          </div>
+          <div class="car-wiz-field">
+            <label for="wiz-custom-color">Livery Color</label>
+            <input type="color" id="wiz-custom-color" value="#e10600">
+          </div>
+          <div class="car-wiz-field">
+            <label for="wiz-budget-tier">Starting Budget Tier</label>
+            <select id="wiz-budget-tier">
+              <option value="works">Works Giant ($115M · Lvl 3 HQ · Target P3)</option>
+              <option value="midfield" selected>Midfield Challenger ($82M · Lvl 2 HQ · Target P6)</option>
+              <option value="underdog">Underdog Startup ($58M · Lvl 1 HQ · Target P9)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="car-wiz-foot">
+        <button type="button" id="wiz-cancel-btn" class="btn-util hidden">Cancel</button>
+        <button type="button" id="wiz-launch-btn" class="btn-launch-battle">
+          <i class="fas fa-flag-checkered"></i> Sign Team Principal Contract &amp; Start Season
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== MAIN TEAM PRINCIPAL HQ ==================== -->
+  <section id="career-hq" class="car-hq hidden">
+    <!-- Top Team Principal Status Bar -->
+    <div class="car-topbar">
+      <div class="car-tb-team">
+        <span id="car-team-swatch" class="car-team-swatch"></span>
+        <div>
+          <strong id="car-team-name">Team Name</strong>
+          <small id="car-season-meta">Season 1 · Round 1 / 12</small>
+        </div>
+      </div>
+
+      <div class="car-tb-kpis">
+        <div class="car-kpi"><small>BUDGET</small><b id="car-kpi-cash">$0.0M</b></div>
+        <div class="car-kpi"><small>COST CAP</small><b id="car-kpi-cap">$0/$135M</b></div>
+        <div class="car-kpi"><small>CAR OVR</small><b id="car-kpi-car">0.0</b></div>
+        <div class="car-kpi"><small>WCC</small><b id="car-kpi-wcc">P—</b></div>
+        <div class="car-kpi"><small>BOARD</small><b id="car-kpi-conf">78%</b></div>
+        <div class="car-kpi"><small>SCOUTS</small><b id="car-kpi-scouts">0/1</b></div>
+      </div>
+
+      <div class="car-tb-actions">
+        <a href="/career/cards.pdf" target="_blank" id="car-pdf-btn" class="sim-dir-btn" title="Export Printable Collector Cards PDF for your Career Team & Custom Livery"><i class="fas fa-file-pdf"></i> Team PDF</a>
+        <button type="button" class="sim-dir-btn btn-trophy-pill" data-f1-trophy-pill title="Unified Player Profile & Trophy Cabinet"><i class="fas fa-trophy"></i> <span>0/20</span></button>
+        <button type="button" id="car-saves-btn" class="sim-dir-btn" title="Manage Save Slots, Rollback Checkpoints & Backups"><i class="fas fa-save"></i> Saves</button>
+        <button type="button" id="car-new-btn" class="sim-dir-btn" title="Start a new career in a new slot"><i class="fas fa-plus"></i> New</button>
+        <button type="button" id="car-advance-season-btn" class="btn-racing hidden"><i class="fas fa-trophy"></i> Start Next Season</button>
+        <button type="button" id="car-go-race-btn" class="btn-launch-battle car-race-cta">
+          <i class="fas fa-flag-checkered"></i> <span id="car-go-race-label">Race Weekend</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Action Feedback Toast -->
+    <div id="car-toast" class="car-toast hidden"></div>
+
+    <!-- HQ Workspace: Left Navigation Rail + Dynamic Stage -->
+    <div class="car-shell">
+      <nav class="car-nav" aria-label="Team Principal HQ">
+        <button type="button" class="car-nav-btn active" data-car-tab="dashboard"><i class="fas fa-tachometer-alt"></i> HQ Dashboard <span id="car-badge-dilemma" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn" data-car-tab="market"><i class="fas fa-users"></i> Drivers &amp; Market</button>
+        <button type="button" class="car-nav-btn" data-car-tab="scouting"><i class="fas fa-binoculars"></i> Scouting Hub <span id="car-badge-scouts" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn" data-car-tab="staff"><i class="fas fa-user-tie"></i> Technical Staff</button>
+        <button type="button" class="car-nav-btn" data-car-tab="rd"><i class="fas fa-cogs"></i> Car R&amp;D <span id="car-badge-rd" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn" data-car-tab="facilities"><i class="fas fa-industry"></i> HQ Facilities</button>
+        <button type="button" class="car-nav-btn" data-car-tab="standings"><i class="fas fa-trophy"></i> Standings &amp; Finance</button>
+        <button type="button" class="car-nav-btn" data-car-tab="dynasty"><i class="fas fa-landmark"></i> Dynasty &amp; Records <span id="car-badge-rivals" class="car-nav-badge"></span></button>
+      </nav>
+
+      <div class="car-stage">
+        <!-- TAB 1: HQ DASHBOARD -->
+        <div id="car-tab-dashboard" class="car-tab-pane active">
+          <div id="car-ultimatum-banner" class="car-dilemma-banner hidden"></div>
+          <div id="car-resume-banner" class="car-resume-banner hidden"></div>
+          <div id="car-media-banner" class="car-media-banner hidden"></div>
+          <div id="car-dilemma-banner" class="car-dilemma-banner hidden"></div>
+          <div class="car-dash-grid">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-helmet-safety"></i> ACTIVE RACE LINEUP &amp; TRAINING FOCUS</span><small>Car #1 · Car #2 · Reserve</small></div>
+              <div id="car-dash-lineup" class="car-lineup-grid"></div>
+            </div>
+
+            <div class="car-panel">
+              <div class="car-panel-head">
+                <span><i class="fas fa-car-side"></i> LIVE 3D CHASSIS SHOWROOM</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <small id="car-3d-spec-tag">2020s Spec</small>
+                  <button type="button" id="car-livery-toggle-btn" class="car-btn-xs car-btn-gold" title="Customize your 3D team livery & chassis era"><i class="fas fa-palette"></i> Livery</button>
+                </div>
+              </div>
+              <div class="car-dash-3d-wrap">
+                <canvas id="car-dash-3d-canvas" aria-label="Team 3D F1 Car"></canvas>
+                <div id="car-livery-editor" class="car-livery-editor hidden">
+                  <div class="car-liv-colors">
+                    <label>Main <input type="color" id="liv-main" value="#e10600"></label>
+                    <label>Sec <input type="color" id="liv-sec" value="#111622"></label>
+                    <label>Acc <input type="color" id="liv-acc" value="#facc15"></label>
+                    <label>Pop <input type="color" id="liv-pop" value="#ffffff"></label>
+                    <label>Det <input type="color" id="liv-det" value="#252c38"></label>
+                  </div>
+                  <div class="car-liv-opts">
+                    <select id="liv-style">
+                      <option value="two-tone">Two-Tone</option>
+                      <option value="modern">Modern</option>
+                      <option value="racing-stripe">Racing Stripe</option>
+                      <option value="chevron">Chevron</option>
+                      <option value="classic">Classic</option>
+                    </select>
+                    <select id="liv-era">
+                      <option value="2020s">2020s Chassis</option>
+                      <option value="2010s">2010s Hybrid</option>
+                      <option value="2000s">2000s V10</option>
+                      <option value="1990s">1990s Airbox</option>
+                      <option value="1980s">1980s Turbo</option>
+                      <option value="1970s">1970s Wedge</option>
+                      <option value="1960s">1960s Cigar</option>
+                      <option value="1950s">1950s Torpedo</option>
+                    </select>
+                    <button type="button" id="car-livery-save-btn" class="car-btn-xs car-btn-red"><i class="fas fa-check"></i> Save Livery</button>
+                  </div>
+                </div>
+                <div id="car-dash-3d-bars" class="car-3d-mini-bars"></div>
+              </div>
+            </div>
+
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-map-marked-alt"></i> NEXT GRAND PRIX</span><small id="car-next-gp-sub">—</small></div>
+              <div id="car-next-gp-card" class="car-next-gp-box"></div>
+            </div>
+
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-envelope-open-text"></i> PADDOCK INBOX &amp; SPONSORS</span></div>
+              <ul id="car-inbox-list" class="car-inbox-list"></ul>
+              <div class="car-subhead" style="margin-top:8px;"><i class="fas fa-handshake"></i> ACTIVE SPONSORS &amp; BOARD TARGET</div>
+              <div id="car-dash-sponsors" class="car-spon-mini"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: DRIVERS & TRANSFER MARKET -->
+        <div id="car-tab-market" class="car-tab-pane">
+          <div class="car-panel">
+            <div class="car-panel-head">
+              <span><i class="fas fa-exchange-alt"></i> GLOBAL F1 DRIVER MARKET (FOG-OF-WAR)</span>
+              <div class="car-market-filters">
+                <input type="text" id="car-mkt-search" placeholder="Search driver or team…">
+                <select id="car-mkt-filter">
+                  <option value="all">All Drivers</option>
+                  <option value="free">Free Agents Only</option>
+                  <option value="scouted">Fully Scouted</option>
+                  <option value="wonderkids">Wonderkids (Age ≤ 24)</option>
+                  <option value="wet">Scouted Rain Masters</option>
+                </select>
+              </div>
+            </div>
+            <div class="car-table-scroll">
+              <table class="car-table">
+                <thead>
+                  <tr>
+                    <th>Driver</th>
+                    <th>Team / Status</th>
+                    <th>Age</th>
+                    <th>OVR / Pot</th>
+                    <th>Pace / Race / Wet</th>
+                    <th>Salary / Buyout</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="car-market-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: SCOUTING HUB -->
+        <div id="car-tab-scouting" class="car-tab-pane">
+          <div class="car-two-col">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-binoculars"></i> ACTIVE SCOUT ASSIGNMENTS</span><small id="car-scout-slots-label">0 / 1 Slots</small></div>
+              <div id="car-active-scouts-list" class="car-stack-list"></div>
+              <div class="car-subhead" style="margin-top:12px;"><i class="fas fa-graduation-cap"></i> JUNIOR ACADEMY &amp; RESERVE PROGRAMME</div>
+              <div id="car-academy-box" class="car-academy-box">
+                <p class="muted small" style="margin:0 0 8px;">Develop your Reserve Driver in the Factory Sim or fund an F2/F3 scouting trip to discover a fresh 18–19yo high-potential wonderkid!</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button type="button" id="car-acad-train-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-dumbbell"></i> Train Reserve Sim Camp (-$0.8M · +30 XP)</button>
+                  <button type="button" id="car-acad-disc-btn" class="car-btn-xs car-btn-red"><i class="fas fa-star"></i> Discover F2 Wonderkid (-$1.4M)</button>
+                </div>
+              </div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-file-alt"></i> COMPLETED TELEMETRY DOSSIERS</span><small>Exact stats, Potential &amp; Hidden Trait unlocked</small></div>
+              <div id="car-scouted-list" class="car-dossier-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3B: KEY TECHNICAL STAFF -->
+        <div id="car-tab-staff" class="car-tab-pane">
+          <div class="car-two-col">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-user-tie"></i> YOUR TECHNICAL LEADERSHIP</span><small>Active bonuses apply to R&amp;D, Car OVR, FP Setup &amp; Pit Stops</small></div>
+              <div id="car-staff-active" class="car-staff-grid"></div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-briefcase"></i> PADDOCK STAFF MARKET</span><small>Poach elite engineers &amp; strategists</small></div>
+              <div id="car-staff-market" class="car-staff-market-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: CAR R&D & GRID RANKINGS -->
+        <div id="car-tab-rd" class="car-tab-pane">
+          <div class="car-two-col">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-cogs"></i> COMMISSION CHASSIS &amp; PU UPGRADES</span><small id="car-rd-slots-label">0 / 1 Active</small></div>
+              <div id="car-rd-active-list" class="car-stack-list"></div>
+              <div id="car-rd-parts-grid" class="car-rd-grid"></div>
+              <div class="car-subhead"><i class="fas fa-forward"></i> NEXT-SEASON REGULATION SPEC RESEARCH ($3.8M · CARRIES OVER!)</div>
+              <div id="car-nextgen-grid" class="car-nextgen-grid"></div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-chart-bar"></i> CONSTRUCTOR CAR PERFORMANCE RANKING</span><small>Aero · Chassis · Power · Tyre Care</small></div>
+              <div id="car-rd-comparison" class="car-comp-bars"></div>
+              <div class="car-subhead"><i class="fas fa-battery-three-quarters"></i> FIA POWER UNIT &amp; GEARBOX POOL (4 ICE · 3 ERS · 4 GBX)</div>
+              <div id="car-pu-pool" class="car-pu-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: HQ FACILITIES -->
+        <div id="car-tab-facilities" class="car-tab-pane">
+          <div class="car-panel">
+            <div class="car-panel-head"><span><i class="fas fa-industry"></i> FACTORY &amp; PIT WALL DEPARTMENTS (LVL 1–5)</span><small>Bonuses apply directly in Live GPS Races, R&amp;D, Scouting &amp; Finances</small></div>
+            <div id="car-fac-grid" class="car-fac-grid"></div>
+          </div>
+        </div>
+
+        <!-- TAB 6: STANDINGS, CALENDAR & FINANCES -->
+        <div id="car-tab-standings" class="car-tab-pane">
+          <div class="car-standings-grid">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-trophy"></i> DRIVERS CHAMPIONSHIP (WDC)</span></div>
+              <div class="car-table-scroll car-tall-scroll">
+                <table class="car-table">
+                  <thead><tr><th>P</th><th>Driver</th><th>Team</th><th>W</th><th>FL</th><th>PTS</th></tr></thead>
+                  <tbody id="car-wdc-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-shield-alt"></i> CONSTRUCTORS (WCC) &amp; SPONSORS</span></div>
+              <table class="car-table">
+                <thead><tr><th>P</th><th>Constructor</th><th>Car</th><th>W</th><th>PTS</th></tr></thead>
+                <tbody id="car-wcc-tbody"></tbody>
+              </table>
+              <div class="car-subhead"><i class="fas fa-chart-line"></i> WCC CHAMPIONSHIP TRAJECTORY</div>
+              <canvas id="car-wcc-chart" class="car-wcc-chart"></canvas>
+              <div class="car-subhead"><i class="fas fa-handshake"></i> SPONSOR PARTNERSHIPS</div>
+              <div id="car-sponsor-catalog" class="car-spon-grid"></div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-calendar-alt"></i> SEASON CALENDAR &amp; LEDGER</span></div>
+              <div id="car-calendar-list" class="car-cal-list"></div>
+              <div class="car-subhead"><i class="fas fa-coins"></i> RECENT FINANCIAL LEDGER</div>
+              <ul id="car-finance-log" class="car-fin-list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 7: MULTI-SEASON DYNASTY, RIVALRIES & HALL OF FAME -->
+        <div id="car-tab-dynasty" class="car-tab-pane">
+          <div id="car-dynasty-kpis" class="car-dyn-kpis"></div>
+          <div class="car-two-col" style="margin-top:10px;">
+            <div class="car-panel">
+              <div class="car-panel-head">
+                <span><i class="fas fa-award"></i> TEAM DRIVER HALL OF FAME</span>
+                <div style="display:flex;gap:6px;">
+                  <a href="/career/cards.pdf?mode=collector" target="_blank" class="car-btn-xs car-btn-gold"><i class="fas fa-file-pdf"></i> Collector Cards PDF</a>
+                  <a href="/career/cards.pdf?mode=game" target="_blank" class="car-btn-xs car-btn-red"><i class="fas fa-gamepad"></i> Game Cards PDF</a>
+                </div>
+              </div>
+              <div class="car-table-scroll">
+                <table class="car-table">
+                  <thead><tr><th>Driver</th><th>Starts</th><th>Wins</th><th>Podiums</th><th>Poles</th><th>FL</th><th>Pts</th></tr></thead>
+                  <tbody id="car-dynasty-drivers"></tbody>
+                </table>
+              </div>
+              <div class="car-subhead"><i class="fas fa-car"></i> CHAMPIONSHIP GARAGE &amp; SEASON ARCHIVE</div>
+              <div id="car-dynasty-seasons" class="car-garage-grid"></div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-fire"></i> PADDOCK RIVALRIES &amp; MEDIA HEAT</span><small>Driven by Post-Race Press Conferences</small></div>
+              <div id="car-dynasty-rivals" class="car-stack-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== LIVE 2-CAR RACE WEEKEND OVERLAY (QUALIFYING + 1-SCREEN GPS PIT WALL) ==================== -->
+  <section id="career-race-view" class="car-race-view hidden">
+    <!-- Qualifying Briefing Panel -->
+    <div id="car-quali-panel" class="car-quali-panel">
+      <div class="car-quali-card">
+        <div class="car-quali-head">
+          <div>
+            <span class="tut-pill" id="car-q-round-pill">ROUND 1 QUALIFYING</span>
+            <h2 id="car-q-title">Australian Grand Prix — Albert Park</h2>
+            <p id="car-q-meta" class="muted"></p>
+          </div>
+          <div class="car-q-controls">
+            <select id="car-q-weather">
+              <option value="dynamic" selected>Dynamic Forecast</option>
+              <option value="dry">Dry Sun</option>
+              <option value="showers">Changing Showers</option>
+              <option value="rain">Heavy Rain</option>
+            </select>
+            <select id="car-q-laps">
+              <option value="10">10-Lap Sprint</option>
+              <option value="15" selected>15-Lap Grand Prix</option>
+              <option value="25">25-Lap Endurance</option>
+            </select>
+            <button type="button" id="car-q-back-btn" class="sim-dir-btn"><i class="fas fa-arrow-left"></i> Back to HQ</button>
+          </div>
+        </div>
+
+        <!-- Free Practice Car Setup Tuner + Pre-Race Split Tyre Strategy -->
+        <div class="car-fp-setup-box">
+          <div class="car-fp-head">
+            <span><i class="fas fa-sliders-h"></i> FREE PRACTICE CAR SETUP <small id="car-fp-stints" class="muted">(0/3 FP Stints)</small></span>
+            <div class="car-fp-right">
+              <span id="car-fp-conf-pill" class="car-fp-conf">SETUP 70%</span>
+              <button type="button" id="car-fp-auto-btn" class="car-btn-xs car-btn-gold" title="Let your Chief Race Engineer dial in the car">⚡ Engineer Auto-Tune</button>
+              <button type="button" id="car-fp-run-btn" class="car-btn-xs car-btn-red">Run FP Stint</button>
+            </div>
+          </div>
+          <div class="car-fp-sliders">
+            <label>
+              <span>Wing Angle <b id="fp-wing-val">50</b> <em id="fp-wing-fb">UNTESTED</em></span>
+              <input type="range" id="fp-wing" min="0" max="100" value="50">
+            </label>
+            <label>
+              <span>Suspension <b id="fp-susp-val">50</b> <em id="fp-susp-fb">UNTESTED</em></span>
+              <input type="range" id="fp-susp" min="0" max="100" value="50">
+            </label>
+            <label>
+              <span>Diff &amp; Brakes <b id="fp-diff-val">50</b> <em id="fp-diff-fb">UNTESTED</em></span>
+              <input type="range" id="fp-diff" min="0" max="100" value="50">
+            </label>
+          </div>
+          <div class="car-start-tyre-bar">
+            <span class="muted small"><i class="fas fa-dharmachakra"></i> Starting Tyre Strategy:</span>
+            <label><span id="car-st-lbl-0">Car #1</span>
+              <select id="car-start-tyre-0">
+                <option value="auto" selected>Auto (Best)</option>
+                <option value="soft">Soft (S)</option>
+                <option value="medium">Medium (M)</option>
+                <option value="hard">Hard (H)</option>
+                <option value="inter">Inter (I)</option>
+                <option value="wet">Wet (W)</option>
+              </select>
+            </label>
+            <label><span id="car-st-lbl-1">Car #2</span>
+              <select id="car-start-tyre-1">
+                <option value="auto" selected>Auto (Best)</option>
+                <option value="soft">Soft (S)</option>
+                <option value="medium">Medium (M)</option>
+                <option value="hard">Hard (H)</option>
+                <option value="inter">Inter (I)</option>
+                <option value="wet">Wet (W)</option>
+              </select>
+            </label>
+          </div>
+          <div id="car-strat-planner" class="car-strat-planner"></div>
+        </div>
+
+        <!-- Interactive Q1 -> Q2 -> Q3 Knockout Qualifying Controls -->
+        <div id="car-q-knockout-bar" class="car-q-ko-bar">
+          <div class="car-q-ko-left">
+            <span id="car-q-stage-pill" class="car-q-stage-pill">Q1 · TOP 15 ADVANCE</span>
+            <small id="car-q-tyre-note" class="muted">Pick tyre set or skip straight to full grid</small>
+          </div>
+          <div class="car-q-ko-btns">
+            <select id="car-q-tyre-choice" title="Fresh Softs give peak pace; Scrubbed Tyres save a fresh Soft set (+4% life) for the race!">
+              <option value="fresh" selected>🔴 Fresh Softs (Peak Lap)</option>
+              <option value="scrubbed">🟡 Scrubbed Tyres (Save Softs +4%)</option>
+            </select>
+            <button type="button" id="car-q-stage-btn" class="car-btn-xs car-btn-red"><i class="fas fa-stopwatch"></i> Run Q1</button>
+            <button type="button" id="car-q-simfull-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-fast-forward"></i> Sim Full Quali</button>
+          </div>
+        </div>
+
+        <div id="car-q-grid-wrap" class="car-q-grid-wrap"></div>
+
+        <div class="car-q-foot">
+          <button type="button" id="car-q-quicksim-btn" class="sim-dir-btn">
+            <i class="fas fa-fast-forward"></i> Quick-Sim Grand Prix
+          </button>
+          <button type="button" id="car-q-lightsout-btn" class="btn-launch-battle">
+            <i class="fas fa-flag-checkered"></i> LIGHTS OUT — COMMAND BOTH CARS LIVE!
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live 1-Screen 2-Car GPS Pit Wall Cockpit -->
+    <div id="car-live-cockpit" class="car-live-cockpit hidden">
+      <div class="sim-director-bar">
+        <div class="sim-dir-left">
+          <span id="cr-flag-pill" class="sim-flag-pill flag-green"><i class="fas fa-flag"></i> GREEN FLAG</span>
+          <div class="sim-dir-circuit">
+            <strong id="cr-dir-name">Circuit</strong>
+            <span id="cr-dir-specs" class="sim-dir-specs">Specs</span>
+          </div>
+        </div>
+        <div class="sim-dir-center">
+          <div class="sim-lap-box"><small>LAP</small><strong id="cr-dir-lap">01 / 15</strong></div>
+          <div id="cr-weather-pill" class="sim-weather-pill w-dry">
+            <span id="cr-weather-text">☀️ DRY 0%</span>
+            <span class="sim-wet-meter"><i id="cr-wet-fill" style="width:0%"></i></span>
+          </div>
+          <span id="cr-radar-pill" class="cr-radar-pill" title="Pit Wall Weather Radar">RADAR: CLEAR</span>
+        </div>
+        <div class="sim-dir-right">
+          <button type="button" id="cr-chart-btn" class="sim-dir-btn" title="View Live Lap-by-Lap Position Telemetry Chart"><i class="fas fa-chart-line"></i> <span class="sim-lbl-md">Chart</span></button>
+          <button type="button" id="cr-sfx-toggle" class="sim-dir-btn sim-dir-icon" title="Toggle Pit Wall Radio & Start-Light Audio"><i class="fas fa-volume-up"></i></button>
+          <button type="button" id="cr-duel-toggle" class="sim-dir-btn is-duel-on" title="Toggle dramatic 3D Braking-Zone Duel cut-ins (max 1/race, final 3 laps for P1-P3)">
+            <i class="fas fa-film"></i> <span class="sim-lbl-md">3D Duel: ON</span>
+          </button>
+          <div class="sim-speed-btns" role="group" aria-label="Race speed">
+            <button type="button" class="sim-speed-btn" data-cr-speed="0" title="Pause [Space]"><i class="fas fa-pause"></i></button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="0.25" title="0.25× True-Time Battle Cam">0.25×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="0.5" title="0.5× Slow-Mo Battle Speed">0.5×</button>
+            <button type="button" class="sim-speed-btn active" data-cr-speed="1">1×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="2">2×</button>
+            <button type="button" class="sim-speed-btn" data-cr-speed="4">4×</button>
+          </div>
+          <button type="button" id="cr-focus-btn" class="sim-dir-btn sim-dir-icon" title="Focus Mode: hide site navbar for extra vertical space [F]"><i class="fas fa-expand"></i></button>
+          <button type="button" id="cr-abort-btn" class="sim-dir-btn" title="Pause & save progress to HQ (resume anytime!)"><i class="fas fa-save"></i> <span class="sim-lbl-md">Save &amp; Exit</span></button>
+        </div>
+      </div>
+
+      <div id="cr-cockpit-grid" class="sim-cockpit-grid" data-dock-pane="strategy">
+        <!-- Narrow/Split-Screen (<1024px) 1-Screen Zero-Scroll Dock Switcher -->
+        <div class="sim-mobile-dock" role="tablist" aria-label="Cockpit view">
+          <button type="button" class="sim-dock-tab active" data-dock-target="strategy"><i class="fas fa-sliders-h"></i> Pit Wall &amp; Strategy</button>
+          <button type="button" class="sim-dock-tab" data-dock-target="tower"><i class="fas fa-stopwatch"></i> Live Timing (Full Grid)</button>
+        </div>
+        <!-- Left: Live Broadcast Timing Tower (FULL GRID — ALL DRIVERS!) -->
+        <aside class="sim-tower-panel">
+          <div class="sim-panel-head">
+            <span><i class="fas fa-stopwatch"></i> LIVE TIMING <small id="cr-grid-count" class="muted">(22)</small></span>
+            <div class="sim-gap-toggle">
+              <button type="button" class="sim-gap-btn active" data-cr-gap="int">INT</button>
+              <button type="button" class="sim-gap-btn" data-cr-gap="ldr">LDR</button>
+            </div>
+          </div>
+          <div class="sim-timing-wrap">
+            <table class="sim-timing-table cr-full-tower">
+              <thead><tr><th>P</th><th>DRV</th><th id="cr-gap-head">INT</th><th>TYRE</th><th>ST</th></tr></thead>
+              <tbody id="cr-timing-body"></tbody>
+            </table>
+          </div>
+        </aside>
+
+        <!-- Center: Hero Realistic GPS Circuit Map -->
+        <div class="sim-stage-panel">
+          <canvas id="cr-track-canvas" class="sim-track-canvas"></canvas>
+          <div id="cr-rival-pill" class="cr-rival-pill hidden"></div>
+          <div id="cr-pit-banner" class="cr-pit-banner hidden"></div>
+          <div id="cr-alert-toast" class="sim-alert-toast hidden"></div>
+          <div class="sim-map-toggles">
+            <div class="sim-cam-group" role="group" aria-label="Broadcast Camera Zoom">
+              <button type="button" class="sim-cam-chip active" data-cr-cam="full" title="Full Circuit View [Z]"><i class="fas fa-map"></i> Full</button>
+              <button type="button" class="sim-cam-chip" data-cr-cam="follow" title="2.5× Follow Cam [Z]">2.5×</button>
+              <button type="button" class="sim-cam-chip" data-cr-cam="battle" title="5× Battle Zoom [Z]">5×</button>
+              <button type="button" class="sim-cam-chip" data-cr-cam="close" title="8.5× Close-Up [Z]">8.5×</button>
+              <button type="button" class="sim-cam-chip" data-cr-cam="heli" title="11× Ultra Heli Close-Up (Scroll to 12×) [Z]"><i class="fas fa-helicopter"></i> 11×</button>
+            </div>
+            <button type="button" class="sim-layer-chip active" data-cr-layer="corners">Corners</button>
+            <button type="button" class="sim-layer-chip active" data-cr-layer="sectors">Sectors</button>
+            <button type="button" class="sim-layer-chip active" data-cr-layer="line" title="Toggle Optimal Racing Line (Green = Flat Out, Amber = Apex, Red = Braking)">Best Line</button>
+            <button type="button" class="sim-layer-chip active" data-cr-layer="ai" title="Toggle Live AI Perception, Steering Vectors & Decision Badges (AVOID / ATTACK / DEFEND / HOLD / FIGHT)">AI Mind</button>
+            <button type="button" class="sim-layer-chip active" data-cr-layer="hud" title="Toggle F1 TV Broadcast Telemetry Halo">TV HUD</button>
+            <button type="button" class="sim-layer-chip" data-cr-layer="ghost">Pit Ghost</button>
+          </div>
+          <div class="sim-map-legend">
+            <span><i style="background:#ef4444"></i>S1</span>
+            <span><i style="background:#38bdf8"></i>S2</span>
+            <span><i style="background:#facc15"></i>S3</span>
+            <span><i style="background:#22c55e"></i>DRS</span>
+          </div>
+        </div>
+
+        <!-- Right: Dual-Car Team Principal Strategy Console! -->
+        <aside class="sim-strategy-panel">
+          <!-- Switch Between Car #1 & Car #2 ([Tab] Hotkey!) + Live Team Orders -->
+          <div class="cr-dual-switcher">
+            <button type="button" id="cr-car-tab-0" class="cr-car-tab active" data-cr-car="0">CAR #1</button>
+            <button type="button" id="cr-car-tab-1" class="cr-car-tab" data-cr-car="1">CAR #2</button>
+          </div>
+          <div class="cr-team-orders" role="group" aria-label="Team Orders">
+            <small>ORDERS</small>
+            <button type="button" class="cr-order-btn active" data-cr-order="free" title="Free to race (Papaya rules)">FREE</button>
+            <button type="button" class="cr-order-btn" data-cr-order="hold" title="Hold positions — avoid intra-team fighting & save tyres">HOLD</button>
+            <button type="button" class="cr-order-btn cr-order-swap" id="cr-swap-btn" title="Swap Car #1 & Car #2 when within 2.5s on track">⇄ SWAP</button>
+          </div>
+
+          <div id="cr-driver-card" class="sim-card sim-driver-card">
+            <div class="sim-drv-top">
+              <div class="sim-drv-ident">
+                <span id="cr-p-code" class="sim-drv-code">DRV</span>
+                <div class="sim-drv-meta">
+                  <strong id="cr-p-name">Driver</strong>
+                  <small id="cr-p-team">Team · Facility Bonuses</small>
+                </div>
+              </div>
+              <div class="sim-drv-pos-wrap">
+                <strong id="cr-p-pos" class="sim-drv-pos">P1</strong>
+                <small id="cr-p-lap-time">--.-s</small>
+              </div>
+            </div>
+            <div class="sim-drv-deltas">
+              <span id="cr-p-ahead" class="sim-delta-pill">▲ LEADER</span>
+              <span id="cr-p-behind" class="sim-delta-pill">▼ +0.0s</span>
+            </div>
+            <div class="sim-live-telem-strip">
+              <span class="sim-speed-read"><b id="cr-p-kph">290</b><small>KPH</small></span>
+              <span id="cr-p-gear" class="sim-gear-pill">G7</span>
+              <span id="cr-p-fuel" class="cr-fuel-pill" title="Fuel Delta vs Target">+0.4L</span>
+              <span id="cr-p-sectors" class="sim-sector-dots"><i class="sd-none">S1</i><i class="sd-none">S2</i><i class="sd-none">S3</i></span>
+              <span id="cr-p-rule" class="sim-rule-pill rule-warn">1-COMP</span>
+            </div>
+          </div>
+
+          <div class="sim-card sim-telem-card">
+            <div class="sim-telem-row">
+              <div class="sim-telem-label"><span><i class="fas fa-dharmachakra"></i> TYRE</span><b id="cr-p-tyre">—</b><span id="cr-p-temp" class="sim-temp-tag">98°C</span></div>
+              <small id="cr-p-cliff" class="sim-cliff-tag">~8.0L</small>
+            </div>
+            <div class="sim-bar-track"><div id="cr-p-tyre-bar" class="sim-bar-fill" style="width:100%"></div><span class="sim-cliff-tick"></span></div>
+            <div id="cr-crossover-alert" class="sim-crossover-alert hidden"></div>
+            <div class="sim-telem-row sim-ers-row-gap">
+              <div class="sim-telem-label"><span><i class="fas fa-bolt"></i> ERS</span><b id="cr-p-ers">65%</b></div>
+              <small id="cr-p-ers-flow" class="sim-ers-flow">+6%/L</small>
+            </div>
+            <div class="sim-bar-track"><div id="cr-p-ers-bar" class="sim-bar-fill sim-ers-fill" style="width:65%"></div></div>
+          </div>
+
+          <div class="sim-card sim-modes-card">
+            <div class="sim-mode-block">
+              <div class="sim-mode-head"><span>PACE MODE</span><small>Tab: Switch Car</small></div>
+              <div class="sim-seg-row">
+                <button type="button" class="sim-tac-btn" data-cr-pace="conserve">🔋 Save</button>
+                <button type="button" class="sim-tac-btn active" data-cr-pace="balanced">⚖️ Bal</button>
+                <button type="button" class="sim-tac-btn" data-cr-pace="push">🔥 Push</button>
+              </div>
+            </div>
+            <div class="sim-mode-block">
+              <div class="sim-mode-head"><span>ERS DEPLOY</span><small id="cr-ers-bonus-lbl">Lab Bonus</small></div>
+              <div class="sim-seg-row">
+                <button type="button" class="sim-tac-btn" data-cr-ers="harvest">🔌 Harv</button>
+                <button type="button" class="sim-tac-btn active" data-cr-ers="auto">⚖️ Auto</button>
+                <button type="button" class="sim-tac-btn" data-cr-ers="overtake">⚡ Ovt</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-card sim-pit-card">
+            <div class="sim-mode-head"><span><i class="fas fa-wrench"></i> PIT CALL</span><small id="cr-pit-loss-tag">Loss 20s</small></div>
+            <div class="sim-comp-row">
+              <button type="button" class="sim-comp-btn" data-cr-comp="soft"><span class="sim-tbadge t-soft">S</span></button>
+              <button type="button" class="sim-comp-btn active" data-cr-comp="medium"><span class="sim-tbadge t-medium">M</span></button>
+              <button type="button" class="sim-comp-btn" data-cr-comp="hard"><span class="sim-tbadge t-hard">H</span></button>
+              <button type="button" class="sim-comp-btn" data-cr-comp="inter"><span class="sim-tbadge t-inter">I</span></button>
+              <button type="button" class="sim-comp-btn" data-cr-comp="wet"><span class="sim-tbadge t-wet">W</span></button>
+            </div>
+            <div id="cr-dstack-alert" class="cr-dstack-alert hidden">⚠ DOUBLE STACK RISK (+3.2s)</div>
+            <div id="cr-rejoin-pred" class="sim-rejoin-pred">REJOIN ~P6 · CLEAR AIR</div>
+            <button type="button" id="cr-box-btn" class="btn-ers sim-box-cta"><i class="fas fa-wrench"></i> BOX THIS LAP</button>
+          </div>
+        </aside>
+      </div>
+
+      <div class="sim-radio-bar">
+        <div class="sim-radio-live">
+          <span class="sim-radio-badge"><i class="fas fa-headset"></i> PIT WALL</span>
+          <div id="cr-radio-latest" class="sim-radio-latest">Lights out!</div>
+          <div id="cr-radio-actions" class="cr-radio-actions hidden"></div>
+        </div>
+        <span class="sim-hotkey-hint">Tab: Switch Car #1/#2 · Space: Pause · Q/W/E: Pace · A/S/D: ERS · B: Box</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CONTRACT NEGOTIATION MODAL ==================== -->
+  <div id="car-offer-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog car-modal-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge">CONTRACT NEGOTIATION</span>
+        <button type="button" id="car-offer-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-offer-header" class="car-offer-head"></div>
+      <div class="car-offer-form">
+        <div class="car-wiz-field">
+          <label for="offer-seat">Target Seat</label>
+          <select id="offer-seat">
+            <option value="seat1">Race Seat #1 (Lead Driver)</option>
+            <option value="seat2" selected>Race Seat #2</option>
+            <option value="reserve">Reserve / Academy Driver</option>
+          </select>
+        </div>
+        <div class="car-wiz-field">
+          <label for="offer-salary">Annual Salary ($M / Season)</label>
+          <input type="number" id="offer-salary" step="0.5" min="0.5" max="45">
+        </div>
+        <div class="car-wiz-field">
+          <label for="offer-bonus">Upfront Signing Bonus ($M)</label>
+          <input type="number" id="offer-bonus" step="0.5" min="0" max="25" value="1.0">
+        </div>
+        <div class="car-wiz-field">
+          <label for="offer-years">Contract Length</label>
+          <select id="offer-years">
+            <option value="1">1 Season</option>
+            <option value="2" selected>2 Seasons</option>
+            <option value="3">3 Seasons</option>
+          </select>
+        </div>
+      </div>
+      <div id="car-offer-preview" class="car-offer-preview"></div>
+      <div class="tut-foot">
+        <button type="button" id="car-offer-cancel" class="btn-util">Walk Away</button>
+        <button type="button" id="car-offer-submit" class="btn-racing"><i class="fas fa-pen-nib"></i> Submit Formal Offer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== POST-RACE DEBRIEF MODAL ==================== -->
+  <div id="car-debrief-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog car-modal-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge" id="car-debrief-badge">GRAND PRIX DEBRIEF</span>
+        <button type="button" id="car-debrief-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-debrief-body" class="car-debrief-body"></div>
+      <div class="tut-foot">
+        <span></span>
+        <button type="button" id="car-debrief-ok" class="btn-racing">Return to Team HQ <i class="fas fa-arrow-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SAVE MANAGER & CHECKPOINTS MODAL ==================== -->
+  <div id="car-saves-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog f1-prof-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge"><i class="fas fa-database"></i> CAREER SAVE MANAGER · SQLITE WAL</span>
+        <button type="button" id="car-saves-close" class="tut-close">&times;</button>
+      </div>
+      <div class="car-saves-body">
+        <div class="car-saves-col">
+          <div class="car-subhead"><i class="fas fa-folder-open"></i> SAVE SLOTS (UNLIMITED)</div>
+          <div id="car-slots-list" class="car-slots-list"></div>
+          <div class="car-saves-io">
+            <a href="/api/career/export" class="car-btn-xs car-btn-gold" download="local-f1-career-backup.json"><i class="fas fa-download"></i> Export Active JSON</a>
+            <label class="car-btn-xs" style="cursor:pointer;"><i class="fas fa-upload"></i> Import JSON <input type="file" id="car-import-file" accept=".json,application/json" style="display:none;"></label>
+          </div>
+        </div>
+        <div class="car-saves-col">
+          <div class="car-subhead"><i class="fas fa-history"></i> AUTO-CHECKPOINTS (ROLLBACK)</div>
+          <div id="car-ckpt-list" class="car-slots-list"></div>
+        </div>
+      </div>
+      <div class="tut-foot">
+        <span class="muted small">Stored in <code>data/career_saves.sqlite</code> — isolated from read-only <code>f1.sqlite</code></span>
+        <button type="button" id="car-saves-ok" class="btn-racing">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PERMANENT GRAND PRIX RACE REPORT MODAL ==================== -->
+  <div id="car-report-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog f1-prof-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge" id="car-report-badge">GRAND PRIX RACE REPORT</span>
+        <button type="button" id="car-report-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-report-body" class="car-report-body"></div>
+      <div class="tut-foot">
+        <span></span>
+        <button type="button" id="car-report-ok" class="btn-racing">Close Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CONTRACT RENEWAL MODAL ==================== -->
+  <div id="car-renew-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog car-modal-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge">CONTRACT RENEWAL</span>
+        <button type="button" id="car-renew-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-renew-header" class="car-offer-head"></div>
+      <div class="car-offer-form">
+        <div class="car-wiz-field">
+          <label for="renew-salary">New Annual Salary ($M)</label>
+          <input type="number" id="renew-salary" step="0.5" min="0.5" max="50">
+        </div>
+        <div class="car-wiz-field">
+          <label for="renew-years">Extension Length</label>
+          <select id="renew-years">
+            <option value="1">+1 Season</option>
+            <option value="2" selected>+2 Seasons</option>
+            <option value="3">+3 Seasons</option>
+          </select>
+        </div>
+      </div>
+      <div class="tut-foot">
+        <button type="button" id="car-renew-cancel" class="btn-util">Cancel</button>
+        <button type="button" id="car-renew-submit" class="btn-racing"><i class="fas fa-pen-nib"></i> Sign Renewal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FIA RED FLAG FREE TYRE SWAP MODAL ==================== -->
+  <div id="car-redflag-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog car-modal-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge" style="background:#dc2626;color:#fff;">🚩 FIA RED FLAG — SESSION SUSPENDED</span>
+      </div>
+      <p id="car-rf-desc" class="muted" style="margin:0 0 10px;"></p>
+      <div class="car-offer-form">
+        <div class="car-wiz-field">
+          <label for="rf-tyre-0" id="rf-lbl-0">Car #1 Free Tyre Change</label>
+          <select id="rf-tyre-0">
+            <option value="soft">Soft (S)</option>
+            <option value="medium" selected>Medium (M)</option>
+            <option value="hard">Hard (H)</option>
+            <option value="inter">Inter (I)</option>
+            <option value="wet">Wet (W)</option>
+          </select>
+        </div>
+        <div class="car-wiz-field">
+          <label for="rf-tyre-1" id="rf-lbl-1">Car #2 Free Tyre Change</label>
+          <select id="rf-tyre-1">
+            <option value="soft">Soft (S)</option>
+            <option value="medium" selected>Medium (M)</option>
+            <option value="hard">Hard (H)</option>
+            <option value="inter">Inter (I)</option>
+            <option value="wet">Wet (W)</option>
+          </select>
+        </div>
+      </div>
+      <div class="tut-foot">
+        <span class="muted small">Authentic FIA rule: Free fresh tyres + repairs before Standing Restart!</span>
+        <button type="button" id="car-rf-restart-btn" class="btn-launch-battle"><i class="fas fa-flag-checkered"></i> Standing Restart!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HIGH-STAKES 3D BRAKING-ZONE DUEL MODAL ==================== -->
+  <div id="car-duel-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog f1-prof-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge" style="background:#e10600;color:#fff;">🔥 FINAL-LAPS 3D BRAKING-ZONE DUEL</span>
+        <span id="car-duel-timer" class="car-fp-conf">5s</span>
+      </div>
+      <div id="car-duel-matchup" class="car-duel-matchup"></div>
+      <canvas id="car-duel-3d-canvas" class="car-duel-3d-canvas"></canvas>
+      <div id="car-duel-verdict" class="car-duel-verdict hidden"></div>
+      <div id="car-duel-choices" class="car-duel-choices">
+        <button type="button" class="car-dil-btn" data-duel-call="brake"><i class="fas fa-fire"></i> Late Brake Dive (Clutch)</button>
+        <button type="button" class="car-dil-btn" data-duel-call="switchback"><i class="fas fa-random"></i> Apex Switchback (Racecraft)</button>
+        <button type="button" class="car-dil-btn" data-duel-call="ers"><i class="fas fa-bolt"></i> Full ERS Dump (Power)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== OFF-SEASON SILLY SEASON RECAP MODAL ==================== -->
+  <div id="car-silly-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog car-modal-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge" id="car-silly-badge">OFF-SEASON SILLY SEASON RECAP</span>
+        <button type="button" id="car-silly-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-silly-body" class="car-debrief-body"></div>
+      <div class="tut-foot">
+        <span></span>
+        <button type="button" id="car-silly-ok" class="btn-racing">Start New Season <i class="fas fa-flag-checkered"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DRIVER HEAD-TO-HEAD COMPARE MODAL ==================== -->
+  <div id="car-compare-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog f1-prof-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge"><i class="fas fa-balance-scale"></i> DRIVER HEAD-TO-HEAD TELEMETRY COMPARISON</span>
+        <button type="button" id="car-compare-close" class="tut-close">&times;</button>
+      </div>
+      <div id="car-compare-body" class="car-report-body"></div>
+      <div class="tut-foot">
+        <span></span>
+        <button type="button" id="car-compare-ok" class="btn-racing">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LIVE LAP-BY-LAP POSITION CHART MODAL ==================== -->
+  <div id="car-lapchart-modal" class="tut-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="tut-dialog f1-prof-dialog">
+      <div class="tut-head">
+        <span class="tut-step-badge"><i class="fas fa-chart-line"></i> LIVE LAP-BY-LAP POSITION CHART</span>
+        <button type="button" id="car-lapchart-close" class="tut-close">&times;</button>
+      </div>
+      <canvas id="car-live-lapchart-canvas" class="car-lapchart-canvas"></canvas>
+      <div id="car-lapchart-legend" class="car-lapchart-legend"></div>
+      <div class="tut-foot">
+        <span class="muted small">Tracks Car #1, Car #2 &amp; top podium contenders every lap</span>
+        <button type="button" id="car-lapchart-ok" class="btn-racing">Back to Pit Wall</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.F1_CAREER_BOOT = {{ career_boot | tojson }};
+</script>
+<script src="/static/vendor/three.min.js"></script>
+<script src="/static/js/f1_car_3d.js"></script>
+<script src="/static/js/f1_sfx.js"></script>
+<script src="/static/js/f1_race_engine.js"></script>
+<script src="/static/js/f1_profile.js"></script>
+<script src="/static/js/f1_track_renderer.js"></script>
+<script src="/static/js/career.js"></script>
+{% endblock %}

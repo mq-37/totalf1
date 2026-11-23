@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Car Liveries — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Car Liveries</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → Car Liveries</p>
+  </div>
+
+  <p class="muted">
+    3D studio F1 car renders, one 5-colour livery per team — <strong>main</strong>,
+    <strong>secondary</strong>, <strong>accent</strong>, <strong>pop</strong>, and <strong>detail</strong>.
+    Palettes live in <code>data/team_car_palettes.json</code>; regenerate PNGs with
+    <code>python3 scripts/render_3d_cars.py</code> or inspect any team interactively in the
+    <a href="/dev/car-3d"><strong>3D F1 Car Studio →</strong></a>.
+  </p>
+
+  <div class="livery-grid">
+    {% for t in teams %}
+    <div class="card livery-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+        <h2 class="livery-name" style="margin:0;">{{ t.name }}</h2>
+        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+          <span class="badge">{{ t.era }}</span>
+          <span class="badge muted">{{ t.style | replace('-', ' ') | title }}</span>
+          <a href="/dev/car-3d?team={{ t.name | urlencode }}&era={{ t.era }}" class="badge">3D View</a>
+        </div>
+      </div>
+      <img class="livery-car" src="/static/cars/png/{{ t.slug }}.png" alt="{{ t.name }} 3D livery car" loading="lazy"/>
+      <div class="livery-swatches">
+        {% for slot, hex in t.palette.items() %}
+        <span class="livery-swatch" title="{{ slot }} {{ hex }}">
+          <span class="livery-chip" style="background: {{ hex }}"></span>
+          <span class="livery-hex">{{ hex }}</span>
+          <span class="livery-slot">{{ slot }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <style>
+    .livery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px; }
+    .livery-card { padding: 16px; }
+    .livery-name { margin: 0 0 8px; font-size: 1.1rem; }
+    .livery-car { width: 100%; height: auto; display: block; }
+    .livery-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .livery-swatch { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; }
+    .livery-chip { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.25); display: inline-block; }
+    .livery-hex { font-family: monospace; }
+    .livery-slot { opacity: 0.65; }
+  </style>
+{% endblock %}

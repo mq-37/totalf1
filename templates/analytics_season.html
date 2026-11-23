@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Analytics · Season {{ year }} — Local F1{% endblock %}
+{% block content %}
+  <div class="page-header">
+    <h1>Season Analytics {{ year }}</h1>
+    <p class="breadcrumb"><a href="/">Home</a> → <a href="/analytics">Analytics</a> → Per Season</p>
+  </div>
+
+  <nav class="sub-nav" aria-label="Analytics sections">
+    <a href="/analytics/overall" class="nav-link">Overall</a>
+    <a href="/analytics/season" class="nav-link active">Per Season</a>
+    <a href="/analytics/team" class="nav-link">Per Team</a>
+    <a href="/analytics/tracks" class="nav-link">Per Track</a>
+  </nav>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <form method="get" action="/analytics/season" class="form-inline">
+      <label for="year" class="label-inline">Season</label>
+      <select id="year" name="year" onchange="this.form.submit()">
+        {% for y in seasons %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="analytics-grid">
+    <section class="card">
+      <h2>Driver Wins</h2>
+      <table>
+        <thead><tr><th>Driver</th><th>Wins</th></tr></thead>
+        <tbody>
+          {% for r in wins %}
+          <tr><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td>{{ r["wins"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Team Wins</h2>
+      <table>
+        <thead><tr><th>Team</th><th>Wins</th></tr></thead>
+        <tbody>
+          {% for r in team_wins %}
+          <tr><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["wins"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Fastest Laps</h2>
+      <table>
+        <thead><tr><th>Driver</th><th>Fastest Laps</th></tr></thead>
+        <tbody>
+          {% for r in fastest %}
+          <tr><td><a href="/driver/{{ r['driver_name'].replace(' ', '-') }}">{{ r["driver_name"] }}</a></td><td>{{ r["fastest_laps"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Team Points</h2>
+      <table>
+        <thead><tr><th>Team</th><th>Points</th></tr></thead>
+        <tbody>
+          {% for r in team_points %}
+          <tr><td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td><td>{{ r["total_points"] }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <div class="card table-card" style="margin-top: 24px;">
+    <h2>Driver Standings</h2>
+    <table>
+      <thead><tr><th>Pos</th><th>Driver</th><th>Team</th><th>Nat</th><th>Pts</th></tr></thead>
+      <tbody>
+        {% for r in driver_standings %}
+        <tr>
+          <td>{{ r["position"] }}</td>
+          <td><a href="/driver/{{ r['driver'].replace(' ', '-') }}">{{ r["driver"] }}</a></td>
+          <td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td>
+          <td>{{ r["nationality"] }}</td>
+          <td>{{ r["points"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card table-card" style="margin-top: 24px;">
+    <h2>Constructor Standings</h2>
+    <table>
+      <thead><tr><th>Pos</th><th>Team</th><th>Pts</th></tr></thead>
+      <tbody>
+        {% for r in team_standings %}
+        <tr>
+          <td>{{ r["position"] }}</td>
+          <td><a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a></td>
+          <td>{{ r["points"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card table-card" style="margin-top: 24px;">
+    <h2>Races {{ year }}</h2>
+    <div data-tabs>
+      <div class="tabs-nav" data-tab-nav role="tablist">
+        {% for t in race_tabs %}
+        <button type="button" data-tab role="tab">{{ t['round'] }} · {{ t['grand_prix'] }}</button>
+        {% endfor %}
+      </div>
+      {% for t in race_tabs %}
+      <div data-tab-panel class="tab-panel" role="tabpanel">
+        <h3>{{ t['grand_prix'] }} — {{ t['date'] }}</h3>
+        <p class="race-winner"><strong>Winner</strong>: <a href="/driver/{{ t['winner'].replace(' ', '-') }}">{{ t['winner'] }}</a> (<a href="/team/{{ t['team'].replace(' ', '-') }}">{{ t['team'] }}</a>) · <strong>Laps</strong> {{ t['laps'] }} · <strong>Time</strong> {{ t['time'] }}</p>
+        <table>
+          <thead><tr><th>Pos</th><th>Driver</th><th>Team</th></tr></thead>
+          <tbody>
+            {% for rr in t['results'] %}
+            <tr>
+              <td>{{ rr['position_text'] }}</td>
+              <td><a href="/driver/{{ rr['driver'].replace(' ', '-') }}">{{ rr['driver'] }}</a></td>
+              <td><a href="/team/{{ rr['team'].replace(' ', '-') }}">{{ rr['team'] }}</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}
