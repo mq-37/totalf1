@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 from .. import server as srv
-from .. import f1db
+from .. import f1db, fia_docs
 
 router = APIRouter()
 
@@ -16,12 +16,14 @@ router = APIRouter()
 async def f1db_browser_page(request: Request):
     status = f1db.get_f1db_status(srv.DATA_DB)
     tables = f1db.list_tables(srv.DATA_DB)
+    fia_status = fia_docs.get_fia_docs_status(srv.DATA_DB)
     return srv.templates.TemplateResponse(
         "f1db.html",
         {
             "request": request,
             "status": status,
             "tables": tables,
+            "fia_status": fia_status,
             "current_season": srv.CURRENT_SEASON,
         },
     )
@@ -97,11 +99,73 @@ def api_f1db_circuit(circuit_id: str):
 
 @router.post("/api/f1db/sync")
 def api_f1db_sync(force: bool = Query(False)):
-    from ..f1db_sync import sync_f1db
+    from ..f1db_sync import sync_f1db, sync_latest_season_into_f1_sqlite
     from .. import driver_dna
 
     result = sync_f1db(srv.BASE_DIR / "data", force=force)
+    archive_sync = sync_latest_season_into_f1_sqlite(
+        srv.DATA_DB, srv.BASE_DIR / "data" / "f1db.sqlite", year=srv.CURRENT_SEASON
+    )
     f1db.invalidate_caches()
     with driver_dna._DNA_LOCK:
         driver_dna._DNA_CACHE = None
+    result["archiveSync"] = archive_sync
     return result
+
+
+# ---------------------- TracingInsights FIA Documents & Penalties ----------------------
+
+@router.get("/api/fia-docs/status")
+def api_fia_docs_status():
+    return fia_docs.get_fia_docs_status(srv.DATA_DB)
+
+
+@router.get("/api/fia-docs/events")
+def api_fia_docs_events(year: Optional[int] = Query(None)):
+    events = fia_docs.list_events(year=year, path=srv.DATA_DB)
+    return {"count": len(events), "events": events}
+
+
+@router.get("/api/fia-docs/search")
+def api_fia_docs_search(
+    year: Optional[int] = Query(None),
+    event: str = Query(""),
+    doc_type: str = Query(""),
+    driver: str = Query(""),
+    team: str = Query(""),
+    q: str = Query(""),
+    only_hydrated: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return fia_docs.search_fia_docs(
+        path=srv.DATA_DB,
+        year=year,
+        event_slug=event,
+        doc_type=doc_type,
+        driver=driver,
+        team=team,
+        q=q,
+        only_hydrated=only_hydrated,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/api/fia-docs/doc/{year}/{event_slug}/{slug}")
+def api_fia_docs_detail(year: int, event_slug: str, slug: str, hydrate: bool = Query(True)):
+    res = fia_docs.get_fia_doc_detail(year, event_slug, slug, path=srv.DATA_DB, hydrate=hydrate)
+    if res is None:
+        raise HTTPException(status_code=404, detail="FIA document not found")
+    return res
+
+
+@router.get("/api/fia-docs/precedents")
+def api_fia_docs_precedents():
+    return fia_docs.get_fia_precedents(srv.DATA_DB)
+
+
+@router.post("/api/fia-docs/sync")
+def api_fia_docs_sync(force: bool = Query(False), max_sidecars: int = Query(200, ge=10, le=1000)):
+    from ..fia_docs_sync import sync_fia_docs
+    return sync_fia_docs(srv.BASE_DIR / "data", force=force, max_sidecars=max_sidecars)

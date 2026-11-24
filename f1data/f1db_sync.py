@@ -307,3 +307,264 @@ def sync_f1db(
         "totalRows": sum(row_counts.values()),
         "rebuilt": needs_rebuild,
     }
+
+
+def sync_latest_season_into_f1_sqlite(
+    f1_sqlite_path: str | Path,
+    f1db_sqlite_path: str | Path,
+    year: int = 2026,
+) -> dict[str, Any]:
+    """
+    Backfill any completed rounds & updated standings from `f1db.sqlite` into TRAF1's
+    primary `data/f1.sqlite` (e.g. 2026 Round 21 Las Vegas GP) while preserving existing rounds.
+    """
+    f1_p = Path(f1_sqlite_path)
+    src_p = Path(f1db_sqlite_path)
+    if not f1_p.exists() or not src_p.exists():
+        return {"ok": False, "reason": "missing db"}
+
+    src = sqlite3.connect(f"file:{src_p}?mode=ro", uri=True)
+    src.row_factory = sqlite3.Row
+    dst = sqlite3.connect(str(f1_p), timeout=15.0)
+    dst.row_factory = sqlite3.Row
+
+    try:
+        existing_rounds = {
+            int(r[0]) for r in dst.execute("SELECT round FROM races WHERE year = ?", (year,)).fetchall()
+        }
+        completed_rounds = [
+            int(r[0])
+            for r in src.execute(
+                "SELECT DISTINCT round FROM races_race_results WHERE year = ? ORDER BY round", (year,)
+            ).fetchall()
+        ]
+        new_rounds = [rnd for rnd in completed_rounds if rnd not in existing_rounds]
+
+        # Build canonical driver display name map ("First Last ABR") from existing 2026 f1.sqlite rows
+        existing_drv_by_abbr: dict[str, tuple[str, str, str, str]] = {}
+        for r in dst.execute(
+            "SELECT driver, nationality, team, driver_id, driver_url FROM drivers_standings WHERE year = ?",
+            (year,),
+        ).fetchall():
+            parts = str(r["driver"]).split()
+            if parts and len(parts[-1]) == 3 and parts[-1].isupper():
+                existing_drv_by_abbr[parts[-1]] = (
+                    r["driver"],
+                    r["nationality"],
+                    r["driver_id"] or "",
+                    r["driver_url"] or "",
+                )
+
+        def fmt_driver(name: str, abbr: str | None) -> str:
+            a = (abbr or "").strip().upper()
+            if a in existing_drv_by_abbr:
+                return existing_drv_by_abbr[a][0]
+            return f"{name} {a}".strip() if a else name
+
+        # Map F1DB constructor names to f1.sqlite short team names
+        team_alias = {
+            "Red Bull": "Red Bull Racing",
+            "Racing Bulls": "Racing Bulls",
+            "Haas": "Haas F1 Team",
+            "Aston Martin": "Aston Martin",
+            "Alpine": "Alpine",
+            "Williams": "Williams",
+            "Mercedes": "Mercedes",
+            "Ferrari": "Ferrari",
+            "McLaren": "McLaren",
+            "Audi": "Audi",
+            "Cadillac": "Cadillac",
+        }
+
+        def fmt_team(cname: str | None) -> str:
+            c = str(cname or "").strip()
+            return team_alias.get(c, c)
+
+        races_added = 0
+        results_added = 0
+
+        for rnd in new_rounds:
+            race = src.execute(
+                """
+                SELECT r.id, r.year, r.round, r.date, r.laps, gp.name AS gpName, gp.id AS gpId
+                FROM races r
+                LEFT JOIN grands_prix gp ON gp.id = r.grandPrixId
+                WHERE r.year = ? AND r.round = ?
+                """,
+                (year, rnd),
+            ).fetchone()
+            if not race:
+                continue
+            rid = race["id"]
+            winner = src.execute(
+                """
+                SELECT rr.laps, rr.time, d.name AS drvName, d.abbreviation AS drvAbbr, c.name AS conName
+                FROM races_race_results rr
+                LEFT JOIN drivers d ON d.id = rr.driverId
+                LEFT JOIN constructors c ON c.id = rr.constructorId
+                WHERE rr.raceId = ? AND rr.positionNumber = 1
+                LIMIT 1
+                """,
+                (rid,),
+            ).fetchone()
+            if not winner:
+                continue
+
+            gp_name = str(race["gpName"] or f"Round {rnd}")
+            gp_slug = str(race["gpId"] or gp_name.lower().replace(" ", "-"))
+            win_drv = fmt_driver(winner["drvName"], winner["drvAbbr"])
+            win_team = fmt_team(winner["conName"])
+            race_url = f"https://tracinginsights.com/f1db/races?year={year}&round={rnd}"
+
+            dst.execute("INSERT OR IGNORE INTO seasons (year) VALUES (?)", (year,))
+            dst.execute("INSERT OR IGNORE INTO grands_prix (gp_slug, name) VALUES (?, ?)", (gp_slug, gp_name))
+            dst.execute(
+                """
+                INSERT OR REPLACE INTO races (year, round, grand_prix, date, winner, team, laps, time, race_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (year, rnd, gp_name, race["date"] or "", win_drv, win_team, winner["laps"] or race["laps"], winner["time"], race_url),
+            )
+            dst.execute(
+                """
+                INSERT OR REPLACE INTO races_normalized (year, round, race_id, gp_slug, date, winner_name, team_name, laps, time, race_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (year, rnd, int(rid), gp_slug, race["date"] or "", win_drv, win_team, winner["laps"] or race["laps"], winner["time"], race_url),
+            )
+            races_added += 1
+
+            # Race results
+            for rr in src.execute(
+                """
+                SELECT rr.positionDisplayOrder, rr.positionNumber, rr.positionText,
+                       d.name AS drvName, d.abbreviation AS drvAbbr, c.name AS conName
+                FROM races_race_results rr
+                LEFT JOIN drivers d ON d.id = rr.driverId
+                LEFT JOIN constructors c ON c.id = rr.constructorId
+                WHERE rr.raceId = ?
+                ORDER BY rr.positionDisplayOrder
+                """,
+                (rid,),
+            ).fetchall():
+                d_str = fmt_driver(rr["drvName"] or "", rr["drvAbbr"])
+                t_str = fmt_team(rr["conName"])
+                pos_txt = str(rr["positionText"] or ("NC" if rr["positionNumber"] is None else rr["positionNumber"]))
+                pos_ord = int(rr["positionNumber"]) if rr["positionNumber"] is not None else 0
+                dst.execute(
+                    """
+                    INSERT OR REPLACE INTO race_results (year, round, driver, team, position_text, position_order)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (year, rnd, d_str, t_str, pos_txt, pos_ord),
+                )
+                results_added += 1
+
+            # Fastest lap
+            fl = src.execute(
+                """
+                SELECT fl.time, d.name AS drvName, d.abbreviation AS drvAbbr
+                FROM races_fastest_laps fl
+                LEFT JOIN drivers d ON d.id = fl.driverId
+                WHERE fl.raceId = ? AND fl.positionNumber = 1
+                LIMIT 1
+                """,
+                (rid,),
+            ).fetchone()
+            if fl and fl["time"]:
+                fl_drv = fmt_driver(fl["drvName"] or "", fl["drvAbbr"])
+                dst.execute(
+                    """
+                    INSERT OR REPLACE INTO fastest_laps (year, round, grand_prix, winner, time, race_url)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (year, rnd, gp_name, fl_drv, fl["time"], race_url),
+                )
+                dst.execute(
+                    """
+                    INSERT OR REPLACE INTO fastest_laps_normalized (year, round, race_id, gp_slug, winner_name, time, race_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (year, rnd, int(rid), gp_slug, fl_drv, fl["time"], race_url),
+                )
+
+        # Refresh season driver & constructor standings when new rounds were added
+        standings_updated = False
+        if new_rounds:
+            latest_rnd = max(completed_rounds)
+            # Drivers standings from F1DB seasons_driver_standings
+            ds_rows = src.execute(
+                """
+                SELECT sds.positionDisplayOrder, sds.positionNumber, sds.points,
+                       d.id AS f1dbId, d.name AS drvName, d.abbreviation AS drvAbbr,
+                       co.iocCode AS natIoc,
+                       (SELECT c.name FROM races_race_results rr2
+                        JOIN constructors c ON c.id = rr2.constructorId
+                        WHERE rr2.year = sds.year AND rr2.driverId = sds.driverId
+                        ORDER BY rr2.round DESC LIMIT 1) AS latestTeam
+                FROM seasons_driver_standings sds
+                JOIN drivers d ON d.id = sds.driverId
+                LEFT JOIN countries co ON co.id = d.nationalityCountryId
+                WHERE sds.year = ?
+                ORDER BY sds.positionDisplayOrder
+                """,
+                (year,),
+            ).fetchall()
+            if ds_rows:
+                dst.execute("DELETE FROM drivers_standings WHERE year = ?", (year,))
+                for idx, r in enumerate(ds_rows, 1):
+                    abbr = (r["drvAbbr"] or "").strip().upper()
+                    prev = existing_drv_by_abbr.get(abbr)
+                    d_str = prev[0] if prev else fmt_driver(r["drvName"], abbr)
+                    nat = (prev[1] if prev else None) or (r["natIoc"] or "FIA")
+                    did = (prev[2] if prev and prev[2] else None) or r["f1dbId"]
+                    durl = (prev[3] if prev and prev[3] else None) or f"https://tracinginsights.com/f1db/drivers?search={r['f1dbId']}"
+                    t_str = fmt_team(r["latestTeam"])
+                    pos_i = int(r["positionNumber"] or idx)
+                    dst.execute(
+                        """
+                        INSERT OR REPLACE INTO drivers_standings
+                        (year, position, driver, nationality, team, points, driver_id, driver_url)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (year, pos_i, d_str, nat, t_str, float(r["points"] or 0.0), did, durl),
+                    )
+
+            ts_rows = src.execute(
+                """
+                SELECT scs.positionDisplayOrder, scs.positionNumber, scs.points,
+                       c.id AS conId, c.name AS conName
+                FROM seasons_constructor_standings scs
+                JOIN constructors c ON c.id = scs.constructorId
+                WHERE scs.year = ?
+                ORDER BY scs.positionDisplayOrder
+                """,
+                (year,),
+            ).fetchall()
+            if ts_rows:
+                dst.execute("DELETE FROM team_standings WHERE year = ?", (year,))
+                for idx, r in enumerate(ts_rows, 1):
+                    t_str = fmt_team(r["conName"])
+                    pos_i = int(r["positionNumber"] or idx)
+                    dst.execute(
+                        """
+                        INSERT OR REPLACE INTO team_standings
+                        (year, position, team, points, team_id, team_url)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (year, pos_i, t_str, float(r["points"] or 0.0), t_str, f"https://tracinginsights.com/f1db/constructors?search={r['conId']}"),
+                    )
+            standings_updated = True
+
+        dst.commit()
+        return {
+            "ok": True,
+            "year": year,
+            "newRounds": new_rounds,
+            "racesAdded": races_added,
+            "resultsAdded": results_added,
+            "standingsUpdated": standings_updated,
+        }
+    finally:
+        src.close()
+        dst.close()

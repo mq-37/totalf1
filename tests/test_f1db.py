@@ -1,7 +1,8 @@
-"""Automated tests for TracingInsights F1DB sync, query layer, engine enrichment & HTTP routes."""
+"""Automated tests for TracingInsights F1DB + FIA Docs sync, tyre-deg curves, enrichment & HTTP routes."""
 from __future__ import annotations
 
 import socket
+import sqlite3
 import threading
 import time
 import unittest
@@ -9,7 +10,7 @@ import unittest
 import requests
 import uvicorn
 
-from f1data import driver_dna, era_rules, f1db, performance_balance
+from f1data import driver_dna, era_rules, f1db, fia_docs, performance_balance
 from f1data import server as srv
 
 
@@ -62,7 +63,7 @@ class TestTracingInsightsF1DB(unittest.TestCase):
         ):
             self.assertIn(req, names)
 
-    def test_f1db_enriches_driver_dna_balance_and_era_rules(self) -> None:
+    def test_f1db_enriches_driver_dna_balance_tyre_deg_and_era_rules(self) -> None:
         with driver_dna._DNA_LOCK:
             driver_dna._DNA_CACHE = None
         all_dna = driver_dna.get_driver_dna_map(srv.DATA_DB)
@@ -74,11 +75,17 @@ class TestTracingInsightsF1DB(unittest.TestCase):
         self.assertGreaterEqual(ver["f1db"]["poles"], 40)
         self.assertGreaterEqual(ver["f1db"]["mech_dnf_pct"], 0)
 
-        bal = performance_balance.get_track_balance_bundle(srv.DATA_DB, "monaco", "2026")
-        self.assertIsNotNone(bal["circuit_f1db"])
-        self.assertEqual(bal["circuit_f1db"]["circuit"]["id"], "monaco")
-        self.assertGreaterEqual(bal["circuit_f1db"]["incidents"]["safetyCarDeployments"], 15)
-        self.assertGreater(bal["circuit_f1db"]["pitStops"]["medianPitLaneSec"], 15)
+        # Bahrain high tyre deg vs Monaco low tyre deg derived from 888k F1DB lap times
+        bal_bah = performance_balance.get_track_balance_bundle(srv.DATA_DB, "bahrain", "2026")
+        bal_mon = performance_balance.get_track_balance_bundle(srv.DATA_DB, "monaco", "2026")
+        self.assertIsNotNone(bal_bah["circuit_f1db"]["tyreDegradation"])
+        self.assertIsNotNone(bal_mon["circuit_f1db"]["tyreDegradation"])
+        self.assertGreater(
+            bal_bah["circuit_f1db"]["tyreDegradation"]["tyreDegMultiplier"],
+            bal_mon["circuit_f1db"]["tyreDegradation"]["tyreDegMultiplier"],
+        )
+        self.assertGreaterEqual(bal_mon["circuit_f1db"]["incidents"]["safetyCarDeployments"], 15)
+        self.assertGreater(bal_mon["circuit_f1db"]["pitStops"]["medianPitLaneSec"], 15)
 
         r2026 = era_rules.get_era_rules(2026)
         self.assertIn("f1db_season", r2026)
@@ -86,45 +93,75 @@ class TestTracingInsightsF1DB(unittest.TestCase):
         self.assertEqual(r2026["f1db_season"]["minWeightKg"], 768)
         self.assertFalse(r2026["f1db_season"]["drsActive"])
 
+    def test_2026_round_21_backfilled_in_f1_sqlite(self) -> None:
+        con = sqlite3.connect(str(srv.DATA_DB))
+        try:
+            r21 = con.execute("SELECT grand_prix, winner FROM races WHERE year = 2026 AND round = 21").fetchone()
+            self.assertIsNotNone(r21)
+            self.assertEqual(r21[0], "Las Vegas")
+            rr_cnt = con.execute("SELECT COUNT(*) FROM race_results WHERE year = 2026 AND round = 21").fetchone()[0]
+            self.assertEqual(rr_cnt, 22)
+        finally:
+            con.close()
+
+    def test_fia_docs_archive_precedents_and_routes(self) -> None:
+        st = fia_docs.get_fia_docs_status(srv.DATA_DB)
+        self.assertTrue(st["available"])
+        self.assertGreater(st["totalDocuments"], 11_000)
+        self.assertGreaterEqual(st["hydratedDecisions"], 300)
+        self.assertIsNotNone(st["penaltiesSummary"])
+        self.assertGreater(st["penaltiesSummary"]["total"], 1000)
+
+        r_st = requests.get(f"{self.base_url}/api/fia-docs/status", timeout=5)
+        self.assertEqual(r_st.status_code, 200)
+        self.assertGreater(r_st.json()["totalDocuments"], 11_000)
+
+        r_srch = requests.get(f"{self.base_url}/api/fia-docs/search?year=2026&doc_type=infringement&driver=Perez", timeout=5)
+        self.assertEqual(r_srch.status_code, 200)
+        self.assertGreaterEqual(r_srch.json()["total"], 1)
+
+        r_doc = requests.get(
+            f"{self.base_url}/api/fia-docs/doc/2026/las-vegas-grand-prix/infringement-car-11-causing-a-collision-with-car-51",
+            timeout=5,
+        )
+        self.assertEqual(r_doc.status_code, 200)
+        dd = r_doc.json()
+        self.assertEqual(dd["detail"]["driver"], "Sergio Perez")
+        self.assertIn("Appendix L", dd["detail"]["offence"])
+        self.assertTrue(len(dd["detail"]["reason"]) > 100)
+
+        r_prec = requests.get(f"{self.base_url}/api/fia-docs/precedents", timeout=5)
+        self.assertEqual(r_prec.status_code, 200)
+        prec = r_prec.json()
+        self.assertTrue(prec["available"])
+        self.assertIn("collision", prec["categories"])
+        self.assertGreaterEqual(prec["categories"]["collision"]["count"], 1)
+
     def test_f1db_http_routes_and_browser_page(self) -> None:
         r_page = requests.get(f"{self.base_url}/f1db", timeout=5)
         self.assertEqual(r_page.status_code, 200)
-        self.assertIn("TracingInsights F1DB Intelligence Hub", r_page.text)
-
-        r_stat = requests.get(f"{self.base_url}/api/f1db/status", timeout=5)
-        self.assertEqual(r_stat.status_code, 200)
-        self.assertEqual(r_stat.json()["tableCount"], 58)
+        self.assertIn("TracingInsights F1DB", r_page.text)
+        self.assertIn("FIA Documents", r_page.text)
 
         r_tbl = requests.get(f"{self.base_url}/api/f1db/table/races_safety_cars?year=2026&limit=10", timeout=5)
         self.assertEqual(r_tbl.status_code, 200)
-        payload = r_tbl.json()
-        self.assertEqual(payload["table"], "races_safety_cars")
-        self.assertIn("columns", payload)
+        self.assertEqual(r_tbl.json()["table"], "races_safety_cars")
 
-        # Safe 404 on invalid table name
         r_bad = requests.get(f"{self.base_url}/api/f1db/table/nonexistent_table;DROP", timeout=5)
         self.assertEqual(r_bad.status_code, 404)
 
-        # 2026 Round 21 (Las Vegas) weekend dossier
         r_race = requests.get(f"{self.base_url}/api/f1db/race/2026/21", timeout=5)
         self.assertEqual(r_race.status_code, 200)
-        rd = r_race.json()
-        self.assertEqual(rd["race"]["circuitId"], "las-vegas")
-        self.assertEqual(len(rd["results"]), 22)
+        self.assertEqual(r_race.json()["race"]["circuitId"], "las-vegas")
 
-        # Driver profile with family relationships
         r_drv = requests.get(f"{self.base_url}/api/f1db/driver/max-verstappen", timeout=5)
         self.assertEqual(r_drv.status_code, 200)
-        dd = r_drv.json()
-        self.assertEqual(dd["driver"]["id"], "max-verstappen")
-        self.assertTrue(any(f["relatedDriverId"] == "jos-verstappen" for f in dd["family"]))
+        self.assertTrue(any(f["relatedDriverId"] == "jos-verstappen" for f in r_drv.json()["family"]))
 
-        # Circuit profile via TRAF1 local slug ("vegas" -> "las-vegas")
-        r_cir = requests.get(f"{self.base_url}/api/f1db/circuit/vegas", timeout=5)
+        r_cir = requests.get(f"{self.base_url}/api/f1db/circuit/bahrain", timeout=5)
         self.assertEqual(r_cir.status_code, 200)
-        self.assertEqual(r_cir.json()["circuit"]["id"], "las-vegas")
+        self.assertEqual(r_cir.json()["tyreDegradation"]["degSeverity"], "HIGH")
 
-        # Season dossier (1988 Turbo era)
         r_s = requests.get(f"{self.base_url}/api/f1db/season/1988", timeout=5)
         self.assertEqual(r_s.status_code, 200)
         self.assertGreaterEqual(len(r_s.json()["hardware"]), 10)

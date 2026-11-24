@@ -471,6 +471,108 @@ def _build_all_circuit_profiles(f1db_path: Path) -> dict[str, dict[str, Any]]:
             if r["circuitId"] not in fl_by_c:
                 fl_by_c[r["circuitId"]] = dict(r)
 
+        # Real tyre degradation & stint pace curves from 888k lap times (modern 2016+ green-flag stints)
+        deg_by_c: dict[str, dict[str, Any]] = {}
+        pit_laps_by_rd: dict[tuple[int, str], set[int]] = {}
+        for rid, did, lap in con.execute(
+            "SELECT raceId, driverId, lap FROM races_pit_stops WHERE year >= 2016 AND lap IS NOT NULL"
+        ).fetchall():
+            pit_laps_by_rd.setdefault((int(rid), str(did)), set()).add(int(lap))
+
+        # Load recent clean lap times grouped by (circuitId, raceId, driverId)
+        lt_by_crd: dict[tuple[str, int, str], list[tuple[int, int]]] = {}
+        for cid, rid, did, lap, ms in con.execute(
+            """
+            SELECT r.circuitId, lt.raceId, lt.driverId, lt.lap, lt.timeMillis
+            FROM races_lap_times lt
+            JOIN races r ON r.id = lt.raceId
+            WHERE r.year >= 2016 AND lt.lap >= 2 AND lt.timeMillis BETWEEN 50000 AND 180000
+            ORDER BY lt.raceId, lt.driverId, lt.lap
+            """
+        ).fetchall():
+            lt_by_crd.setdefault((str(cid), int(rid), str(did)), []).append((int(lap), int(ms)))
+
+        circuit_slopes: dict[str, list[float]] = {}
+        circuit_stint_lens: dict[str, list[int]] = {}
+        circuit_med_laps: dict[str, list[float]] = {}
+
+        for (cid, rid, did), laps in lt_by_crd.items():
+            if len(laps) < 12:
+                continue
+            times = sorted(ms for _, ms in laps)
+            med_ms = times[len(times) // 2]
+            circuit_med_laps.setdefault(cid, []).append(med_ms / 1000.0)
+            # Threshold to exclude SC/VSC/rain outlier laps (> +6.5% off driver's race median)
+            cap_ms = med_ms * 1.065
+            pit_laps = pit_laps_by_rd.get((rid, did), set())
+
+            # Split into pit-bounded clean stints (drop in-lap & out-lap around pit stops)
+            stint: list[tuple[int, float]] = []
+            stint_idx = 0
+            for lap_no, ms in laps:
+                is_pit_adj = (lap_no in pit_laps) or ((lap_no - 1) in pit_laps)
+                if is_pit_adj or ms > cap_ms:
+                    if len(stint) >= 6:
+                        n = len(stint)
+                        sx = sum(x for x, _ in stint)
+                        sy = sum(y for _, y in stint)
+                        sxx = sum(x * x for x, _ in stint)
+                        sxy = sum(x * y for x, y in stint)
+                        denom = n * sxx - sx * sx
+                        if denom > 0:
+                            raw_slope = (n * sxy - sx * sy) / denom
+                            # Fuel burn improves pace by ~0.058s/lap; true tyre deg = observed slope + 0.058
+                            true_deg = raw_slope + 0.058
+                            if -0.02 <= true_deg <= 0.35:
+                                circuit_slopes.setdefault(cid, []).append(true_deg)
+                                circuit_stint_lens.setdefault(cid, []).append(n + 2)
+                    stint = []
+                    stint_idx = 0
+                    continue
+                stint.append((stint_idx, ms / 1000.0))
+                stint_idx += 1
+            if len(stint) >= 6:
+                n = len(stint)
+                sx = sum(x for x, _ in stint)
+                sy = sum(y for _, y in stint)
+                sxx = sum(x * x for x, _ in stint)
+                sxy = sum(x * y for x, y in stint)
+                denom = n * sxx - sx * sx
+                if denom > 0:
+                    true_deg = ((n * sxy - sx * sy) / denom) + 0.058
+                    if -0.02 <= true_deg <= 0.35:
+                        circuit_slopes.setdefault(cid, []).append(true_deg)
+                        circuit_stint_lens.setdefault(cid, []).append(n + 2)
+
+        all_med_slopes: list[float] = []
+        raw_circuit_deg: dict[str, tuple[float, int, float, int]] = {}
+        for cid, slopes in circuit_slopes.items():
+            if len(slopes) < 8:
+                continue
+            slopes.sort()
+            med_deg = slopes[len(slopes) // 2]
+            slens = sorted(circuit_stint_lens.get(cid) or [18])
+            med_stint = slens[len(slens) // 2]
+            mlaps = sorted(circuit_med_laps.get(cid) or [90.0])
+            med_lap_s = mlaps[len(mlaps) // 2]
+            raw_circuit_deg[cid] = (med_deg, med_stint, med_lap_s, len(slopes))
+            all_med_slopes.append(med_deg)
+
+        baseline_deg = sorted(all_med_slopes)[len(all_med_slopes) // 2] if all_med_slopes else 0.065
+        baseline_deg = max(0.035, baseline_deg)
+
+        for cid, (med_deg, med_stint, med_lap_s, sample_n) in raw_circuit_deg.items():
+            deg_mult = round(max(0.72, min(1.38, med_deg / baseline_deg)), 2)
+            severity = "HIGH" if deg_mult >= 1.15 else ("LOW" if deg_mult <= 0.88 else "MEDIUM")
+            deg_by_c[cid] = {
+                "stintSamples": sample_n,
+                "tyreDegSecPerLap": round(med_deg, 4),
+                "tyreDegMultiplier": deg_mult,
+                "degSeverity": severity,
+                "medianStintLaps": int(med_stint),
+                "modernMedianLapSec": round(med_lap_s, 2),
+            }
+
         out: dict[str, dict[str, Any]] = {}
         for cid, cinfo in circuits.items():
             rc = race_counts.get(cid, {})
@@ -505,6 +607,7 @@ def _build_all_circuit_profiles(f1db_path: Path) -> dict[str, dict[str, Any]]:
                 },
                 "pitStops": pit_by_c.get(cid),
                 "lapRecord": fl_by_c.get(cid),
+                "tyreDegradation": deg_by_c.get(cid),
             }
         return out
     finally:

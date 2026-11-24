@@ -1793,7 +1793,9 @@
   function effectivePitLossForCar(car) {
     const sdRating = Number((((DATA.state || {}).staff || {}).sporting_dir || {}).rating || 74);
     const sdSave = car.isPlayerTeam ? Math.max(0, (sdRating - 70) * 0.025) : 0;
-    const base = cr.circuit.pit_loss_s - ((car.facilities.pit_sim || 1) - 1) * 0.65 - sdSave;
+    const f1dbPitSec = Number(cr.circuitF1db?.pitStops?.medianPitLaneSec || 0);
+    const cirPit = f1dbPitSec >= 14 && f1dbPitSec <= 38 ? f1dbPitSec : cr.circuit.pit_loss_s;
+    const base = cirPit - ((car.facilities.pit_sim || 1) - 1) * 0.65 - sdSave;
     const scFactor = cr.safetyCarLaps > 0 ? 0.58 : (cr.vscLaps > 0 ? 0.68 : 1.0);
     return Math.max(11.5, base * scFactor);
   }
@@ -2468,7 +2470,8 @@
 
       const setupWearMult = car.isPlayerTeam ? Math.max(0.88, 1.0 - ((cr.setupConf || 70) - 70) * 0.0035) : 1.0;
       const tyreCareMult = Math.max(0.72, 1.0 - (car.rd.tyre_care - 70) * 0.008) * setupWearMult * (car.isPlayerTeam && cr.teamOrder === "hold" ? 0.93 : 1.0);
-      const wearMult = (0.65 + cr.circuit.tyre_wear * 0.18) * comp.wear * tyreCareMult * (car.tyreTemp > 114 ? 1.25 : 1.0) * (car.paceMode === "push" ? 1.38 : (car.paceMode === "conserve" ? 0.68 : 1.0));
+      const f1dbDegM = Number(cr.circuitF1db?.tyreDegradation?.tyreDegMultiplier || 1.0);
+      const wearMult = (0.65 + cr.circuit.tyre_wear * 0.18) * (0.55 + 0.45 * f1dbDegM) * comp.wear * tyreCareMult * (car.tyreTemp > 114 ? 1.25 : 1.0) * (car.paceMode === "push" ? 1.38 : (car.paceMode === "conserve" ? 0.68 : 1.0));
       car.tyreLife = Math.max(5, car.tyreLife - wearMult * (simDt / cr.circuit.base_lap_s) * 9.2);
 
       // Live Fuel Delta for player cars
@@ -2591,11 +2594,15 @@
           getEl("cr-radio-latest").textContent = `💨 YELLOW S${sec} — ${car.cleanName} pulls off smoking with mechanical failure!`;
           if (cr.safetyCarLaps === 0 && cr.vscLaps === 0) {
             const roll = Math.random();
-            if (!cr.redFlagUsed && car.lap >= 3 && car.lap <= cr.totalLaps - 3 && roll < 0.08) {
+            const cirRfP = Number(cr.circuitF1db?.incidents?.redFlagProbability ?? 0.08);
+            const cirScM = Number(cr.circuitF1db?.incidents?.safetyCarMultiplier ?? 1.0);
+            const rfThresh = Math.min(0.26, Math.max(0.05, 0.04 + cirRfP * 0.55));
+            const scThresh = Math.min(0.82, rfThresh + 0.36 * cirScM);
+            if (!cr.redFlagUsed && car.lap >= 3 && car.lap <= cr.totalLaps - 3 && roll < rfThresh) {
               cr.redFlagUsed = true;
               cr.redFlagCount += 1;
               triggerRedFlag(car);
-            } else if (roll < 0.44) {
+            } else if (roll < scThresh) {
               cr.safetyCarLaps = 2;
               cr.scCount += 1;
               const pCar = getFocusedCar();
@@ -3146,6 +3153,7 @@
     const teamAff = (balData && balData.team_affinity) || {};
     const drvPsych = (balData && balData.driver_psychology) || {};
     const drvDnaMap = (balData && balData.driver_dna) || {};
+    cr.circuitF1db = (balData && balData.circuit_f1db) || null;
     cr.simToEndActive = false;
     getEl("cr-simtoend-ovl")?.classList.add("hidden");
 

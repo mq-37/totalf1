@@ -1896,7 +1896,8 @@
         car.tyreBlistering = Math.max(0, car.tyreBlistering - lapFrac * 8);
       }
       const thermalWear = (car.tyreTemp > 114 ? 1.25 : 1.0) * (1 + ((car.tyreBlistering || 0) / 100) * 0.35);
-      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * comp.wear * thermalWear * beh.tyreWearMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
+      const f1dbDegMult = Number(fs.circuitF1db?.tyreDegradation?.tyreDegMultiplier || 1.0);
+      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * (0.55 + 0.45 * f1dbDegMult) * comp.wear * thermalWear * beh.tyreWearMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
       car.tyreLife = Math.max(5, car.tyreLife - (wearMult * lapFrac * baseWearPerLap));
 
       // Keep Safety Car bunching responsive every tick (not just on lap crossing!)
@@ -2027,9 +2028,12 @@
           if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "dnf", `${car.card.code3} DNF`, `Smoking mechanical retirement at ${corner}`, car.idx);
           if (fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
             const roll = Math.random();
-            if (roll < 0.36 * (era.sc_chance_mult || 1.0)) {
+            const cirScMult = Number(fs.circuitF1db?.incidents?.safetyCarMultiplier || 1.0);
+            const cirVscProb = Number(fs.circuitF1db?.incidents?.vscProbability ?? 0.30);
+            const scThresh = Math.min(0.85, 0.36 * (era.sc_chance_mult || 1.0) * cirScMult);
+            if (roll < scThresh) {
               deploySafetyCar(`${car.card.code3} stopped smoking at ${corner}`, 2, fastMode);
-            } else if (era.vsc_enabled && roll < 0.68) {
+            } else if (era.vsc_enabled && roll < Math.min(0.95, scThresh + Math.max(0.22, cirVscProb * 0.9))) {
               fs.vscLaps = 1;
               if (!fastMode) { showToast("⚠️ VIRTUAL SAFETY CAR (VSC)!", "warn"); playSfx("radioAlert"); }
               addCommentary(car.lap + 1, "⚠️ VIRTUAL SAFETY CAR (VSC) deployed while marshals recover stranded car!", "warn");
@@ -2038,31 +2042,34 @@
           return;
         }
 
-        // FIA Track Limits Strike Counter (Art. 33.3: 3 strikes -> Black & White Flag; 4th -> +5s Penalty!)
+        // FIA Track Limits Strike Counter (Art. 33.3 / ISC App L Ch IV Art 2c: 3 strikes -> Black & White Flag; 4th -> +5s Penalty!)
         if (car.lap >= 2 && fs.safetyCarLaps === 0 && fs.vscLaps === 0 && (car.paceMode === "push" || car.inDrsRange)) {
           if (Math.random() < 0.022 * (fs.chaosMult || 1)) {
             car.trackLimitStrikes = (car.trackLimitStrikes || 0) + 1;
+            const tlArt = (fs.fiaPrecedents?.categories?.track_limits?.topArticles?.[0]) || "Art. 33.3";
             if (car.trackLimitStrikes === 3) {
               if (!fastMode && (car.pos <= 8 || car.idx === fs.focusIdx)) {
-                showStewardsBanner("🏁 FIA BLACK & WHITE FLAG · ART. 33.3", `${car.card.clean_name} — 3 Track Limits Strikes (Final Warning)`, "info");
+                showStewardsBanner(`🏁 FIA BLACK & WHITE FLAG · ${tlArt}`, `${car.card.clean_name} — 3 Track Limits Strikes (Final Warning)`, "info");
               }
-              addCommentary(car.lap + 1, `🏁 BLACK & WHITE FLAG: ${car.card.clean_name} warned for track limits (Strike 3/3)!`, "info");
+              addCommentary(car.lap + 1, `🏁 BLACK & WHITE FLAG: ${car.card.clean_name} warned for track limits (${tlArt}, Strike 3/3)!`, "info");
             } else if (car.trackLimitStrikes >= 4 && (car.trackLimitStrikes - 4) % 2 === 0) {
               car.unservedPenaltyS = (car.unservedPenaltyS || 0) + 5;
               car.timePenaltyS = (car.timePenaltyS || 0) + 5;
               if (!fastMode) {
-                showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY (ART. 33.3)", `${car.card.clean_name} — Exceeding Track Limits (Strike ${car.trackLimitStrikes})`, "penalty");
+                showStewardsBanner(`⚖️ FIA STEWARDS · +5s PENALTY (${tlArt})`, `${car.card.clean_name} — Exceeding Track Limits (Strike ${car.trackLimitStrikes})`, "penalty");
                 playSfx("radioAlert");
               }
-              addCommentary(car.lap + 1, `⚖️ FIA PENALTY: +5s for ${car.card.clean_name} (Track Limits — Art. 33.3)!`, "warn");
-              if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "incident", `${car.card.code3} +5s Pen`, "Track Limits (Art. 33.3)", car.idx);
+              addCommentary(car.lap + 1, `⚖️ FIA PENALTY: +5s for ${car.card.clean_name} (Track Limits — ${tlArt})!`, "warn");
+              if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "incident", `${car.card.code3} +5s Pen`, `Track Limits (${tlArt})`, car.idx);
             }
           }
         }
 
-        // Era-Aware CPU Pit Strategy (Refuelling, Weather Hysteresis, 2-Compound Rule, Pit Errors!)
+        // Era-Aware CPU Pit Strategy (Refuelling, Weather Hysteresis, 2-Compound Rule, F1DB Pit-Lane Loss!)
         const scFactor = fs.safetyCarLaps > 0 ? 0.58 : (fs.vscLaps > 0 ? 0.68 : 1.0);
-        const effPit = (fs.circuit.pit_loss_s + Math.max(0, (era.pit_base_s || 2.3) - 2.3)) * scFactor;
+        const f1dbPitSec = Number(fs.circuitF1db?.pitStops?.medianPitLaneSec || 0);
+        const basePitLoss = f1dbPitSec >= 14 && f1dbPitSec <= 38 ? f1dbPitSec : (fs.circuit.pit_loss_s || 21.5);
+        const effPit = (basePitLoss + Math.max(0, (era.pit_base_s || 2.3) - 2.3)) * scFactor;
         const lapsLeft = fs.totalLaps - car.lap;
         const lapsSincePit = car.lap - (car.lastPitLap == null ? -99 : car.lastPitLap);
         const minStint = Math.max(3, Math.round(fs.totalLaps * 0.12));
@@ -2262,8 +2269,10 @@
           addCommentary(leaderLap + 1, msg, "warn", clipId);
           if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.chaser.idx, `🚨 CRASH AT ${corner.toUpperCase()}!`); }
           if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "sc", `Crash & Debris at ${corner}`, `${aName} & ${bName}`, ev.chaser.idx);
-          // Realistic & rare Red Flag (~7% on severe multi-car pile-ups with remaining laps!)
-          if (!fs.redFlagUsed && leaderLap >= 2 && leaderLap <= fs.totalLaps - 3 && (crashDnfs >= 2 || Math.random() < 0.08 * (fs.chaosMult || 1))) {
+          // Realistic Red Flag calibrated by F1DB historical circuit red-flag probability!
+          const cirRfProb = Number(fs.circuitF1db?.incidents?.redFlagProbability ?? 0.08);
+          const rfChance = Math.min(0.45, Math.max(0.05, 0.05 + cirRfProb * 0.65)) * (fs.chaosMult || 1);
+          if (!fs.redFlagUsed && leaderLap >= 2 && leaderLap <= fs.totalLaps - 3 && (crashDnfs >= 2 || Math.random() < rfChance)) {
             triggerRedFlag(`Heavy collision & barrier debris at ${corner}`, fastMode);
           } else if (fs.safetyCarLaps === 0) {
             deploySafetyCar(`Collision & debris at ${corner}`, 2, fastMode);
@@ -2686,6 +2695,13 @@
     const teamAff = (balData && balData.team_affinity) || {};
     const drvPsych = (balData && balData.driver_psychology) || {};
     const drvDnaMap = (balData && balData.driver_dna) || {};
+    fs.circuitF1db = (balData && balData.circuit_f1db) || null;
+    if (!fs.fiaPrecedents) {
+      try {
+        const pr = await fetch("/api/fia-docs/precedents");
+        if (pr.ok) fs.fiaPrecedents = await pr.json();
+      } catch (_) {}
+    }
 
     const dist = getEl("fsim-laps-sel")?.value || "15";
     fs.totalLaps = fs.sprintPhase === "sprint" ? 5 : (dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15));

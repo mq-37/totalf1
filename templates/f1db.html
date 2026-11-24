@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}TracingInsights F1DB Data Browser — Local F1{% endblock %}
+{% block title %}TracingInsights F1DB & FIA Docs Intelligence Hub — Local F1{% endblock %}
 
 {% block head %}
 <style>
   .f1db-hero {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
     padding: 1.25rem 1.5rem; border-radius: 14px;
-    background: linear-gradient(135deg, rgba(225,6,0,0.16), rgba(15,23,42,0.92));
+    background: linear-gradient(135deg, rgba(225,6,0,0.18), rgba(15,23,42,0.94));
     border: 1px solid rgba(255,255,255,0.12); margin-bottom: 1.25rem;
   }
   .f1db-hero h1 { margin: 0 0 0.25rem; font-size: 1.65rem; display: flex; align-items: center; gap: 0.6rem; }
@@ -15,72 +15,88 @@
     background: rgba(15,23,42,0.75); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px;
     padding: 0.8rem 1rem;
   }
-  .f1db-kpi .lbl { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
-  .f1db-kpi .val { font-size: 1.35rem; font-weight: 700; margin-top: 0.15rem; }
-  .f1db-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .f1db-kpi .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+  .f1db-kpi .val { font-size: 1.28rem; font-weight: 700; margin-top: 0.15rem; }
+  .f1db-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1rem; }
   .f1db-tab {
-    padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
-    background: rgba(15,23,42,0.7); color: inherit; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+    padding: 0.52rem 0.92rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(15,23,42,0.72); color: inherit; cursor: pointer; font-weight: 600; font-size: 0.87rem;
   }
   .f1db-tab.active { background: #e10600; border-color: #e10600; color: #fff; }
   .f1db-panel { display: none; }
   .f1db-panel.active { display: block; }
   .f1db-controls {
-    display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; margin-bottom: 0.9rem;
+    display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.9rem;
     padding: 0.85rem; border-radius: 10px; background: rgba(15,23,42,0.65); border: 1px solid rgba(255,255,255,0.08);
   }
   .f1db-controls select, .f1db-controls input {
     background: rgba(2,6,23,0.85); color: #f8fafc; border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 7px; padding: 0.45rem 0.7rem; font-size: 0.9rem;
+    border-radius: 7px; padding: 0.44rem 0.68rem; font-size: 0.88rem;
   }
   .f1db-btn {
-    padding: 0.48rem 0.95rem; border-radius: 7px; border: 1px solid rgba(255,255,255,0.18);
-    background: #1e293b; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.86rem;
+    padding: 0.46rem 0.9rem; border-radius: 7px; border: 1px solid rgba(255,255,255,0.18);
+    background: #1e293b; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.84rem;
   }
   .f1db-btn.primary { background: #e10600; border-color: #e10600; }
   .f1db-btn:disabled { opacity: 0.55; cursor: not-allowed; }
   .f1db-table-wrap {
     overflow-x: auto; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(2,6,23,0.65); max-height: 62vh;
+    background: rgba(2,6,23,0.65); max-height: 58vh;
   }
-  .f1db-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  .f1db-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
   .f1db-table th, .f1db-table td {
-    padding: 0.48rem 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.07); text-align: left; white-space: nowrap;
+    padding: 0.46rem 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.07); text-align: left; white-space: nowrap;
   }
+  .f1db-table td.wrap { white-space: normal; max-width: 360px; }
   .f1db-table th {
     position: sticky; top: 0; background: #0f172a; font-weight: 700; cursor: pointer; user-select: none;
   }
-  .f1db-table tr:hover td { background: rgba(255,255,255,0.04); }
+  .f1db-table tr:hover td { background: rgba(255,255,255,0.045); }
   .f1db-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
   .f1db-card {
     background: rgba(15,23,42,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1rem 1.15rem;
   }
-  .f1db-card h3 { margin: 0 0 0.65rem; font-size: 1.02rem; color: #f8fafc; }
-  .f1db-kv { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; font-size: 0.86rem; }
+  .f1db-card h3 { margin: 0 0 0.65rem; font-size: 1rem; color: #f8fafc; }
+  .f1db-kv { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; font-size: 0.85rem; }
   .f1db-kv .k { opacity: 0.72; }
   .f1db-kv .v { font-weight: 600; text-align: right; }
   .f1db-badge {
-    display: inline-block; padding: 0.16rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
+    display: inline-block; padding: 0.14rem 0.48rem; border-radius: 999px; font-size: 0.73rem; font-weight: 700;
     background: rgba(225,6,0,0.2); border: 1px solid rgba(225,6,0,0.45); color: #fca5a5;
   }
   .f1db-badge.ok { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.45); color: #6ee7b7; }
   .f1db-badge.warn { background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.45); color: #fcd34d; }
-  .f1db-pager { display: flex; justify-content: space-between; align-items: center; margin-top: 0.7rem; font-size: 0.85rem; }
+  .f1db-badge.info { background: rgba(56,189,248,0.18); border-color: rgba(56,189,248,0.42); color: #7dd3fc; }
+  .f1db-pager { display: flex; justify-content: space-between; align-items: center; margin-top: 0.7rem; font-size: 0.84rem; }
+  .fia-drawer {
+    margin-top: 1rem; padding: 1.15rem; border-radius: 12px;
+    background: rgba(2,6,23,0.92); border: 1px solid rgba(225,6,0,0.45); display: none;
+  }
+  .fia-drawer.open { display: block; }
+  .fia-reason {
+    margin-top: 0.75rem; padding: 0.85rem; border-radius: 8px;
+    background: rgba(15,23,42,0.85); border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.87rem; line-height: 1.55; white-space: pre-wrap;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="f1db-hero">
   <div>
-    <h1><i class="fas fa-database"></i> TracingInsights F1DB Intelligence Hub</h1>
+    <h1><i class="fas fa-database"></i> TracingInsights F1DB &amp; FIA Docs Intelligence Hub</h1>
     <div class="muted">
-      Synced from <a href="https://tracinginsights.com/f1db" target="_blank" rel="noopener">tracinginsights.com/f1db</a> (CC BY 4.0) ·
-      Powers Driver DNA (921 drivers), Circuit Safety Car/Pit Calibration &amp; 1950–2026 FIA Regulations
+      Synced from <a href="https://tracinginsights.com/f1db" target="_blank" rel="noopener">tracinginsights.com/f1db</a> &amp;
+      <a href="https://tracinginsights.com/fia-docs" target="_blank" rel="noopener">tracinginsights.com/fia-docs</a> (CC BY 4.0) ·
+      Powers Driver DNA (921 drivers), Circuit SC/Pit/Tyre-Deg Calibration, 1950–2026 FIA Regs &amp; Real Steward Precedents
     </div>
   </div>
-  <div style="display:flex; gap:0.6rem; align-items:center;">
+  <div style="display:flex; flex-wrap:wrap; gap:0.55rem; align-items:center;">
     <button type="button" id="f1db-sync-btn" class="f1db-btn primary">
-      <i class="fas fa-sync-alt"></i> Sync Latest from TracingInsights
+      <i class="fas fa-sync-alt"></i> Sync F1DB
+    </button>
+    <button type="button" id="fia-sync-btn" class="f1db-btn">
+      <i class="fas fa-gavel"></i> Sync FIA Docs
     </button>
     <span id="f1db-sync-msg" class="muted" style="font-size:0.82rem;"></span>
   </div>
@@ -88,11 +104,11 @@
 
 <div class="f1db-kpis">
   <div class="f1db-kpi">
-    <div class="lbl">Catalog Tables</div>
+    <div class="lbl">F1DB Tables</div>
     <div class="val">{{ status.tableCount or 0 }}</div>
   </div>
   <div class="f1db-kpi">
-    <div class="lbl">Total Rows</div>
+    <div class="lbl">F1DB Rows</div>
     <div class="val">{{ "{:,}".format(status.totalRows or 0) }}</div>
   </div>
   <div class="f1db-kpi">
@@ -106,20 +122,76 @@
     </div>
   </div>
   <div class="f1db-kpi">
-    <div class="lbl">Last Updated</div>
-    <div class="val" style="font-size:1rem;">{{ (status.lastUpdated or 'Never')[:10] }}</div>
+    <div class="lbl">Official FIA Docs</div>
+    <div class="val">{{ "{:,}".format(fia_status.totalDocuments or 0) }}</div>
+  </div>
+  <div class="f1db-kpi">
+    <div class="lbl">Hydrated Decisions</div>
+    <div class="val">{{ "{:,}".format(fia_status.hydratedDecisions or 0) }}</div>
+  </div>
+  <div class="f1db-kpi">
+    <div class="lbl">FIA Fines (2020–25)</div>
+    <div class="val">{{ fia_status.penaltiesSummary.finesLabel if fia_status.penaltiesSummary else '—' }}</div>
   </div>
 </div>
 
 <div class="f1db-tabs" role="tablist">
-  <button type="button" class="f1db-tab active" data-tab="tables"><i class="fas fa-table"></i> 58-Table Browser</button>
+  <button type="button" class="f1db-tab active" data-tab="fia"><i class="fas fa-file-contract"></i> FIA Documents ({{ "{:,}".format(fia_status.totalDocuments or 0) }})</button>
+  <button type="button" class="f1db-tab" data-tab="precedents"><i class="fas fa-balance-scale"></i> Stewards Precedents &amp; Penalties</button>
+  <button type="button" class="f1db-tab" data-tab="tables"><i class="fas fa-table"></i> 58-Table F1DB Browser</button>
   <button type="button" class="f1db-tab" data-tab="race"><i class="fas fa-flag-checkered"></i> Race Weekend Dossier</button>
   <button type="button" class="f1db-tab" data-tab="season"><i class="fas fa-gavel"></i> Season FIA Regs &amp; Hardware</button>
-  <button type="button" class="f1db-tab" data-tab="circuit"><i class="fas fa-road"></i> Circuit SC / Pit Calibration</button>
+  <button type="button" class="f1db-tab" data-tab="circuit"><i class="fas fa-road"></i> Circuit SC / Pit / Tyre Deg</button>
 </div>
 
-<!-- TAB 1: 58-TABLE BROWSER -->
-<div id="tab-tables" class="f1db-panel active">
+<!-- TAB 1: FIA DOCUMENTS ARCHIVE (11,919 DOCS) -->
+<div id="tab-fia" class="f1db-panel active">
+  <div class="f1db-controls">
+    <select id="fia-year-sel">
+      <option value="">All Seasons (2018–2026)</option>
+      {% for s in (fia_status.seasons or []) %}
+        <option value="{{ s.year }}" {% if s.year == 2026 %}selected{% endif %}>{{ s.year }} ({{ "{:,}".format(s.documents) }} docs)</option>
+      {% endfor %}
+    </select>
+    <select id="fia-type-sel">
+      <option value="">All Document Types</option>
+      {% for dt in (fia_status.docTypes or []) %}
+        <option value="{{ dt.type }}" {% if dt.type == 'infringement' %}selected{% endif %}>{{ dt.type }} ({{ "{:,}".format(dt.count) }})</option>
+      {% endfor %}
+    </select>
+    <input id="fia-driver-in" type="search" placeholder="Driver (e.g. Verstappen, Perez)" style="width:190px;">
+    <input id="fia-q-in" type="search" placeholder="Search title, offence, rule, reason..." style="min-width:220px;">
+    <button type="button" id="fia-search-btn" class="f1db-btn primary"><i class="fas fa-search"></i> Search</button>
+  </div>
+
+  <div class="f1db-table-wrap">
+    <table class="f1db-table" id="fia-docs-table">
+      <thead>
+        <tr>
+          <th>Date</th><th>Grand Prix</th><th>Doc #</th><th>Type</th><th>Title</th><th>Drivers / Team</th><th>Stewards Decision</th><th>Inspect</th>
+        </tr>
+      </thead>
+      <tbody><tr><td colspan="8" class="muted">Loading FIA Documents...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="f1db-pager">
+    <span id="fia-pager-info" class="muted"></span>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="button" id="fia-prev-btn" class="f1db-btn">Prev</button>
+      <button type="button" id="fia-next-btn" class="f1db-btn">Next</button>
+    </div>
+  </div>
+
+  <div id="fia-detail-drawer" class="fia-drawer"></div>
+</div>
+
+<!-- TAB 2: STEWARDS PRECEDENTS & PENALTIES -->
+<div id="tab-precedents" class="f1db-panel">
+  <div id="fia-precedents-out" class="muted">Loading FIA Stewards Precedents &amp; Penalties Analytics...</div>
+</div>
+
+<!-- TAB 3: 58-TABLE F1DB BROWSER -->
+<div id="tab-tables" class="f1db-panel">
   <div class="f1db-controls">
     <label for="f1db-table-select" class="muted">Table:</label>
     <select id="f1db-table-select">
@@ -148,7 +220,7 @@
   </div>
 </div>
 
-<!-- TAB 2: RACE WEEKEND DOSSIER -->
+<!-- TAB 4: RACE WEEKEND DOSSIER -->
 <div id="tab-race" class="f1db-panel">
   <div class="f1db-controls">
     <label class="muted">Season:</label>
@@ -160,7 +232,7 @@
   <div id="race-dossier-out" class="muted">Click Load Weekend to inspect Qualifying Q1/Q2/Q3, Race Results, Pit Stops, Safety Cars, VSCs, Red Flags &amp; DOTD.</div>
 </div>
 
-<!-- TAB 3: SEASON FIA REGULATIONS & HARDWARE -->
+<!-- TAB 5: SEASON FIA REGULATIONS & HARDWARE -->
 <div id="tab-season" class="f1db-panel">
   <div class="f1db-controls">
     <label class="muted">Season (1950–2026):</label>
@@ -170,14 +242,14 @@
   <div id="season-dossier-out" class="muted">Select a season to view authentic FIA technical &amp; sporting regulations, points systems, and chassis/engine/tyre pairings.</div>
 </div>
 
-<!-- TAB 4: CIRCUIT CALIBRATION -->
+<!-- TAB 6: CIRCUIT CALIBRATION -->
 <div id="tab-circuit" class="f1db-panel">
   <div class="f1db-controls">
-    <label class="muted">Circuit ID (e.g. monaco, silverstone, spa, vegas, singapore, baku, monza):</label>
-    <input id="circuit-id-in" type="text" value="monaco" style="width:180px;">
+    <label class="muted">Circuit ID (e.g. bahrain, monaco, silverstone, spa, vegas, singapore, baku, monza):</label>
+    <input id="circuit-id-in" type="text" value="bahrain" style="width:180px;">
     <button type="button" id="circuit-load-btn" class="f1db-btn primary"><i class="fas fa-tachometer-alt"></i> Inspect Circuit</button>
   </div>
-  <div id="circuit-dossier-out" class="muted">Inspect historical Safety Car, VSC, and Red Flag probabilities, pit-lane duration benchmarks, layouts &amp; lap records.</div>
+  <div id="circuit-dossier-out" class="muted">Inspect historical Safety Car, VSC, and Red Flag probabilities, pit-lane duration benchmarks &amp; 888k lap-time tyre degradation curves.</div>
 </div>
 {% endblock %}
 
@@ -186,6 +258,7 @@
 (() => {
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let state = { table: document.getElementById('f1db-table-select')?.value || 'races_safety_cars', offset: 0, limit: 50, sort_col: '', sort_dir: 'desc', total: 0 };
+  let fiaState = { offset: 0, limit: 40, total: 0 };
 
   document.querySelectorAll('.f1db-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -193,11 +266,134 @@
       document.querySelectorAll('.f1db-panel').forEach((p) => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
+      if (btn.dataset.tab === 'tables' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadTable(); }
+      if (btn.dataset.tab === 'precedents' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadPrecedents(); }
       if (btn.dataset.tab === 'race' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadRace(); }
       if (btn.dataset.tab === 'season' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadSeason(); }
       if (btn.dataset.tab === 'circuit' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadCircuit(); }
     });
   });
+
+  async function loadFiaDocs() {
+    const params = new URLSearchParams({ limit: String(fiaState.limit), offset: String(fiaState.offset) });
+    const yr = document.getElementById('fia-year-sel').value;
+    const tp = document.getElementById('fia-type-sel').value;
+    const drv = document.getElementById('fia-driver-in').value.trim();
+    const q = document.getElementById('fia-q-in').value.trim();
+    if (yr) params.set('year', yr);
+    if (tp) params.set('doc_type', tp);
+    if (drv) params.set('driver', drv);
+    if (q) params.set('q', q);
+
+    const res = await fetch(`/api/fia-docs/search?${params}`);
+    const data = await res.json();
+    fiaState.total = data.total || 0;
+    const tbody = document.querySelector('#fia-docs-table tbody');
+    const items = data.items || [];
+    tbody.innerHTML = items.length ? items.map((d) => `
+      <tr>
+        <td>${esc(d.date)}</td>
+        <td>${esc(d.year)} ${esc(d.event_name)}</td>
+        <td>#${esc(d.doc_number ?? '—')}</td>
+        <td><span class="f1db-badge ${d.doc_type === 'infringement' ? '' : (d.doc_type === 'decision' ? 'warn' : 'info')}">${esc(d.doc_type)}</span></td>
+        <td class="wrap">${esc(d.title)}</td>
+        <td class="wrap">${esc(d.drivers_text || d.teams_text || '—')}</td>
+        <td class="wrap">${d.decision ? esc(d.decision) : (d.hydrated ? '<span class="muted">No penalty text</span>' : '<span class="muted">Click Inspect to hydrate</span>')}</td>
+        <td><button type="button" class="f1db-btn fia-inspect-btn" data-y="${esc(d.year)}" data-e="${esc(d.event_slug)}" data-s="${esc(d.slug)}">Inspect</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="8" class="muted">No matching FIA documents</td></tr>';
+
+    tbody.querySelectorAll('.fia-inspect-btn').forEach((btn) => {
+      btn.addEventListener('click', () => inspectFiaDoc(btn.dataset.y, btn.dataset.e, btn.dataset.s));
+    });
+
+    const start = fiaState.total ? fiaState.offset + 1 : 0;
+    const end = Math.min(fiaState.total, fiaState.offset + items.length);
+    document.getElementById('fia-pager-info').textContent = `Showing ${start}–${end} of ${fiaState.total.toLocaleString()} FIA documents`;
+    document.getElementById('fia-prev-btn').disabled = fiaState.offset <= 0;
+    document.getElementById('fia-next-btn').disabled = end >= fiaState.total;
+  }
+
+  async function inspectFiaDoc(y, ev, slug) {
+    const drawer = document.getElementById('fia-detail-drawer');
+    drawer.classList.add('open');
+    drawer.innerHTML = '<span class="muted">Loading full FIA Steward Decision &amp; Reasoning...</span>';
+    const res = await fetch(`/api/fia-docs/doc/${encodeURIComponent(y)}/${encodeURIComponent(ev)}/${encodeURIComponent(slug)}`);
+    const data = await res.json();
+    if (!res.ok) { drawer.innerHTML = `<span class="f1db-badge">${esc(data.detail || 'Not found')}</span>`; return; }
+    const doc = data.document || {}, det = data.detail || {};
+    const rules = (det.rulesReferenced || []).map((r) => `<span class="f1db-badge info" style="margin-right:0.35rem;">${esc(r)}</span>`).join('');
+    drawer.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:0.75rem;">
+        <div>
+          <h3 style="margin:0 0 0.25rem;">${esc(doc.title)}</h3>
+          <div class="muted">${esc(doc.year)} ${esc(doc.eventName)} · Doc #${esc(doc.docNumber ?? '—')} · ${esc(doc.date)} ${det.session ? '· ' + esc(det.session) : ''}</div>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          ${doc.pdfUrl ? `<a href="${esc(doc.pdfUrl)}" target="_blank" rel="noopener" class="f1db-btn">Official PDF</a>` : ''}
+          <a href="${esc(doc.tracingInsightsUrl)}" target="_blank" rel="noopener" class="f1db-btn">TracingInsights</a>
+          <button type="button" class="f1db-btn" onclick="document.getElementById('fia-detail-drawer').classList.remove('open')">Close</button>
+        </div>
+      </div>
+      <div class="f1db-grid-2">
+        <div class="f1db-kv">
+          <div class="k">Driver / Car #</div><div class="v">${esc(det.driver || (doc.drivers||[]).join(', ') || '—')} ${det.car_number ? '(#' + esc(det.car_number) + ')' : ''}</div>
+          <div class="k">Team</div><div class="v">${esc(det.team || (doc.teams||[]).join(', ') || '—')}</div>
+          <div class="k">Fact</div><div class="v">${esc(det.fact || '—')}</div>
+        </div>
+        <div class="f1db-kv">
+          <div class="k">Offence</div><div class="v">${esc(det.offence || '—')}</div>
+          <div class="k">Decision / Penalty</div><div class="v">${esc(det.decision || det.penalty || '—')}</div>
+          <div class="k">Penalty Points</div><div class="v">${det.penalty_points != null ? esc(det.penalty_points) + ' pts' : '—'}</div>
+        </div>
+      </div>
+      ${rules ? `<div style="margin-top:0.5rem;">${rules}</div>` : ''}
+      ${det.reason ? `<div class="fia-reason"><b>Stewards' Reasoning:</b>\n${esc(det.reason)}</div>` : '<div class="muted" style="margin-top:0.5rem;">No structured Steward reasoning text in this document type.</div>'}
+    `;
+    drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  document.getElementById('fia-search-btn')?.addEventListener('click', () => { fiaState.offset = 0; loadFiaDocs(); });
+  document.getElementById('fia-year-sel')?.addEventListener('change', () => { fiaState.offset = 0; loadFiaDocs(); });
+  document.getElementById('fia-type-sel')?.addEventListener('change', () => { fiaState.offset = 0; loadFiaDocs(); });
+  document.getElementById('fia-prev-btn')?.addEventListener('click', () => { fiaState.offset = Math.max(0, fiaState.offset - fiaState.limit); loadFiaDocs(); });
+  document.getElementById('fia-next-btn')?.addEventListener('click', () => { fiaState.offset += fiaState.limit; loadFiaDocs(); });
+
+  async function loadPrecedents() {
+    const out = document.getElementById('fia-precedents-out');
+    const res = await fetch('/api/fia-docs/precedents');
+    const d = await res.json();
+    const pen = d.penaltiesSummary || {};
+    const allegHtml = (pen.allegations || []).map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>`).join('');
+    const outcHtml = (pen.outcomes || []).map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>`).join('');
+    const drvHtml = (pen.drivers || []).map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.decisions)}</td><td>${esc(x.points)}</td></tr>`).join('');
+    const catHtml = Object.entries(d.categories || {}).map(([k, cat]) => `
+      <div class="f1db-card">
+        <h3>${esc(cat.label)} <span class="f1db-badge info">${esc(cat.count)} recent rulings</span></h3>
+        <div style="margin-bottom:0.55rem;">${(cat.topArticles || []).map((a) => `<span class="f1db-badge warn" style="margin-right:0.3rem;">${esc(a)}</span>`).join('')}</div>
+        ${(cat.examples || []).slice(0, 3).map((ex) => `
+          <div style="font-size:0.82rem; padding:0.45rem 0; border-top:1px solid rgba(255,255,255,0.07);">
+            <b>${esc(ex.year)} ${esc(ex.event)}</b> · ${esc(ex.driver || ex.team || 'Competitor')}<br>
+            <span class="muted">${esc(ex.offence || ex.fact)}</span><br>
+            <span style="color:#fca5a5;">→ ${esc(ex.decision)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+
+    out.innerHTML = `
+      <div class="f1db-grid-2">
+        <div class="f1db-card"><h3>Top Allegations (2020–2025 · ${esc(pen.totalLabel || '')} Decisions)</h3><div class="f1db-kv">${allegHtml}</div></div>
+        <div class="f1db-card"><h3>Stewards' Outcomes (${esc(pen.points || '')} Penalty Pts · ${esc(pen.finesLabel || '')})</h3><div class="f1db-kv">${outcHtml}</div></div>
+      </div>
+      <div class="f1db-card" style="margin-bottom:1rem;">
+        <h3>Most Frequent Stewards Appearances (2020–2025)</h3>
+        <div class="f1db-table-wrap"><table class="f1db-table"><thead><tr><th>Driver</th><th>Stewards Decisions</th><th>Penalty Points</th></tr></thead><tbody>${drvHtml}</tbody></table></div>
+      </div>
+      <h3 style="margin:0.5rem 0 0.75rem;">Live Simulator FIA Steward Precedents (2025–2026)</h3>
+      <div class="f1db-grid-2">${catHtml}</div>
+    `;
+  }
 
   async function loadTable() {
     const sel = document.getElementById('f1db-table-select');
@@ -332,7 +528,7 @@
     const res = await fetch(`/api/f1db/circuit/${encodeURIComponent(cid)}`);
     const d = await res.json();
     if (!res.ok) { out.innerHTML = `<span class="f1db-badge">${esc(d.detail || 'Not found')}</span>`; return; }
-    const c = d.circuit || {}, inc = d.incidents || {}, pit = d.pitStops || {}, lr = d.lapRecord || {};
+    const c = d.circuit || {}, inc = d.incidents || {}, pit = d.pitStops || {}, lr = d.lapRecord || {}, td = d.tyreDegradation || {};
     out.innerHTML = `<div class="f1db-grid-2">
       <div class="f1db-card"><h3>${esc(c.fullName || c.name)}</h3><div class="f1db-kv">
         <div class="k">Type / Direction</div><div class="v">${esc(c.type)} · ${esc(c.direction)}</div>
@@ -348,6 +544,13 @@
         <div class="k">Red Flag Probability</div><div class="v">${(inc.redFlagProbability * 100).toFixed(1)}% (${inc.redFlagDeployments} total)</div>
         <div class="k">Pit-Lane Median / P10</div><div class="v">${pit.medianPitLaneSec ? `${pit.medianPitLaneSec}s / ${pit.fastPitLaneSec}s (${pit.sampleCount} stops)` : '—'}</div>
       </div></div>
+      <div class="f1db-card"><h3>Lap-Time Derived Tyre Degradation (888k Laps)</h3><div class="f1db-kv">
+        <div class="k">Degradation Severity</div><div class="v"><span class="f1db-badge ${td.degSeverity === 'HIGH' ? '' : (td.degSeverity === 'LOW' ? 'ok' : 'warn')}">${esc(td.degSeverity || 'N/A')}</span></div>
+        <div class="k">Fuel-Adjusted Slope</div><div class="v">${td.tyreDegSecPerLap != null ? `${td.tyreDegSecPerLap.toFixed(4)} s/lap` : '—'}</div>
+        <div class="k">Sim Tyre Wear Multiplier</div><div class="v">${td.tyreDegMultiplier ? `${td.tyreDegMultiplier}x` : '—'}</div>
+        <div class="k">Median Clean Stint</div><div class="v">${td.medianStintLaps ? `${td.medianStintLaps} laps (${td.stintSamples} stints)` : '—'}</div>
+        <div class="k">Modern Median Race Lap</div><div class="v">${td.modernMedianLapSec ? `${td.modernMedianLapSec}s` : '—'}</div>
+      </div></div>
     </div>`;
   }
   document.getElementById('circuit-load-btn')?.addEventListener('click', loadCircuit);
@@ -356,12 +559,12 @@
     const btn = document.getElementById('f1db-sync-btn');
     const msg = document.getElementById('f1db-sync-msg');
     btn.disabled = true;
-    msg.textContent = 'Syncing from tracinginsights.com/f1db...';
+    msg.textContent = 'Syncing F1DB from tracinginsights.com/f1db...';
     try {
       const res = await fetch('/api/f1db/sync', { method: 'POST' });
       const d = await res.json();
       msg.textContent = res.ok
-        ? `Synced ${d.tableCount} tables (${(d.totalRows||0).toLocaleString()} rows, ${d.downloaded} updated, ${d.cached} cached)`
+        ? `F1DB synced: ${d.tableCount} tables (${(d.totalRows||0).toLocaleString()} rows)`
         : (d.detail || 'Sync failed');
       if (res.ok && d.rebuilt) location.reload();
     } catch (e) {
@@ -371,7 +574,26 @@
     }
   });
 
-  loadTable();
+  document.getElementById('fia-sync-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('fia-sync-btn');
+    const msg = document.getElementById('f1db-sync-msg');
+    btn.disabled = true;
+    msg.textContent = 'Syncing FIA Docs from tracinginsights.com/fia-docs...';
+    try {
+      const res = await fetch('/api/fia-docs/sync', { method: 'POST' });
+      const d = await res.json();
+      msg.textContent = res.ok
+        ? `FIA Docs synced: ${(d.totalDocuments||0).toLocaleString()} docs (${d.hydratedDecisions} hydrated decisions)`
+        : (d.detail || 'FIA sync failed');
+      if (res.ok && (d.docsUpserted > 0 || d.sidecarsFetched > 0)) location.reload();
+    } catch (e) {
+      msg.textContent = 'FIA sync error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  loadFiaDocs();
 })();
 </script>
 {% endblock %}
