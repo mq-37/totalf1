@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TRAF1 (Local F1) — Engineering Dossier &amp; Join the Pit Wall</title>
+  <title>TRAF1 (Local F1) — Visual Architecture Audit &amp; Engineering Dossier</title>
   <style>
     :root {
       --bg: #050811;
       --surface: #0c1222;
       --surface-2: #131c33;
       --border: rgba(148, 163, 184, 0.18);
-      --border-hi: rgba(56, 189, 248, 0.42);
+      --border-hi: rgba(56, 189, 248, 0.45);
       --text: #e2e8f0;
       --muted: #94a3b8;
       --red: #e10600;
@@ -19,6 +19,7 @@
       --gold: #facc15;
       --blue: #38bdf8;
       --green: #22c55e;
+      --purple: #a855f7;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -26,17 +27,15 @@
       margin: 0;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background:
-        radial-gradient(circle at 10% 6%, rgba(225, 6, 0, 0.17), transparent 34%),
-        radial-gradient(circle at 90% 10%, rgba(39, 244, 210, 0.12), transparent 32%),
+        radial-gradient(circle at 10% 5%, rgba(225, 6, 0, 0.16), transparent 32%),
+        radial-gradient(circle at 90% 8%, rgba(39, 244, 210, 0.12), transparent 30%),
         radial-gradient(circle at 50% 88%, rgba(255, 128, 0, 0.08), transparent 40%),
         linear-gradient(180deg, #050811 0%, #090f1f 100%);
       color: var(--text);
-      line-height: 1.7;
+      line-height: 1.66;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
-
-    /* Subtle animated grid backdrop */
     body::before {
       content: "";
       position: fixed;
@@ -46,18 +45,12 @@
         linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
       background-size: 44px 44px;
-      mask-image: radial-gradient(circle at 50% 30%, black 35%, transparent 90%);
+      mask-image: radial-gradient(circle at 50% 25%, black 35%, transparent 92%);
       z-index: 0;
     }
 
-    /* Scroll progress telemetry bar */
     #scroll-progress {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 3px;
-      width: 0%;
-      z-index: 100;
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%; z-index: 100;
       background: linear-gradient(90deg, var(--red), var(--papaya), var(--gold), var(--teal));
       box-shadow: 0 0 12px rgba(225, 6, 0, 0.7);
       transition: width 0.08s linear;
@@ -65,559 +58,311 @@
 
     /* Sticky Top Telemetry Nav */
     .top-bar {
-      position: sticky;
-      top: 0;
-      z-index: 60;
+      position: sticky; top: 0; z-index: 60;
       backdrop-filter: blur(14px);
-      background: rgba(5, 8, 17, 0.84);
+      background: rgba(5, 8, 17, 0.86);
       border-bottom: 1px solid rgba(148, 163, 184, 0.14);
     }
     .top-bar-inner {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 11px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
+      max-width: 1140px; margin: 0 auto; padding: 10px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      letter-spacing: 0.06em;
-      font-size: 0.92rem;
-      color: #f8fafc;
-    }
-    .brand-badge {
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: var(--red);
-      color: #fff;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-    }
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      flex-wrap: wrap;
-    }
-    .nav-links a {
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 0.78rem;
-      font-weight: 700;
-      transition: color 0.18s;
-    }
+    .brand { display: flex; align-items: center; gap: 9px; font-weight: 900; letter-spacing: 0.06em; font-size: 0.9rem; color: #f8fafc; }
+    .brand-badge { padding: 3px 8px; border-radius: 6px; background: var(--red); color: #fff; font-size: 0.7rem; letter-spacing: 0.1em; }
+    .nav-links { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.75rem; font-weight: 700; transition: color 0.18s; }
     .nav-links a:hover { color: #f8fafc; }
     .nav-cta {
-      padding: 6px 13px;
-      border-radius: 999px;
+      padding: 5px 12px; border-radius: 999px;
       background: linear-gradient(90deg, var(--red), #ff3b1f);
-      color: #fff !important;
-      box-shadow: 0 4px 16px rgba(225, 6, 0, 0.38);
-    }
-    .nav-cta:hover { transform: translateY(-1px); }
-
-    .page {
-      position: relative;
-      z-index: 1;
-      max-width: 1080px;
-      margin: 28px auto 72px;
-      padding: 0 24px;
+      color: #fff !important; box-shadow: 0 4px 14px rgba(225, 6, 0, 0.35);
     }
 
-    /* HERO WITH LIVE CANVAS CIRCUIT TELEMETRY + F1 START LIGHTS */
+    .page { position: relative; z-index: 1; max-width: 1140px; margin: 26px auto 72px; padding: 0 24px; }
+
+    /* HERO */
     .hero {
-      position: relative;
-      overflow: hidden;
-      padding: 40px 40px 34px;
-      border-radius: 22px;
+      position: relative; overflow: hidden; padding: 38px 38px 32px; border-radius: 22px;
       background: linear-gradient(135deg, rgba(14, 21, 39, 0.96), rgba(7, 11, 22, 0.98));
       border: 1px solid rgba(225, 6, 0, 0.36);
       box-shadow: 0 28px 70px rgba(0, 0, 0, 0.62);
     }
     .hero::before {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 4px;
+      content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
       background: linear-gradient(90deg, var(--red), var(--papaya), var(--gold), var(--teal));
-      background-size: 200% 100%;
-      animation: gradientSlide 6s linear infinite;
+      background-size: 200% 100%; animation: gradientSlide 6s linear infinite;
     }
-    @keyframes gradientSlide {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 200% 50%; }
-    }
-    #hero-track-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0.42;
-      pointer-events: none;
-    }
+    @keyframes gradientSlide { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+    #hero-track-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.42; pointer-events: none; }
     .hero-content { position: relative; z-index: 2; }
 
-    /* F1 Start Lights Gantry */
     .start-lights-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      padding: 7px 14px;
-      border-radius: 999px;
-      background: rgba(5, 8, 17, 0.78);
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      margin-bottom: 16px;
+      display: inline-flex; align-items: center; gap: 12px; padding: 6px 14px; border-radius: 999px;
+      background: rgba(5, 8, 17, 0.78); border: 1px solid rgba(148, 163, 184, 0.24); margin-bottom: 14px;
     }
     .lights-pods { display: inline-flex; gap: 6px; }
-    .light-pod {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #272c38;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      transition: all 0.22s ease;
-    }
-    .light-pod.is-red {
-      background: #ff2424;
-      box-shadow: 0 0 12px #ff2424, 0 0 24px rgba(255, 36, 36, 0.7);
-    }
-    .light-pod.is-green {
-      background: var(--green);
-      box-shadow: 0 0 12px var(--green);
-    }
-    .lights-label {
-      font-size: 0.7rem;
-      font-weight: 800;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--teal);
-    }
+    .light-pod { width: 10px; height: 10px; border-radius: 50%; background: #272c38; border: 1px solid rgba(255,255,255,0.14); transition: all 0.22s; }
+    .light-pod.is-red { background: #ff2424; box-shadow: 0 0 12px #ff2424; }
+    .light-pod.is-green { background: var(--green); box-shadow: 0 0 12px var(--green); }
+    .lights-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); }
 
-    h1 {
-      margin: 0;
-      font-size: clamp(2rem, 3.8vw, 3rem);
-      font-weight: 900;
-      letter-spacing: -0.025em;
-      color: #f8fafc;
-      line-height: 1.09;
-      max-width: 820px;
-    }
-    .accent-grad {
-      background: linear-gradient(90deg, #ffffff 10%, var(--teal) 55%, var(--papaya) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .subtitle {
-      margin: 14px 0 24px;
-      font-size: 1.03rem;
-      color: #cbd5e1;
-      max-width: 740px;
-    }
-    .hero-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 26px;
-    }
+    h1 { margin: 0; font-size: clamp(1.9rem, 3.6vw, 2.85rem); font-weight: 900; letter-spacing: -0.025em; color: #f8fafc; line-height: 1.1; max-width: 860px; }
+    .accent-grad { background: linear-gradient(90deg, #ffffff 10%, var(--teal) 55%, var(--papaya) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { margin: 12px 0 22px; font-size: 0.99rem; color: #cbd5e1; max-width: 780px; }
+    .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-size: 0.84rem;
-      font-weight: 800;
-      text-decoration: none;
-      cursor: pointer;
-      border: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.86);
-      color: #f8fafc;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 10px;
+      font-size: 0.82rem; font-weight: 800; text-decoration: none; cursor: pointer;
+      border: 1px solid var(--border); background: rgba(15, 23, 42, 0.86); color: #f8fafc;
+      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
     }
-    .btn:hover { transform: translateY(-2px); border-color: var(--teal); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
-    .btn-primary {
-      background: linear-gradient(90deg, var(--red), #f97316);
-      border-color: rgba(255, 128, 0, 0.6);
-      color: #fff;
-      box-shadow: 0 8px 24px rgba(225, 6, 0, 0.35);
-    }
+    .btn:hover { transform: translateY(-2px); border-color: var(--teal); box-shadow: 0 10px 24px rgba(0,0,0,0.45); }
+    .btn-primary { background: linear-gradient(90deg, var(--red), #f97316); border-color: rgba(255,128,0,0.6); color: #fff; box-shadow: 0 8px 24px rgba(225,6,0,0.35); }
+    .btn-sm { padding: 5px 11px; font-size: 0.72rem; border-radius: 7px; }
+    .btn-sm.active { background: rgba(56, 189, 248, 0.22); border-color: var(--blue); color: #7dd3fc; }
 
-    .stat-strip {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .stat {
-      padding: 13px 14px;
-      border-radius: 12px;
-      background: rgba(8, 13, 25, 0.84);
-      border: 1px solid var(--border);
-      transition: transform 0.2s ease, border-color 0.2s ease;
-    }
+    .stat-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+    .stat { padding: 12px 13px; border-radius: 12px; background: rgba(8, 13, 25, 0.84); border: 1px solid var(--border); transition: transform 0.2s, border-color 0.2s; }
     .stat:hover { transform: translateY(-3px); border-color: var(--border-hi); }
-    .stat b {
-      display: block;
-      font-size: 1.18rem;
-      font-weight: 900;
-      color: #f8fafc;
-      font-variant-numeric: tabular-nums;
-    }
-    .stat span {
-      font-size: 0.66rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
+    .stat b { display: block; font-size: 1.15rem; font-weight: 900; color: #f8fafc; font-variant-numeric: tabular-nums; }
+    .stat span { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 
-    /* REVEAL ANIMATION */
-    .reveal {
-      opacity: 0;
-      transform: translateY(22px);
-      transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-    }
+    /* REVEAL */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1), transform 0.55s cubic-bezier(0.22, 1, 0.36, 1); }
     .reveal.is-visible { opacity: 1; transform: translateY(0); }
 
-    /* SECTIONS & CARDS */
-    .section-block { margin-top: 28px; }
+    /* SECTION CARDS */
+    .section-block { margin-top: 26px; }
     .section-card {
-      position: relative;
-      padding: 28px 32px;
-      border-radius: 18px;
-      background: rgba(12, 18, 34, 0.92);
-      border: 1px solid var(--border);
+      padding: 26px 30px; border-radius: 18px;
+      background: rgba(12, 18, 34, 0.92); border: 1px solid var(--border);
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
-      transition: border-color 0.25s ease, transform 0.25s ease;
     }
-    .section-card:hover { border-color: rgba(148, 163, 184, 0.32); }
     .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
-      padding-bottom: 11px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.14);
     }
-    .section-head h2 {
-      margin: 0;
-      font-size: 1.18rem;
-      font-weight: 850;
-      color: #f8fafc;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .section-head h2 { margin: 0; font-size: 1.14rem; font-weight: 850; color: #f8fafc; display: flex; align-items: center; gap: 9px; }
     .num-chip {
-      width: 26px;
-      height: 26px;
-      border-radius: 8px;
-      display: inline-grid;
-      place-items: center;
-      font-size: 0.74rem;
-      font-weight: 900;
-      background: rgba(225, 6, 0, 0.2);
-      color: #fca5a5;
-      border: 1px solid rgba(225, 6, 0, 0.45);
+      width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center;
+      font-size: 0.72rem; font-weight: 900; background: rgba(225, 6, 0, 0.2); color: #fca5a5; border: 1px solid rgba(225, 6, 0, 0.45);
     }
     .pill {
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      background: rgba(56, 189, 248, 0.14);
-      color: var(--blue);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      white-space: nowrap;
+      padding: 4px 10px; border-radius: 999px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+      background: rgba(56, 189, 248, 0.14); color: var(--blue); border: 1px solid rgba(56, 189, 248, 0.35); white-space: nowrap;
     }
     .pill.red { background: rgba(225, 6, 0, 0.16); color: #fca5a5; border-color: rgba(225, 6, 0, 0.4); }
     .pill.teal { background: rgba(39, 244, 210, 0.14); color: var(--teal); border-color: rgba(39, 244, 210, 0.38); }
     .pill.gold { background: rgba(250, 204, 21, 0.14); color: var(--gold); border-color: rgba(250, 204, 21, 0.38); }
     .pill.papaya { background: rgba(255, 128, 0, 0.14); color: #fdba74; border-color: rgba(255, 128, 0, 0.4); }
     .pill.green { background: rgba(34, 197, 94, 0.14); color: #86efac; border-color: rgba(34, 197, 94, 0.4); }
+    .pill.purple { background: rgba(168, 85, 247, 0.14); color: #d8b4fe; border-color: rgba(168, 85, 247, 0.4); }
 
-    .narrative-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-    }
-    article p { margin: 0 0 12px; font-size: 0.94rem; color: #dbe4f0; }
+    .narrative-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    article p { margin: 0 0 11px; font-size: 0.92rem; color: #dbe4f0; }
     article p:last-child { margin-bottom: 0; }
     strong { color: #ffffff; }
-    code {
-      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-      font-size: 0.84em;
-      padding: 2px 6px;
-      border-radius: 5px;
-      background: rgba(56, 189, 248, 0.12);
-      color: #7dd3fc;
+    code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.83em; padding: 2px 6px; border-radius: 5px; background: rgba(56, 189, 248, 0.12); color: #7dd3fc; }
+
+    /* MODULE OWNERSHIP & LOC VISUALIZER */
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .mod-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .mod-card {
+      padding: 12px 13px; border-radius: 11px; background: rgba(8, 13, 25, 0.86);
+      border: 1px solid var(--border); border-left: 3px solid var(--mc, var(--blue));
+      transition: transform 0.18s, border-color 0.18s;
+    }
+    .mod-card:hover { transform: translateY(-2px); border-color: var(--mc, var(--blue)); }
+    .mod-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .mod-top strong { font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
+    .mod-loc { font-size: 0.68rem; font-weight: 800; color: var(--muted); }
+    .mod-card p { margin: 0 0 7px; font-size: 0.75rem; color: var(--muted); line-height: 1.42; }
+    .loc-bar { height: 5px; border-radius: 999px; background: rgba(148,163,184,0.14); overflow: hidden; }
+    .loc-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--mc, var(--blue)); }
+
+    /* CAREER vs LADDER COMPARISON MATRIX */
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.79rem; }
+    .cmp-table th {
+      text-align: left; padding: 9px 10px; font-size: 0.69rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); border-bottom: 1px solid rgba(148, 163, 184, 0.22); background: rgba(15, 23, 42, 0.6);
+    }
+    .cmp-table td { padding: 9px 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); vertical-align: top; color: #cbd5e1; }
+    .cmp-table tr:hover td { background: rgba(56, 189, 248, 0.04); }
+    .st-badge { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 0.63rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .st-shared { background: rgba(34, 197, 94, 0.18); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
+    .st-dup { background: rgba(250, 204, 21, 0.16); color: #fde047; border: 1px solid rgba(250,204,21,0.4); }
+    .st-v1 { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.4); }
+    .st-gap { background: rgba(225, 6, 0, 0.18); color: #fca5a5; border: 1px solid rgba(225,6,0,0.4); }
+
+    /* VISUAL ER DIAGRAM + RATING ENGINE PIPELINE */
+    .er-grid { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 16px; }
+    .er-panel { padding: 16px; border-radius: 13px; background: rgba(7, 11, 22, 0.88); border: 1px solid var(--border); }
+    .er-panel h3 { margin: 0 0 12px; font-size: 0.85rem; color: #f8fafc; display: flex; align-items: center; justify-content: space-between; }
+    .er-nodes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .er-tbl {
+      padding: 10px 11px; border-radius: 9px; background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.22); border-top: 3px solid var(--tc, var(--blue));
+    }
+    .er-tbl.is-root { grid-column: 1 / -1; border-top-color: var(--gold); background: rgba(30, 41, 59, 0.55); }
+    .er-tbl-name { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 800; color: #f8fafc; display: flex; justify-content: space-between; }
+    .er-cols { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 0.67rem; color: var(--muted); line-height: 1.48; }
+    .pk { color: var(--gold); font-weight: 800; }
+    .fk { color: var(--teal); font-weight: 800; }
+
+    .rating-flow { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 16px; margin-top: 16px; }
+    .rf-box { padding: 16px; border-radius: 13px; background: rgba(7, 11, 22, 0.88); border: 1px solid var(--border); }
+    .rf-step {
+      padding: 9px 11px; border-radius: 8px; background: rgba(15, 23, 42, 0.86);
+      border: 1px solid rgba(148, 163, 184, 0.16); border-left: 3px solid var(--sc, var(--blue));
+      margin-bottom: 8px; font-size: 0.77rem;
+    }
+    .rf-step strong { display: block; font-size: 0.79rem; margin-bottom: 2px; }
+    .rf-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .rf-stat { padding: 7px 9px; border-radius: 8px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148,163,184,0.16); }
+    .rf-stat-top { display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 800; margin-bottom: 4px; }
+    .rf-track { height: 6px; border-radius: 99px; background: rgba(148,163,184,0.16); overflow: hidden; }
+    .rf-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--blue), var(--teal)); }
+    .json-pre {
+      margin: 10px 0 0; padding: 12px; border-radius: 9px; background: #04070f;
+      border: 1px solid rgba(56, 189, 248, 0.24); font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem; color: #a5f3fc; max-height: 220px; overflow: auto;
     }
 
-    /* Expandable Engineering Deep-Dive */
-    details.deep-dive {
-      margin-top: 14px;
-      border-radius: 10px;
-      background: rgba(7, 11, 22, 0.72);
-      border: 1px solid rgba(148, 163, 184, 0.16);
-      padding: 10px 14px;
+    /* ANIMATED 6-STAGE RACE WEEKEND SWIMLANE */
+    .swimlane {
+      display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px;
+      position: relative; margin-top: 14px;
     }
-    details.deep-dive summary {
-      cursor: pointer;
-      font-size: 0.78rem;
-      font-weight: 800;
-      color: var(--teal);
-      letter-spacing: 0.04em;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .lane-node {
+      position: relative; padding: 13px 11px; border-radius: 12px;
+      background: linear-gradient(180deg, rgba(19, 28, 51, 0.95), rgba(9, 14, 27, 0.96));
+      border: 1px solid var(--border); border-top: 3px solid var(--lc, var(--blue));
+      transition: transform 0.2s, border-color 0.2s;
     }
-    details.deep-dive summary::after { content: "+ Expand Tech Specs"; color: var(--muted); font-size: 0.72rem; }
-    details.deep-dive[open] summary::after { content: "− Collapse"; color: var(--teal); }
-    .dd-body {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed rgba(148, 163, 184, 0.18);
-      font-size: 0.81rem;
-      color: var(--muted);
+    .lane-node:hover { transform: translateY(-4px); border-color: var(--lc, var(--blue)); }
+    .lane-node::after {
+      content: "→"; position: absolute; right: -10px; top: 44%; color: var(--teal);
+      font-weight: 900; font-size: 0.9rem; z-index: 4; animation: arrowPulse 1.8s infinite;
     }
-    .dd-body ul { margin: 4px 0 0; padding-left: 18px; line-height: 1.6; }
+    .lane-node:last-child::after { display: none; }
+    @keyframes arrowPulse { 0%, 100% { opacity: 0.4; transform: translateX(0); } 50% { opacity: 1; transform: translateX(3px); } }
+    .lane-num { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lc, var(--blue)); }
+    .lane-node h4 { margin: 3px 0 5px; font-size: 0.78rem; color: #f8fafc; line-height: 1.25; }
+    .lane-node p { margin: 0; font-size: 0.71rem; color: var(--muted); line-height: 1.42; }
 
-    /* INTERACTIVE ANIMATED ARCHITECTURE FLOW */
-    .pipeline-wrap { position: relative; margin-top: 14px; }
-    .arch-flow {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
-      position: relative;
-      z-index: 2;
-    }
-    .arch-box {
-      cursor: pointer;
-      padding: 16px;
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(19, 28, 51, 0.96), rgba(10, 15, 29, 0.96));
-      border: 1px solid var(--border);
-      border-top: 3px solid var(--accent, var(--blue));
-      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-    }
-    .arch-box:hover, .arch-box.active {
-      transform: translateY(-4px);
-      border-color: var(--accent, var(--blue));
-      box-shadow: 0 12px 28px color-mix(in srgb, var(--accent, var(--blue)) 24%, transparent);
-    }
-    .arch-box h3 {
-      margin: 0 0 8px;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #f8fafc;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .pulse-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent, var(--blue));
-      animation: pulseRing 2s infinite;
-    }
-    @keyframes pulseRing {
-      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, var(--blue)) 70%, transparent); }
-      70% { box-shadow: 0 0 0 8px transparent; }
-      100% { box-shadow: 0 0 0 0 transparent; }
-    }
-    .arch-box ul { margin: 0; padding-left: 16px; font-size: 0.77rem; color: var(--muted); line-height: 1.58; }
-    .arch-inspector {
-      margin-top: 14px;
-      padding: 16px 18px;
-      border-radius: 12px;
-      background: rgba(7, 11, 22, 0.88);
-      border: 1px solid var(--border-hi);
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 16px;
-      align-items: center;
-    }
-    .arch-inspector h4 { margin: 0 0 6px; color: #f8fafc; font-size: 0.92rem; }
-    .arch-inspector p { margin: 0; color: #cbd5e1; font-size: 0.83rem; }
-    .arch-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-    .tech-tag {
-      padding: 4px 9px;
-      border-radius: 6px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      background: rgba(30, 41, 59, 0.9);
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      color: #e2e8f0;
+    .tick-callout {
+      margin-top: 14px; padding: 12px 16px; border-radius: 11px;
+      background: rgba(39, 244, 210, 0.08); border: 1px solid rgba(39, 244, 210, 0.32);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 0.8rem;
     }
 
-    /* LIVE ANIMATED BENCHMARK METERS */
-    .bench-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+    /* INTERACTIVE ZERO-SCROLL WIREFRAME DIAGRAM */
+    .wireframe-wrap { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; align-items: center; }
+    .wf-browser {
+      border-radius: 12px; overflow: hidden; border: 1px solid rgba(56, 189, 248, 0.35);
+      background: #060911; box-shadow: 0 18px 42px rgba(0, 0, 0, 0.55);
     }
-    .bench-item {
-      padding: 15px 16px;
-      border-radius: 12px;
-      background: rgba(8, 13, 25, 0.86);
-      border: 1px solid var(--border);
+    .wf-chrome {
+      padding: 7px 11px; background: #0f172a; border-bottom: 1px solid rgba(148,163,184,0.18);
+      display: flex; justify-content: space-between; align-items: center; font-size: 0.66rem; color: var(--muted); font-family: monospace;
     }
-    .bench-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-    .bench-top strong { font-size: 0.86rem; }
+    .wf-viewport {
+      height: 250px; display: grid; grid-template-columns: 88px minmax(0, 1fr);
+      padding: 8px; gap: 8px; overflow: hidden;
+    }
+    .wf-rail {
+      border-radius: 7px; background: rgba(15, 23, 42, 0.95); border: 1px dashed rgba(250, 204, 21, 0.55);
+      padding: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 0.58rem; color: var(--gold);
+    }
+    .wf-rail-rung { padding: 3px 4px; border-radius: 4px; background: rgba(255,255,255,0.05); color: #cbd5e1; text-align: center; font-weight: 700; }
+    .wf-rail-rung.on { background: rgba(225, 6, 0, 0.25); border: 1px solid var(--red); color: #fff; }
+    .wf-main { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+    .wf-topbar {
+      padding: 5px 8px; border-radius: 6px; background: rgba(15, 23, 42, 0.95);
+      border: 1px dashed rgba(56, 189, 248, 0.55); font-size: 0.6rem; color: var(--blue);
+      display: flex; justify-content: space-between;
+    }
+    .wf-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .wf-card {
+      border-radius: 6px; background: rgba(15, 23, 42, 0.88); border: 1px dashed rgba(39, 244, 210, 0.5);
+      padding: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 0.58rem; color: var(--teal);
+    }
+    .wf-scroll {
+      flex: 1; border-radius: 4px; background: rgba(39, 244, 210, 0.08);
+      padding: 4px; display: flex; flex-direction: column; gap: 3px;
+    }
+    .wf-line { height: 7px; border-radius: 3px; background: rgba(148, 163, 184, 0.22); }
+
+    /* EXTENSION SEAMS + BENCHMARKS + ROLES + ONBOARDING */
+    .seams-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .seam-card {
+      padding: 15px 16px; border-radius: 12px; background: rgba(8, 13, 25, 0.88);
+      border: 1px solid var(--border); border-left: 3px solid var(--sc, var(--teal));
+    }
+    .seam-card h4 { margin: 0 0 5px; font-size: 0.86rem; color: #f8fafc; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .seam-card p { margin: 0; font-size: 0.78rem; color: #cbd5e1; line-height: 1.5; }
+
+    .bench-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .bench-item { padding: 15px 16px; border-radius: 12px; background: rgba(8, 13, 25, 0.86); border: 1px solid var(--border); }
+    .bench-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
     .bench-delta { font-size: 0.78rem; font-weight: 900; color: var(--teal); }
-    .bench-sub { font-size: 0.76rem; color: var(--muted); margin-bottom: 8px; }
-    .meter-track {
-      height: 8px;
-      border-radius: 999px;
-      background: rgba(148, 163, 184, 0.14);
-      overflow: hidden;
-    }
-    .meter-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--red), var(--papaya), var(--teal));
-      transition: width 1.25s cubic-bezier(0.22, 1, 0.36, 1);
-    }
+    .bench-sub { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; }
+    .meter-track { height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.14); overflow: hidden; }
+    .meter-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--red), var(--papaya), var(--teal)); transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
 
-    /* HIRING & OPEN ROLES */
-    .roles-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-    }
+    .roles-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .role-card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 20px;
-      border-radius: 14px;
+      display: flex; flex-direction: column; gap: 9px; padding: 19px; border-radius: 14px;
       background: linear-gradient(180deg, rgba(19, 28, 51, 0.92), rgba(9, 14, 27, 0.96));
-      border: 1px solid var(--border);
-      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+      border: 1px solid var(--border); transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
     }
-    .role-card:hover {
-      transform: translateY(-5px);
-      border-color: var(--role-col, var(--teal));
-      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.48);
-    }
-    .role-kicker {
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--role-col, var(--teal));
-    }
-    .role-card h3 { margin: 0; font-size: 1rem; color: #f8fafc; }
-    .role-card p { margin: 0; font-size: 0.82rem; color: #cbd5e1; line-height: 1.55; }
-    .role-list { margin: 0; padding-left: 17px; font-size: 0.78rem; color: var(--muted); line-height: 1.55; flex: 1; }
-    .role-stack { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .role-card:hover { transform: translateY(-5px); border-color: var(--role-col, var(--teal)); box-shadow: 0 18px 36px rgba(0, 0, 0, 0.48); }
+    .role-kicker { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--role-col, var(--teal)); }
+    .role-card h3 { margin: 0; font-size: 0.98rem; color: #f8fafc; }
+    .role-card p { margin: 0; font-size: 0.8rem; color: #cbd5e1; line-height: 1.5; }
+    .role-list { margin: 0; padding-left: 17px; font-size: 0.77rem; color: var(--muted); line-height: 1.52; flex: 1; }
+    .role-stack { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .tech-tag { padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.22); color: #e2e8f0; }
 
-    /* ONBOARDING ROADMAP + QUICKSTART TERMINAL */
-    .onboard-grid {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 16px;
-    }
+    .onboard-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
     .timeline { display: flex; flex-direction: column; gap: 10px; }
-    .tl-step {
-      display: grid;
-      grid-template-columns: 88px minmax(0, 1fr);
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: 11px;
-      background: rgba(8, 13, 25, 0.82);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--blue);
-    }
-    .tl-time { font-size: 0.72rem; font-weight: 900; color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2px; }
-    .tl-step strong { display: block; font-size: 0.86rem; margin-bottom: 2px; }
-    .tl-step span { font-size: 0.78rem; color: var(--muted); }
+    .tl-step { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; padding: 12px 14px; border-radius: 11px; background: rgba(8, 13, 25, 0.82); border: 1px solid var(--border); border-left: 3px solid var(--blue); }
+    .tl-time { font-size: 0.7rem; font-weight: 900; color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2px; }
+    .tl-step strong { display: block; font-size: 0.84rem; margin-bottom: 2px; }
+    .tl-step span { font-size: 0.76rem; color: var(--muted); }
 
-    .terminal {
-      border-radius: 12px;
-      overflow: hidden;
-      background: #04070f;
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      display: flex;
-      flex-direction: column;
-    }
-    .term-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      background: rgba(30, 41, 59, 0.55);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-      font-size: 0.72rem;
-      color: var(--muted);
-    }
+    .terminal { border-radius: 12px; overflow: hidden; background: #04070f; border: 1px solid rgba(148, 163, 184, 0.24); display: flex; flex-direction: column; }
+    .term-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(30, 41, 59, 0.55); border-bottom: 1px solid rgba(148, 163, 184, 0.14); font-size: 0.72rem; color: var(--muted); }
     .term-dots { display: inline-flex; gap: 6px; }
     .term-dots i { width: 9px; height: 9px; border-radius: 50%; display: block; }
-    .term-code {
-      margin: 0;
-      padding: 14px 16px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 0.76rem;
-      line-height: 1.65;
-      color: #a5f3fc;
-      overflow-x: auto;
-      flex: 1;
-    }
+    .term-code { margin: 0; padding: 14px 16px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.75rem; line-height: 1.62; color: #a5f3fc; overflow-x: auto; flex: 1; }
     .term-code .cm { color: #64748b; }
     .term-code .ok { color: #4ade80; }
-    .copy-btn {
-      padding: 3px 9px;
-      border-radius: 6px;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e2e8f0;
-      font-size: 0.68rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
+    .copy-btn { padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.3); background: rgba(15, 23, 42, 0.9); color: #e2e8f0; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
     .copy-btn:hover { border-color: var(--teal); color: var(--teal); }
 
-    footer {
-      margin-top: 34px;
-      padding-top: 18px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
+    details.deep-dive { margin-top: 12px; border-radius: 10px; background: rgba(7, 11, 22, 0.72); border: 1px solid rgba(148, 163, 184, 0.16); padding: 9px 13px; }
+    details.deep-dive summary { cursor: pointer; font-size: 0.76rem; font-weight: 800; color: var(--teal); list-style: none; display: flex; justify-content: space-between; }
+    details.deep-dive summary::after { content: "+ Expand"; color: var(--muted); font-size: 0.7rem; }
+    details.deep-dive[open] summary::after { content: "− Collapse"; color: var(--teal); }
 
-    @media (max-width: 900px) {
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 0.76rem; color: var(--muted); }
+
+    @media (max-width: 960px) {
       .stat-strip { grid-template-columns: repeat(3, 1fr); }
-      .narrative-grid, .bench-grid, .roles-grid, .arch-flow, .onboard-grid, .arch-inspector { grid-template-columns: 1fr; }
-      .hero, .section-card { padding: 22px 18px; }
-      .arch-tags { justify-content: flex-start; }
+      .narrative-grid, .mod-grid, .er-grid, .rating-flow, .swimlane, .wireframe-wrap, .seams-grid, .bench-grid, .roles-grid, .onboard-grid { grid-template-columns: 1fr; }
+      .lane-node::after { display: none; }
+      .hero, .section-card { padding: 20px 16px; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
       .reveal { opacity: 1; transform: none; }
     }
     @media print {
-      #scroll-progress, .top-bar, #hero-track-canvas, .hero-actions, .copy-btn { display: none !important; }
+      #scroll-progress, .top-bar, #hero-track-canvas, .hero-actions, .copy-btn, .filter-bar { display: none !important; }
       body { background: #fff; color: #0f172a; }
-      .hero, .section-card, .stat, .arch-box, .role-card, .bench-item, .tl-step { background: #fff !important; color: #0f172a !important; box-shadow: none !important; border-color: #cbd5e1 !important; }
-      h1, h2, h3, strong, .stat b { color: #0f172a !important; -webkit-text-fill-color: #0f172a !important; }
-      article p, .subtitle, .stat span, .role-card p, .role-list { color: #334155 !important; }
+      .hero, .section-card, .stat, .mod-card, .er-panel, .er-tbl, .rf-box, .lane-node, .seam-card, .role-card, .bench-item, .tl-step { background: #fff !important; color: #0f172a !important; box-shadow: none !important; border-color: #cbd5e1 !important; }
+      h1, h2, h3, h4, strong, .stat b { color: #0f172a !important; -webkit-text-fill-color: #0f172a !important; }
     }
   </style>
 </head>
@@ -626,22 +371,22 @@
 
   <header class="top-bar">
     <div class="top-bar-inner">
-      <div class="brand">
-        <span class="brand-badge">TRAF1</span>
-        <span>ENGINEERING DOSSIER</span>
-      </div>
+      <div class="brand"><span class="brand-badge">TRAF1</span><span>VISUAL ARCHITECTURE &amp; HIRING DOSSIER</span></div>
       <nav class="nav-links">
         <a href="#overview">Overview</a>
-        <a href="#architecture">Live Architecture</a>
-        <a href="#benchmarks">Benchmarks</a>
-        <a href="#roles">Open Roles</a>
-        <a href="#quickstart" class="nav-cta">Join the Pit Wall →</a>
+        <a href="#modules">Repo Map</a>
+        <a href="#career-vs-ladder">Career vs Ladder</a>
+        <a href="#schemas">DB &amp; Ratings</a>
+        <a href="#pipeline">Race Pipeline</a>
+        <a href="#ui-pattern">Zero-Scroll UI</a>
+        <a href="#seams">Extension Seams</a>
+        <a href="#roles" class="nav-cta">Join the Pit Wall →</a>
       </nav>
     </div>
   </header>
 
   <main class="page">
-    <!-- ANIMATED HERO WITH LIVE CANVAS CIRCUIT + F1 START LIGHTS -->
+    <!-- ANIMATED HERO -->
     <section class="hero">
       <canvas id="hero-track-canvas" aria-hidden="true"></canvas>
       <div class="hero-content">
@@ -652,27 +397,28 @@
           <span class="lights-label" id="lights-status">SYSTEM CHECK · PIT WALL TELEMETRY</span>
         </div>
 
-        <h1>Build the Most Authentic <span class="accent-grad">Formula 1 Archive, 3D Sim &amp; Career Engine</span> Ever Run Locally.</h1>
-        <p class="subtitle">TRAF1 (Local F1) fuses 77 seasons of structured Formula 1 telemetry, procedural Three.js chassis modeling, fair multi-source driver scoring, live 2D/3D race simulation, and a 5-tier motorsport career—zero cloud lock-in, sub-5ms APIs, and huge technical runway ahead.</p>
+        <h1>Build the Most Authentic <span class="accent-grad">Formula 1 Archive, 3D Sim &amp; 5-Tier Career Engine</span> Ever Run Locally.</h1>
+        <p class="subtitle">Ground-truth architecture audit &amp; engineering pitch for <strong>TRAF1 (Local F1)</strong>: 77 F1 seasons, 1.13M F1DB rows, 26.1k LOC Python + 44.8k LOC vanilla JS/HTML/CSS, procedural Three.js cars, 79 real 2D circuits, and huge technical runway ahead.</p>
 
         <div class="hero-actions">
-          <a href="#roles" class="btn btn-primary">Explore Open Engineering Roles →</a>
-          <a href="#architecture" class="btn">Inspect Live System Blueprint</a>
-          <a href="#quickstart" class="btn">Run Locally in 30s</a>
+          <a href="#roles" class="btn btn-primary">Explore Open Engineering Tracks →</a>
+          <a href="#schemas" class="btn">Inspect SQLite ER &amp; Rating Flow</a>
+          <a href="#pipeline" class="btn">Trace Live Race Weekend</a>
+          <a href="#quickstart" class="btn">Boot Locally in 30s</a>
         </div>
 
         <div class="stat-strip">
           <div class="stat"><b data-count="77" data-suffix=" Yrs">77 Yrs</b><span>1950–2026 Archive</span></div>
-          <div class="stat"><b data-count="1.13" data-decimals="2" data-suffix="M">1.13M</b><span>F1DB Rows Indexed</span></div>
+          <div class="stat"><b data-count="1.13" data-decimals="2" data-suffix="M">1.13M</b><span>F1DB Rows (WAL)</span></div>
           <div class="stat"><b data-count="79" data-suffix="">79</b><span>Real 2D/3D Circuits</span></div>
-          <div class="stat"><b data-count="23" data-suffix="">23</b><span>Bespoke 3D Liveries</span></div>
+          <div class="stat"><b data-count="241" data-suffix="">241</b><span>Deduped 3D PNGs</span></div>
           <div class="stat"><b data-count="4.4" data-decimals="1" data-suffix="ms">4.4ms</b><span>Cached Deck API</span></div>
-          <div class="stat"><b data-count="38" data-suffix="/38">38/38</b><span>Automated Tests</span></div>
+          <div class="stat"><b data-count="38" data-suffix="/38">38/38</b><span>Passing Tests</span></div>
         </div>
       </div>
     </section>
 
-    <!-- 500-WORD ARCHITECTURAL NARRATIVE WITH EXPANDABLE TECH SPECS -->
+    <!-- 500-WORD EXECUTIVE ARCHITECTURE NARRATIVE -->
     <article id="overview" class="section-block narrative-grid">
       <section class="section-card reveal">
         <div class="section-head">
@@ -680,126 +426,346 @@
           <span class="pill red">Product Scope</span>
         </div>
         <p><strong>TRAF1 (Local F1)</strong> is a local-first Formula 1 web application that unites deep historical motorsport analytics with interactive racing, card battles, and team-management gameplay. Designed to run cleanly on localhost with zero cloud lock-in, the platform spans six tightly integrated experiences: a complete 1950–2026 Driver and Constructor Archive, printable Collector and Game Card decks exported as ReportLab PDFs, the 3D <strong>F1 Card Arena</strong> (Top Trumps GP, Track Simulator, Guess the Legend, and Higher/Lower), a <strong>Full CPU Broadcast Simulator</strong> with live telemetry and director cameras, a zero-scroll <strong>Team Principal Career</strong>, and <strong>Pit Wall: The Ladder</strong>—a persistent five-tier career rising from grassroots Karting through Formula 4, Formula 3, and Formula 2 into Formula 1, complete with a hybrid F2-to-F1 Career Fork.</p>
-        <details class="deep-dive">
-          <summary>Key Routes &amp; User Flows</summary>
-          <div class="dd-body">
-            <ul>
-              <li><code>/play</code> — 3D Top Trumps GP duel arena with 8 attributes, tyre compounds, ERS boosts &amp; Pit Wall abilities.</li>
-              <li><code>/sim</code> — Full CPU broadcast race director with live 2D/3D viewports, 6-component wear, radio voice synthesis &amp; weather radar.</li>
-              <li><code>/career</code> &amp; <code>/ladder</code> — Zero-scroll (100vh) management suites with persistent SQLite saves, scouting, R&amp;D, FIA voting &amp; live 2D Pit Wall.</li>
-            </ul>
-          </div>
-        </details>
       </section>
 
       <section class="section-card reveal">
         <div class="section-head">
           <h2><span class="num-chip">02</span> Data Foundation &amp; Fair Scoring</h2>
-          <span class="pill blue">Data &amp; Telemetry</span>
+          <span class="pill blue">5 SQLite WAL DBs</span>
         </div>
         <p>Under the hood, TRAF1 combines five local SQLite databases running in concurrent WAL mode: <code>f1.sqlite</code> for season standings and team palettes, <code>f1db.sqlite</code> (1.13 million rows of qualifying, race results, retirements, and lap records), <code>fia_docs.sqlite</code> (11,919 official steward and regulatory documents), plus relational career save stores <code>career_saves.sqlite</code> and <code>ladder_saves.sqlite</code>. Rather than relying on raw career win totals that disproportionately reward dominant machinery, <code>rating_engine.py</code> executes a cached bulk pass across F1DB, FIA steward infringements, and Driver DNA to compute eight era-normalized, machinery-adjusted attributes—Pace, Racecraft, Consistency, Duels, Clutch, Wet Weather, Tyre Care, and Driver-Fault DNF%. Mechanical failures are strictly separated from driver-fault crashes, while qualifying and race teammate head-to-head rates distinguish pure driver skill from estimated car strength across cards, live races, and careers.</p>
-        <details class="deep-dive">
-          <summary>Rating Engine Calibration Proof</summary>
-          <div class="dd-body">
-            <ul>
-              <li>Parses <code>races_race_results.reasonRetired</code> so Senna (23.5% mech DNF vs 9.9% fault) and Prost (21.8% vs 7.9%) are never penalized for turbo-era reliability.</li>
-              <li>Warm bulk index loads across 1.13M rows in ~240ms at server startup; <code>/api/ratings/driver</code> resolves in 1.4ms.</li>
-            </ul>
-          </div>
-        </details>
       </section>
 
       <section class="section-card reveal">
         <div class="section-head">
           <h2><span class="num-chip">03</span> Procedural 3D Cars, Tracks &amp; Weather</h2>
-          <span class="pill teal">Graphics &amp; Physics</span>
+          <span class="pill teal">Three.js &amp; Canvas 2D</span>
         </div>
         <p>Every vehicle in TRAF1 is procedurally sculpted in <strong>Three.js</strong> via <code>f1_car_3d.js</code> using year-faithful chassis geometry spanning 1950s cigar torpedoes, 1968 high wings, 1975 periscope airboxes, 2017 shark-fin T-wings, and 2026 compact active-aero cars. A year-aware livery registry resolves constructors onto 23 bespoke 3D pattern styles—including matte Red Bull bull-nose liveries, Ferrari HP blue-and-white accents, exposed-carbon Mercedes arrows, and classic heritage stripes—paired with matte, gloss, metallic, or carbon finishes. A headless Chrome studio renderer pre-bakes 1,231 team-year car icons deduplicated through a <code>manifest.json</code> alias map into 241 canonical PNGs, cutting disk usage by 80%. On race day, <code>f1_track_renderer.js</code> draws 79 authentic circuit layouts featuring Open-Meteo Doppler weather radar, surface-versus-core tyre cliffs, dirty-air downforce loss, pit-rejoin ghost predictors, and dynamic team radio.</p>
-        <details class="deep-dive">
-          <summary>Rendering &amp; Asset Pipeline Details</summary>
-          <div class="dd-body">
-            <ul>
-              <li>16 distinct aero-generation geometry buckets built procedurally with MeshPhysicalMaterial clearcoat &amp; woven carbon textures.</li>
-              <li><code>scripts/render_3d_cars.py</code> drives headless Chrome CDP to re-bake all 1,231 studio-lit car icons in 12.7 seconds.</li>
-            </ul>
-          </div>
-        </details>
       </section>
 
       <section class="section-card reveal">
         <div class="section-head">
           <h2><span class="num-chip">04</span> Backend Engineering &amp; Infra</h2>
-          <span class="pill gold">FastAPI &amp; Scale</span>
+          <span class="pill gold">FastAPI + Uvicorn</span>
         </div>
         <p>The server runs on <strong>Python, FastAPI, Uvicorn, and Jinja2</strong>, cleanly structured into seven domain routers (<code>archive</code>, <code>cards</code>, <code>game</code>, <code>career</code>, <code>ladder</code>, <code>f1db</code>, and <code>dev</code>) backed by decoupled engines for practice programmes, wind-tunnel R&amp;D correlation, cost-cap accounting, FIA regulation voting, paddock politics, and five-tier world AI. Infrastructure middleware provides GZip compression (shrinking HTML and JS payloads by over 72%), immutable versioned static caching, startup index warmups, sub-5-millisecond cached deck APIs, a live <code>/api/health</code> diagnostics endpoint, and a 38-test automated verification suite ensuring rock-solid reliability across every layer.</p>
-        <details class="deep-dive">
-          <summary>Production Discipline Already Built In</summary>
-          <div class="dd-body">
-            <ul>
-              <li>Request-scoped SQLite session middleware cleanly closes connections via Python <code>ContextVar</code>.</li>
-              <li>Zero Starlette deprecation warnings, strict path-traversal guards on image serving, and SQLite WAL across all 5 DBs.</li>
-            </ul>
-          </div>
-        </details>
       </section>
     </article>
 
-    <!-- INTERACTIVE SYSTEM ARCHITECTURE EXPLORER -->
-    <section id="architecture" class="section-block section-card reveal">
+    <!-- AUDIT AREA 1: INTERACTIVE REPO TREE & MODULE OWNERSHIP MAP -->
+    <section id="modules" class="section-block section-card reveal">
       <div class="section-head">
-        <h2>Interactive System Architecture Explorer</h2>
-        <span class="pill papaya">Click Any Layer to Inspect</span>
+        <h2><span class="num-chip">A1</span> Repository Topology &amp; Module Ownership Map</h2>
+        <span class="pill blue">26,144 Backend LOC · 44,811 Frontend LOC</span>
       </div>
-      <div class="pipeline-wrap">
-        <div class="arch-flow" id="arch-flow">
-          <div class="arch-box active" data-layer="data" style="--accent:#38bdf8">
-            <h3>1. Data Layer <span class="pulse-dot"></span></h3>
-            <ul>
-              <li><code>f1.sqlite</code> (1950–2026)</li>
-              <li><code>f1db.sqlite</code> (1.13M rows)</li>
-              <li><code>fia_docs.sqlite</code> (11.9k docs)</li>
-              <li><code>career</code> &amp; <code>ladder</code> WAL DBs</li>
-            </ul>
-          </div>
-          <div class="arch-box" data-layer="engines" style="--accent:#facc15">
-            <h3>2. Domain Engines <span class="pulse-dot"></span></h3>
-            <ul>
-              <li><code>rating_engine.py</code> (8 stats)</li>
-              <li><code>livery_registry.py</code> (23 styles)</li>
-              <li><code>weather_radar.py</code> &amp; Weekend</li>
-              <li><code>ladder_engine.py</code> (5 tiers)</li>
-            </ul>
-          </div>
-          <div class="arch-box" data-layer="api" style="--accent:#e10600">
-            <h3>3. FastAPI Core <span class="pulse-dot"></span></h3>
-            <ul>
-              <li>7 Modular APIRouters</li>
-              <li>GZip + Immutable Cache</li>
-              <li>Startup Warmup &amp; Deck Cache</li>
-              <li><code>/api/health</code> + ReportLab PDF</li>
-            </ul>
-          </div>
-          <div class="arch-box" data-layer="clients" style="--accent:#27f4d2">
-            <h3>4. 2D &amp; 3D Clients <span class="pulse-dot"></span></h3>
-            <ul>
-              <li>Three.js 1950–2026 Cars</li>
-              <li>79-Circuit 2D Track Map</li>
-              <li>Pit-Rejoin Ghosts &amp; Radar</li>
-              <li>Zero-Scroll Command UIs</li>
-            </ul>
+      <p style="margin:0 0 12px;color:#cbd5e1;font-size:0.86rem;">Filter the live codebase below to inspect exact module boundaries, router responsibilities, and where the largest refactor opportunities live:</p>
+      <div class="filter-bar" id="mod-filters">
+        <button type="button" class="btn btn-sm active" data-mfilter="all">All Modules</button>
+        <button type="button" class="btn btn-sm" data-mfilter="router">7 FastAPI Routers</button>
+        <button type="button" class="btn btn-sm" data-mfilter="engine">Domain Engines</button>
+        <button type="button" class="btn btn-sm" data-mfilter="frontend">2D / 3D Frontend JS</button>
+      </div>
+      <div class="mod-grid" id="mod-grid"></div>
+    </section>
+
+    <!-- AUDIT AREA 2: CAREER vs LADDER STATE & DUPLICATION MATRIX -->
+    <section id="career-vs-ladder" class="section-block section-card reveal">
+      <div class="section-head">
+        <h2><span class="num-chip">A2</span> Current State Audit: Team Principal Career vs. Pit Wall: The Ladder</h2>
+        <span class="pill papaya">Shared vs. Duplicated vs. Next Upgrades</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cmp-table">
+          <thead>
+            <tr>
+              <th style="width:17%">Subsystem</th>
+              <th style="width:33%">Team Principal Career (<code>/career</code>)</th>
+              <th style="width:33%">Pit Wall: The Ladder (<code>/ladder</code>)</th>
+              <th style="width:17%">Code Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Persistence</strong></td>
+              <td><code>career_db.py</code> — 8 tables in <code>career_saves.sqlite</code> (slots, checkpoints, mid-race snapshots, reports, telemetry).</td>
+              <td><code>ladder_db.py</code> — 2 tables in <code>ladder_saves.sqlite</code> (<code>ladder_saves</code> + indexed <code>ladder_history</code>).</td>
+              <td><span class="st-badge st-dup">Separate DBs</span></td>
+            </tr>
+            <tr>
+              <td><strong>Weekend FP &amp; Quali</strong></td>
+              <td>Full <code>FP1 → FP2 → FP3 → Q1/Q2/Q3</code> via <code>weekend_engine.py</code> (6 programmes, Dev Points, watchable via <code>weekend_session_sim.js</code>).</td>
+              <td>Single-shot setup slider (Kart flex/gear/PSI vs F4+ wings) + 3 Quali tactics + F3/F2 Reverse-Grid Sprints.</td>
+              <td><span class="st-badge st-gap">Upgrade Seam</span></td>
+            </tr>
+            <tr>
+              <td><strong>Live Race Sim</strong></td>
+              <td><code>full_sim.js</code> + <code>f1_race_engine.js</code> — 2D + 3D broadcast viewports, 6-component wear, Edge-TTS radio.</td>
+              <td><code>ladder_race_sim.js</code> — 2D <code>F1TrackRenderer</code> map, Pit-Rejoin Ghosts, surface/core tyre cliffs, dirty air (&lt;1.5s), 1×–16× auto-pause.</td>
+              <td><span class="st-badge st-shared">Shared Track 2D</span><br><span class="st-badge st-dup" style="margin-top:4px">Parallel Sim JS</span></td>
+            </tr>
+            <tr>
+              <td><strong>5-Tier Ecosystem</strong></td>
+              <td>Single F1 tier + side feeder series module (<code>feeders.py</code>) for recruiting F2/F3/F1A juniors.</td>
+              <td>All 5 tiers (<code>KART → F4 → F3 → F2 → F1</code>) advance concurrently with strict Unlock Matrix &amp; rolling 3-yr 40-pt Super License.</td>
+              <td><span class="st-badge st-v1">Live v1</span><br><span class="st-badge st-gap" style="margin-top:4px">Needs AI Transfers</span></td>
+            </tr>
+            <tr>
+              <td><strong>Driver Ratings</strong></td>
+              <td>Inherits calibrated 8-stat profiles directly from <code>rating_engine.py</code> + F1DB/FIA Docs.</td>
+              <td>Uses <code>feeders.py</code> for F2/F3/F1A + hardcoded <code>f1_seeds</code> for Tier 5 F1 (not yet wired to <code>rating_engine.py</code>).</td>
+              <td><span class="st-badge st-gap">Wire Rating Engine</span></td>
+            </tr>
+            <tr>
+              <td><strong>Politics &amp; Fork</strong></td>
+              <td><code>paddock_profiles.py</code> (TP personalities + job stress) &amp; <code>regulation_architect.py</code> (2D CAD / 3D custom tools).</td>
+              <td>F3/F2 F1 Academy KPI contracts, F1 Gardening Leave poaching, FIA proposals, &amp; F2→F1 Hybrid Career Fork (Poach / Bid / Mercenary).</td>
+              <td><span class="st-badge st-v1">Fork Live v1</span><br><span class="st-badge st-gap" style="margin-top:4px">Plug TP Profiles</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- AUDIT AREA 3: VISUAL SQLITE ER DIAGRAM + RATING ENGINE DATA FLOW -->
+    <section id="schemas" class="section-block section-card reveal">
+      <div class="section-head">
+        <h2><span class="num-chip">A3</span> Visual Database Schemas &amp; <code>rating_engine.py</code> Data Pipeline</h2>
+        <span class="pill teal">SQLite WAL · 1.13M Rows Indexed in ~240ms</span>
+      </div>
+
+      <div class="er-grid">
+        <div class="er-panel">
+          <h3><span><code>data/career_saves.sqlite</code></span><span class="pill gold">8 Tables · 3 Indexes</span></h3>
+          <div class="er-nodes">
+            <div class="er-tbl is-root">
+              <div class="er-tbl-name"><span>career_slots</span><span style="color:var(--gold)">ROOT</span></div>
+              <div class="er-cols"><span class="pk">PK slot_id</span> · slot_name · team_name · era · season_num · current_round · wcc_pos · cash_m · car_overall · is_active · state_json</div>
+            </div>
+            <div class="er-tbl" style="--tc:#38bdf8">
+              <div class="er-tbl-name"><span>career_checkpoints</span><span>1:N</span></div>
+              <div class="er-cols"><span class="pk">PK checkpoint_id</span> · <span class="fk">FK slot_id</span> · label · season_num · round_num · state_json</div>
+            </div>
+            <div class="er-tbl" style="--tc:#27f4d2">
+              <div class="er-tbl-name"><span>career_midrace</span><span>1:1</span></div>
+              <div class="er-cols"><span class="pk">PK/FK slot_id</span> · season_num · round_num · circuit_id · lap · snapshot_json</div>
+            </div>
+            <div class="er-tbl" style="--tc:#ff8000">
+              <div class="er-tbl-name"><span>career_race_reports</span><span>1:N</span></div>
+              <div class="er-cols"><span class="pk">PK report_id</span> · <span class="fk">FK slot_id</span> · gp_name · winner_name · weather_summary · sc_count · report_json</div>
+            </div>
+            <div class="er-tbl" style="--tc:#a855f7">
+              <div class="er-tbl-name"><span>career_race_telemetry</span><span>1:N</span></div>
+              <div class="er-cols"><span class="pk">PK (slot_id, season, round)</span> · telemetry_json · interviews_json</div>
+            </div>
+            <div class="er-tbl is-root" style="border-top-color:#94a3b8;background:rgba(15,23,42,0.75)">
+              <div class="er-tbl-name"><span>Standalone Global Tables</span><span style="color:var(--muted)">Profile &amp; Mods</span></div>
+              <div class="er-cols"><code>custom_seasons</code> (season_id, config_json) · <code>player_profile</code> (id=1, stats_json) · <code>player_achievements</code> (achievement_id, meta_json)</div>
+            </div>
           </div>
         </div>
-        <div class="arch-inspector" id="arch-inspector">
-          <div>
-            <h4 id="insp-title">Data Layer — Five Concurrent WAL SQLite Stores</h4>
-            <p id="insp-desc">Every historical race result, qualifying time, retirement reason, FIA steward ruling, and multi-season career state lives locally with zero external DB daemon required. Startup hooks enforce WAL mode and composite indexes automatically.</p>
+
+        <div class="er-panel">
+          <h3><span><code>data/ladder_saves.sqlite</code></span><span class="pill green">2 Tables · 1 Index</span></h3>
+          <div class="er-nodes" style="grid-template-columns:1fr;">
+            <div class="er-tbl is-root" style="border-top-color:var(--green)">
+              <div class="er-tbl-name"><span>ladder_saves</span><span style="color:var(--green)">ROOT</span></div>
+              <div class="er-cols"><span class="pk">PK save_id</span> · team_name · principal_name · tier (karting..f1) · season · round · cash_k · reputation · career_path · state_json · created_at · updated_at</div>
+            </div>
+            <div class="er-tbl" style="--tc:#38bdf8">
+              <div class="er-tbl-name"><span>ladder_history</span><span>1:N Indexed</span></div>
+              <div class="er-cols"><span class="pk">PK id</span> · <span class="fk">FK save_id</span> · season · tier · team_name · team_pos · champion_driver · points · career_path · summary_json</div>
+            </div>
+            <div class="er-tbl" style="--tc:#e10600;border-style:dashed;opacity:0.88">
+              <div class="er-tbl-name"><span>Planned Normalized Seam</span><span style="color:#fca5a5">NEXT</span></div>
+              <div class="er-cols">+ <code>ladder_race_reports</code> &amp; <code>ladder_midrace</code> (mirrors Career's normalized pattern for 15+ season telemetry &amp; mid-race resume)</div>
+            </div>
           </div>
-          <div class="arch-tags" id="insp-tags">
-            <span class="tech-tag">SQLite WAL</span>
-            <span class="tech-tag">1.13M Rows</span>
-            <span class="tech-tag">11,919 FIA Docs</span>
-            <span class="tech-tag">Zero Cloud Lock-in</span>
+        </div>
+      </div>
+
+      <!-- FAIR RATING ENGINE VISUAL FLOW -->
+      <div class="rating-flow">
+        <div class="rf-box">
+          <h3 style="margin:0 0 10px;font-size:0.88rem;color:#f8fafc;">How <code>rating_engine.py</code> Computes Fair Attributes</h3>
+          <div class="rf-step" style="--sc:#38bdf8">
+            <strong>1. Bulk Index Warmup (<code>_build_f1db_and_fia_index()</code>)</strong>
+            Single pass at server startup (~240ms) reading <code>f1db.sqlite</code> (<code>drivers</code>, <code>races</code>, <code>races_race_results</code>) + <code>fia_docs.sqlite</code> (steward penalty regex <code>Car XX - Surname</code>).
           </div>
+          <div class="rf-step" style="--sc:#ff8000">
+            <strong>2. Mechanical vs. Driver-Fault DNF Separation</strong>
+            Regex classifies <code>reasonRetired</code>: Engine/Gearbox/Hydraulics become <code>mech_dnf_pct</code> (excluded from driver penalty), while Accident/Collision/Spin become <code>driver_fault_dnf_pct</code>.
+          </div>
+          <div class="rf-step" style="--sc:#27f4d2">
+            <strong>3. Machinery-Adjusted Skill vs. Car Strength</strong>
+            Groups teammates by <code>(raceId, constructorId)</code> to compute exact <strong>Quali H2H %</strong>, <strong>Race H2H %</strong> (excl. mech DNFs), and <code>positionsGained</code> — isolating <code>driver_skill</code> from <code>car_strength_est</code>.
+          </div>
+        </div>
+
+        <div class="rf-box">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <strong style="font-size:0.88rem;">Live Output: Max Verstappen</strong>
+            <span class="pill gold">FAIR 99.0 · SKL 86.5 · CAR 91.0</span>
+          </div>
+          <div class="rf-bars">
+            <div class="rf-stat"><div class="rf-stat-top"><span>PACE</span><span>92</span></div><div class="rf-track"><div class="rf-fill" style="width:92%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>RACECRAFT</span><span>92</span></div><div class="rf-track"><div class="rf-fill" style="width:92%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>CONSISTENCY</span><span>89</span></div><div class="rf-track"><div class="rf-fill" style="width:89%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>DUELS</span><span>88</span></div><div class="rf-track"><div class="rf-fill" style="width:88%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>CLUTCH</span><span>94</span></div><div class="rf-track"><div class="rf-fill" style="width:94%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>WET WEATHER</span><span>94</span></div><div class="rf-track"><div class="rf-fill" style="width:94%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>TYRE CARE</span><span>90</span></div><div class="rf-track"><div class="rf-fill" style="width:90%"></div></div></div>
+            <div class="rf-stat"><div class="rf-stat-top"><span>FAULT DNF (LOW)</span><span style="color:#4ade80">5.9%</span></div><div class="rf-track"><div class="rf-fill" style="width:24%;background:#22c55e"></div></div></div>
+          </div>
+          <details class="deep-dive" style="margin-top:10px">
+            <summary>Inspect Exact JSON Payload (<code>telemetry</code> + <code>stats</code>)</summary>
+            <pre class="json-pre">{
+  "fair_overall": 99.0, "driver_skill": 86.5, "car_strength_est": 91.0,
+  "stats": { "pace": 92, "racecraft": 92, "reliability": 89, "duels": 88,
+             "clutch": 94, "wet": 94, "tyre_care": 90, "discipline": 85, "dnf_rate": 5.9 },
+  "telemetry": {
+    "source": "F1DB + FIA Docs", "poles": 51, "dotd": 234, "grand_slams": 6,
+    "avg_quali": 4.64, "avg_finish": 3.64, "avg_pos_gained": 1.19,
+    "quali_h2h_pct": 79.8, "race_h2h_pct": 79.3,
+    "driver_fault_dnf_pct": 5.9, "mech_dnf_pct": 6.7, "time_penalties": 10
+  }
+}</pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- AUDIT AREA 4: ANIMATED RACE WEEKEND & FRONTEND TICK PIPELINE -->
+    <section id="pipeline" class="section-block section-card reveal">
+      <div class="section-head">
+        <h2><span class="num-chip">A4</span> End-to-End Race Weekend &amp; Live Tick Pipeline</h2>
+        <span class="pill red">100% Client-Side 60 FPS rAF Sim · Zero WS / Polling</span>
+      </div>
+
+      <div class="swimlane">
+        <div class="lane-node" style="--lc:#38bdf8">
+          <span class="lane-num">Stage 01 · Boot</span>
+          <h4>FastAPI + Jinja2</h4>
+          <p><code>GET /career</code> or <code>/ladder</code> renders zero-scroll shell + loads JS modules with <code>?v={{asset_v}}</code> immutable cache.</p>
+        </div>
+        <div class="lane-node" style="--lc:#facc15">
+          <span class="lane-num">Stage 02 · Prep</span>
+          <h4><code>weekend_engine</code> &amp; Radar</h4>
+          <p>Initializes FP1–FP3 programmes, Dev Points, Strategy Intel &amp; Open-Meteo Doppler rain cells.</p>
+        </div>
+        <div class="lane-node" style="--lc:#ff8000">
+          <span class="lane-num">Stage 03 · Practice</span>
+          <h4>Watch Live or Sim</h4>
+          <p><code>weekend_session_sim.js</code> animates 20 cars on GPS tracks; <code>POST /practice</code> commits XP &amp; Knowledge.</p>
+        </div>
+        <div class="lane-node" style="--lc:#a855f7">
+          <span class="lane-num">Stage 04 · Quali</span>
+          <h4>Q1–Q3 / Grid Lock</h4>
+          <p><code>POST /qualify</code> computes lap times, traffic/tow variance, PU grid penalties &amp; Reverse-Grid Sprints.</p>
+        </div>
+        <div class="lane-node" style="--lc:#27f4d2">
+          <span class="lane-num">Stage 05 · Race</span>
+          <h4>2D Map &amp; 3D Cars</h4>
+          <p><code>F1TrackRenderer</code> draws 79 circuits + Pit-Rejoin Ghosts; <code>F1Car3D</code> sculpts 1950–2026 Three.js cars.</p>
+        </div>
+        <div class="lane-node" style="--lc:#22c55e">
+          <span class="lane-num">Stage 06 · Commit</span>
+          <h4>Authoritative Save</h4>
+          <p>On Chequered Flag, <code>POST /race/commit</code> updates points, Cost Cap, crash bills, SL pts &amp; SQLite WAL.</p>
+        </div>
+      </div>
+
+      <div class="tick-callout">
+        <div><strong>Live Tick Architecture:</strong> All live race physics (<code>full_sim.js</code>, <code>ladder_race_sim.js</code>, <code>weekend_session_sim.js</code>) execute locally inside a <strong>60 FPS <code>requestAnimationFrame</code> loop</strong> with variable time scaling (<code>1×–16×</code>) and critical auto-pause triggers. FastAPI is never spammed with per-tick HTTP/WS traffic—it stays sub-5ms for state transitions, persistence, and analytics.</div>
+        <span class="pill teal">Ready for Optional WebSocket Co-Op</span>
+      </div>
+    </section>
+
+    <!-- AUDIT AREA 5: ZERO-SCROLL COMMAND CENTER WIREFRAME EXPLAINER -->
+    <section id="ui-pattern" class="section-block section-card reveal">
+      <div class="section-head">
+        <h2><span class="num-chip">A5</span> Zero-Scroll (<code>100vh</code>) Command Center UI Contract</h2>
+        <span class="pill purple">Vanilla ES6 IIFE · Zero Bundler · Desktop 900px = 900px</span>
+      </div>
+
+      <div class="wireframe-wrap">
+        <div class="wf-browser">
+          <div class="wf-chrome">
+            <span>http://127.0.0.1:8001/ladder · 1440×900</span>
+            <span style="color:#4ade80">scrollHeight === innerHeight (ZERO SCROLL)</span>
+          </div>
+          <div class="wf-viewport">
+            <div class="wf-rail">
+              <strong style="font-size:0.6rem">LEFT RAIL (230px)</strong>
+              <div class="wf-rail-rung on">5 · F1</div>
+              <div class="wf-rail-rung">4 · F2</div>
+              <div class="wf-rail-rung">3 · F3</div>
+              <div class="wf-rail-rung">2 · F4</div>
+              <div class="wf-rail-rung">1 · KART</div>
+              <div style="margin-top:auto;font-size:0.54rem;color:#94a3b8">KPI Plaques + Save Switcher</div>
+            </div>
+            <div class="wf-main">
+              <div class="wf-topbar">
+                <span>FIXED TOPBAR (flex-shrink: 0) · 6 Command Tabs</span>
+                <span style="color:#fca5a5">[▶ Race Weekend]</span>
+              </div>
+              <div class="wf-cols">
+                <div class="wf-card">
+                  <strong>CARD 1</strong>
+                  <div class="wf-scroll"><div class="wf-line"></div><div class="wf-line" style="width:75%"></div><div class="wf-line"></div><div class="wf-line" style="width:60%"></div><div style="margin-top:auto;font-size:0.52rem">inner overflow-y:auto</div></div>
+                </div>
+                <div class="wf-card">
+                  <strong>CARD 2</strong>
+                  <div class="wf-scroll"><div class="wf-line"></div><div class="wf-line" style="width:85%"></div><div class="wf-line"></div><div class="wf-line" style="width:50%"></div><div style="margin-top:auto;font-size:0.52rem">min-height: 0</div></div>
+                </div>
+                <div class="wf-card">
+                  <strong>CARD 3</strong>
+                  <div class="wf-scroll"><div class="wf-line"></div><div class="wf-line" style="width:70%"></div><div class="wf-line"></div><div class="wf-line" style="width:80%"></div><div style="margin-top:auto;font-size:0.52rem">flex: 1</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:0.82rem;color:#cbd5e1;display:flex;flex-direction:column;gap:10px;">
+          <div class="rf-step" style="--sc:#facc15;margin:0">
+            <strong>CSS Viewport Lock</strong>
+            <code>body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }</code> hides footer; <code>.main-content</code> &amp; active panels use <code>flex: 1; min-height: 0; overflow: hidden;</code> so only inner card bodies scroll.
+          </div>
+          <div class="rf-step" style="--sc:#38bdf8;margin:0">
+            <strong>Zero-Build Vanilla JS State Loop</strong>
+            No React/Alpine/Webpack required. Server returns canonical <code>view</code> JSON; client holds <code>currentView</code> in closure memory + save ID in <code>localStorage</code> and re-renders active tabs on each REST <code>POST</code>.
+          </div>
+          <div class="rf-step" style="--sc:#27f4d2;margin:0">
+            <strong>Design Tokens</strong>
+            Carbon navy (<code>#060911</code> / <code>#0d1322</code>), <code>Orbitron</code> telemetry headers, <code>Inter</code>/<code>Source Sans 3</code> body, Rosso Corsa (<code>#e10600</code>), Petronas Teal (<code>#27f4d2</code>), Championship Gold (<code>#fde047</code>).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AUDIT AREA 6: CLEAN EXTENSION SEAMS & DEBT MAP -->
+    <section id="seams" class="section-block section-card reveal">
+      <div class="section-head">
+        <h2><span class="num-chip">A6</span> Clean Extension Seams &amp; Technical Debt Guardrails</h2>
+        <span class="pill green">38/38 Tests Safe Boundary</span>
+      </div>
+      <div class="seams-grid">
+        <div class="seam-card" style="--sc:#27f4d2">
+          <h4><span>Seam 1 · Wire <code>rating_engine.py</code> into Ladder Tier 5</span><span class="pill teal">Low Risk</span></h4>
+          <p>Replace hardcoded <code>f1_seeds</code> in <code>ladder_engine._build_5tier_world()</code> with live 8-attribute profiles from <code>compute_fair_attributes()</code> so F1 grids, wet pace, and fault DNF% stay 100% synced with F1DB.</p>
+        </div>
+        <div class="seam-card" style="--sc:#38bdf8">
+          <h4><span>Seam 2 · Plug Shared Weekend, Radar &amp; Radio Engines</span><span class="pill blue">High Leverage</span></h4>
+          <p>Reuse <code>weekend_engine.py</code> (tier-gated: off in Karting, 1–2 programmes in F4/F3, full FP1–FP3 in F2/F1), <code>weather_radar_ui.js</code>, and <code>f1_radio_engine.js</code> (gated by <code>unlocks.live_radio</code>) instead of duplicating logic.</p>
+        </div>
+        <div class="seam-card" style="--sc:#ff8000">
+          <h4><span>Seam 3 · Extract <code>f1data/ladder_world_ai.py</code></span><span class="pill papaya">Anti-Monolith</span></h4>
+          <p><code>ladder_engine.py</code> is already 1,829 LOC. Keep inter-tier AI driver promotions, 40-pt Super License graduates, 13yo Karting regens, and Silly Season TP firings in a clean new module invoked at season end.</p>
+        </div>
+        <div class="seam-card" style="--sc:#facc15">
+          <h4><span>Seam 4 · Normalize <code>ladder_saves.sqlite</code> &amp; Preserve Tests</span><span class="pill gold">Backwards-Compat</span></h4>
+          <p>Add <code>ladder_race_reports</code> and <code>ladder_midrace</code> tables alongside existing <code>ladder_saves</code> &amp; <code>ladder_history</code>, and reuse <code>paddock_profiles.py</code> in Tier 5 politics while keeping all 38 existing unit tests green.</p>
         </div>
       </div>
     </section>
@@ -807,87 +773,80 @@
     <!-- MEASURED INFRASTRUCTURE BENCHMARKS -->
     <section id="benchmarks" class="section-block section-card reveal">
       <div class="section-head">
-        <h2>Measured Engineering Benchmarks</h2>
-        <span class="pill green">Verified Locally</span>
+        <h2>Measured Infrastructure Benchmarks</h2>
+        <span class="pill green">Verified Against Live Uvicorn</span>
       </div>
       <div class="bench-grid">
         <div class="bench-item">
           <div class="bench-top"><strong>HTTP GZip Compression</strong><span class="bench-delta">−76% Payload</span></div>
-          <div class="bench-sub">/career dropped from 512.9 KB → 121.1 KB; career.js 225.9 KB → 59.1 KB</div>
+          <div class="bench-sub">/career 512.9 KB → 121.1 KB · /play 299.2 KB → 83.0 KB · career.js 225.9 KB → 59.1 KB</div>
           <div class="meter-track"><div class="meter-fill" data-fill="76"></div></div>
         </div>
         <div class="bench-item">
           <div class="bench-top"><strong>3D Car PNG Manifest Deduplication</strong><span class="bench-delta">−80% Storage (−98.4 MB)</span></div>
-          <div class="bench-sub">1,231 team-year car aliases served from 241 canonical studio-lit WebGL PNGs</div>
+          <div class="bench-sub">1,231 team-year car aliases served from 241 canonical studio-lit PNGs with immutable cache</div>
           <div class="meter-track"><div class="meter-fill" data-fill="80"></div></div>
         </div>
         <div class="bench-item">
           <div class="bench-top"><strong>/api/game/deck Cache &amp; Warmup</strong><span class="bench-delta">71× Faster (315ms → 4.4ms)</span></div>
-          <div class="bench-sub">Pre-warmed F1DB bulk rating index + in-memory keyed deck cache</div>
+          <div class="bench-sub">Pre-warmed F1DB bulk rating index at lifespan boot + keyed in-memory deck cache</div>
           <div class="meter-track"><div class="meter-fill" data-fill="96"></div></div>
         </div>
         <div class="bench-item">
-          <div class="bench-top"><strong>Automated Quality &amp; Runtime Gate</strong><span class="bench-delta">38/38 Tests · 0 JS Errors</span></div>
-          <div class="bench-sub">Full unit/API coverage + headless Chrome CDP visual &amp; zero-scroll verification</div>
+          <div class="bench-top"><strong>Quality &amp; Zero-Scroll Runtime Gate</strong><span class="bench-delta">38/38 Tests · 0 JS Errors</span></div>
+          <div class="bench-sub">All 5 SQLite DBs in WAL mode, 0 Starlette warnings, verified via headless Chrome CDP</div>
           <div class="meter-track"><div class="meter-fill" data-fill="100"></div></div>
         </div>
       </div>
     </section>
 
-    <!-- HIRING PITCH: OPEN ROLES & HIGH-IMPACT TECHNICAL CHALLENGES -->
+    <!-- HIRING PITCH: OPEN ENGINEERING TRACKS -->
     <section id="roles" class="section-block section-card reveal">
       <div class="section-head">
         <h2>Why Join the Pit Wall — Open Engineering Tracks</h2>
         <span class="pill red">High-Ownership Roles</span>
       </div>
-      <p style="margin:0 0 18px;color:#cbd5e1;font-size:0.92rem;">You won't be nudging CRUD forms or sitting in three layers of sprint ceremonies. TRAF1 already has a working 77-year dataset, live 3D cars, and five racing tiers—and we're looking for builders who want direct ownership over the next leap in graphics, simulation depth, and multiplayer architecture.</p>
-
+      <p style="margin:0 0 16px;color:#cbd5e1;font-size:0.88rem;">You won't be pushing CRUD tickets through three layers of ceremony. TRAF1 already has a working 77-year telemetry dataset, procedural 3D cars, and five racing tiers—we want builders ready to own the next leap in graphics, motorsport AI, and multiplayer systems.</p>
       <div class="roles-grid">
         <div class="role-card" style="--role-col:#27f4d2">
           <span class="role-kicker">Track 01 · Graphics &amp; WebGL</span>
           <h3>3D Car &amp; Broadcast Graphics Engineer</h3>
-          <p>Push our procedural Three.js pipeline from sleek studio models to broadcast-grade motorsport visuals.</p>
+          <p>Push our procedural Three.js pipeline from studio models to broadcast-grade motorsport visuals.</p>
           <ul class="role-list">
-            <li>Build animated DRS/active-aero wing actuation, glowing brake discs &amp; wet-track rain spray shaders.</li>
+            <li>Animate DRS/active-aero wing actuation, glowing brake discs &amp; wet-track rain spray particles.</li>
             <li>Add procedural sponsor/number canvas decals &amp; driver-specific helmet visors per season.</li>
-            <li>Optimize instanced 20–30 car rendering at locked 60 FPS on integrated laptop GPUs.</li>
+            <li>Optimize instanced 20–30 car grids at locked 60 FPS on integrated laptop GPUs.</li>
           </ul>
-          <div class="role-stack">
-            <span class="tech-tag">Three.js</span><span class="tech-tag">GLSL Shaders</span><span class="tech-tag">Canvas 2D</span>
-          </div>
+          <div class="role-stack"><span class="tech-tag">Three.js</span><span class="tech-tag">GLSL Shaders</span><span class="tech-tag">Canvas 2D</span></div>
         </div>
 
         <div class="role-card" style="--role-col:#ff8000">
           <span class="role-kicker">Track 02 · Simulation &amp; AI</span>
-          <h3>Race Physics &amp; Motorsport AI Engineer</h3>
+          <h3>Race Physics &amp; 5-Tier World AI Engineer</h3>
           <p>Deepen strategy realism across all five tiers—from Karting slipstreams to F1 wind-tunnel correlation.</p>
           <ul class="role-list">
-            <li>Refine core/surface tyre thermal models, undercut/overcut AI strategists &amp; Safety Car bunching.</li>
-            <li>Expand the 5-tier concurrent World AI: organic Silly Season chains, academy politics &amp; driver regen arcs.</li>
-            <li>Validate sim pace curves directly against our 1.13M-row F1DB lap &amp; pit-stop history.</li>
+            <li>Build <code>ladder_world_ai.py</code>: organic Silly Season chains, 40-pt SL promotions &amp; Karting regens.</li>
+            <li>Refine thermal tyre cliffs, undercut/overcut AI strategists &amp; Safety Car bunching.</li>
+            <li>Calibrate race pace curves directly against our 1.13M-row F1DB lap &amp; pit-stop history.</li>
           </ul>
-          <div class="role-stack">
-            <span class="tech-tag">Python</span><span class="tech-tag">Discrete-Event Sim</span><span class="tech-tag">F1DB Analytics</span>
-          </div>
+          <div class="role-stack"><span class="tech-tag">Python</span><span class="tech-tag">Discrete-Event Sim</span><span class="tech-tag">F1DB Analytics</span></div>
         </div>
 
         <div class="role-card" style="--role-col:#38bdf8">
           <span class="role-kicker">Track 03 · Full-Stack &amp; Systems</span>
-          <h3>Platform, Modularization &amp; Multiplayer Engineer</h3>
-          <p>Scale our fast local architecture into a modular, testable, real-time co-op pit-wall experience.</p>
+          <h3>Platform, Modularization &amp; Co-Op Engineer</h3>
+          <p>Scale our fast local architecture into a modular, testable, real-time multiplayer pit-wall platform.</p>
           <ul class="role-list">
-            <li>Add WebSocket synchronized pit-wall multiplayer (2+ players running rival teams in the same Ladder save).</li>
-            <li>Decompose large legacy modules (<code>career.js</code>, <code>full_sim.js</code>, <code>career.py</code>) into clean ES modules &amp; packages.</li>
-            <li>Build automated Playwright/CDP visual regression &amp; performance CI benchmarks.</li>
+            <li>Add WebSocket synchronized Pit Wall co-op (2+ principals running rival teams in one Ladder save).</li>
+            <li>Decompose large legacy modules (<code>career.js</code>, <code>full_sim.js</code>, <code>career.py</code>) into clean ES modules.</li>
+            <li>Expand Playwright/CDP visual regression &amp; performance CI benchmarks.</li>
           </ul>
-          <div class="role-stack">
-            <span class="tech-tag">FastAPI</span><span class="tech-tag">WebSockets</span><span class="tech-tag">SQLite WAL</span><span class="tech-tag">ES Modules</span>
-          </div>
+          <div class="role-stack"><span class="tech-tag">FastAPI</span><span class="tech-tag">WebSockets</span><span class="tech-tag">SQLite WAL</span><span class="tech-tag">ES Modules</span></div>
         </div>
       </div>
     </section>
 
-    <!-- ONBOARDING ROADMAP + 30-SECOND LOCAL QUICKSTART -->
+    <!-- FIRST 90 DAYS + 30-SECOND LOCAL SETUP -->
     <section id="quickstart" class="section-block section-card reveal">
       <div class="section-head">
         <h2>Your First 90 Days &amp; 30-Second Local Setup</h2>
@@ -897,15 +856,15 @@
         <div class="timeline">
           <div class="tl-step" style="border-left-color:var(--teal)">
             <div class="tl-time">Day 1–5</div>
-            <div><strong>Ship Your First Telemetry Feature</strong><span>Clone, run all 38 unit tests, inspect <code>/api/health</code>, and ship a tangible improvement in <code>/ladder</code>, <code>/sim</code>, or <code>f1_car_3d.js</code>.</span></div>
+            <div><strong>Ship Your First Telemetry Feature</strong><span>Clone, run all 38 tests, inspect <code>/api/health</code>, and wire <code>rating_engine.py</code> or <code>weekend_engine.py</code> into <code>/ladder</code>.</span></div>
           </div>
           <div class="tl-step" style="border-left-color:var(--papaya)">
             <div class="tl-time">Month 1</div>
-            <div><strong>Own a Core Subsystem</strong><span>Take technical ownership of one pillar—3D shader pipeline, multi-tier strategy AI, or modular ES/WebSocket platform refactoring.</span></div>
+            <div><strong>Own a Core Subsystem</strong><span>Take end-to-end ownership of one pillar—3D shader pipeline, 5-tier World AI, or modular ES/WebSocket platform refactoring.</span></div>
           </div>
           <div class="tl-step" style="border-left-color:var(--red)">
             <div class="tl-time">Quarter 1</div>
-            <div><strong>Co-Architect v2 Multiplayer Pit Wall</strong><span>Help launch live head-to-head Pit Wall seasons, richer FIA steward telemetry replay, and community custom-era mod packs.</span></div>
+            <div><strong>Co-Architect v2 Multiplayer Pit Wall</strong><span>Launch live head-to-head Pit Wall seasons, richer FIA steward telemetry replay, and community custom-era mod packs.</span></div>
           </div>
         </div>
 
@@ -916,13 +875,15 @@
             <button type="button" class="copy-btn" id="copy-cmd">Copy</button>
           </div>
           <pre class="term-code" id="term-code"><span class="cm"># 1. Run full 38-test engineering suite (~4.8s)</span>
-.venv/bin/python -m unittest discover -s tests -v
-<span class="ok">→ Ran 38 tests in 4.80s — OK</span>
+.venv/bin/python -m unittest tests/test_ladder.py tests/test_fair_ratings.py \
+  tests/test_weekend_weather.py tests/test_livery_regs_politics.py \
+  tests/test_career_upgrade.py tests/test_f1db.py tests/test_expansion_systems.py -v
+<span class="ok">→ Ran 38 tests in 5.01s — OK</span>
 
 <span class="cm"># 2. Boot local FastAPI + GZip + WAL server</span>
 .venv/bin/python -m uvicorn f1data.server:app --port 8001
 
-<span class="cm"># 3. Inspect live infra health &amp; jump into Pit Wall</span>
+<span class="cm"># 3. Check live infra health &amp; explore routes</span>
 curl -s http://127.0.0.1:8001/api/health | jq .
 <span class="cm"># Open: /ladder · /career · /sim · /play · /dev/car-3d</span></pre>
         </div>
@@ -930,7 +891,7 @@ curl -s http://127.0.0.1:8001/api/health | jq .
     </section>
 
     <footer>
-      <span><strong>TRAF1 (Local F1)</strong> · Technical Architecture &amp; Engineering Recruitment Dossier</span>
+      <span><strong>TRAF1 (Local F1)</strong> · Ground-Truth Architecture Audit &amp; Engineering Recruitment Dossier</span>
       <span>FastAPI · SQLite WAL · Three.js · Canvas 2D · ReportLab · Headless CDP</span>
     </footer>
   </main>
@@ -942,15 +903,13 @@ curl -s http://127.0.0.1:8001/api/health | jq .
       /* 1. F1 Start Lights Sequence */
       const pods = Array.from(document.querySelectorAll("#start-lights .light-pod"));
       const statusEl = document.getElementById("lights-status");
-      pods.forEach((pod, idx) => {
-        setTimeout(() => { pod.classList.add("is-red"); }, 220 + idx * 210);
-      });
+      pods.forEach((pod, idx) => setTimeout(() => pod.classList.add("is-red"), 200 + idx * 190));
       setTimeout(() => {
         pods.forEach((p) => { p.classList.remove("is-red"); p.classList.add("is-green"); });
         if (statusEl) statusEl.textContent = "LIGHTS OUT · WE'RE HIRING BUILDERS";
-      }, 1550);
+      }, 1450);
 
-      /* 2. Live Animated Telemetry Circuit Canvas in Hero Background */
+      /* 2. Live Animated Circuit Telemetry Canvas */
       const canvas = document.getElementById("hero-track-canvas");
       if (canvas && canvas.getContext) {
         const ctx = canvas.getContext("2d");
@@ -967,70 +926,41 @@ curl -s http://127.0.0.1:8001/api/health | jq .
           { t: 0.62, spd: 0.039, col: "#facc15", lbl: "ALO" }
         ];
         function sample(t) {
-          const n = pts.length;
-          const f = (((t % 1) + 1) % 1) * n;
-          const i = Math.floor(f);
-          const u = f - i;
+          const n = pts.length, f = (((t % 1) + 1) % 1) * n, i = Math.floor(f), u = f - i;
           const p0 = pts[(i - 1 + n) % n], p1 = pts[i % n], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
           const u2 = u * u, u3 = u2 * u;
-          const x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3);
-          const y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3);
-          return [x, y];
+          return [
+            0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3),
+            0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3)
+          ];
         }
         let last = performance.now();
         function drawHero(ts) {
-          const dt = Math.min(0.05, (ts - last) / 1000);
-          last = ts;
-          const rect = canvas.getBoundingClientRect();
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+          const rect = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
           const w = Math.max(300, Math.round(rect.width)), h = Math.max(200, Math.round(rect.height));
-          if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-            canvas.width = w * dpr; canvas.height = h * dpr;
-          }
-          ctx.save();
-          ctx.scale(dpr, dpr);
-          ctx.clearRect(0, 0, w, h);
-
-          // Glowing racing circuit spline
+          if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+          ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
           ctx.beginPath();
           for (let s = 0; s <= 120; s++) {
             const [nx, ny] = sample(s / 120);
-            if (s === 0) ctx.moveTo(nx * w, ny * h);
-            else ctx.lineTo(nx * w, ny * h);
+            if (s === 0) ctx.moveTo(nx * w, ny * h); else ctx.lineTo(nx * w, ny * h);
           }
           ctx.closePath();
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
-          ctx.lineWidth = 10;
-          ctx.stroke();
-          ctx.strokeStyle = "rgba(226, 232, 240, 0.25)";
-          ctx.lineWidth = 1.6;
-          ctx.setLineDash([6, 6]);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Animated car blips + trailing telemetry glow
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.22)"; ctx.lineWidth = 10; ctx.stroke();
+          ctx.strokeStyle = "rgba(226, 232, 240, 0.24)"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
           for (const c of cars) {
             c.t = (c.t + c.spd * dt) % 1;
             for (let k = 5; k >= 1; k--) {
               const [tx, ty] = sample(c.t - k * 0.006);
-              ctx.beginPath();
-              ctx.arc(tx * w, ty * h, 2.2, 0, Math.PI * 2);
-              ctx.fillStyle = c.col;
-              ctx.globalAlpha = 0.08 * (6 - k);
-              ctx.fill();
+              ctx.beginPath(); ctx.arc(tx * w, ty * h, 2.2, 0, Math.PI * 2);
+              ctx.fillStyle = c.col; ctx.globalAlpha = 0.08 * (6 - k); ctx.fill();
             }
             ctx.globalAlpha = 1;
             const [cx, cy] = sample(c.t);
-            ctx.beginPath();
-            ctx.arc(cx * w, cy * h, 4.5, 0, Math.PI * 2);
-            ctx.fillStyle = c.col;
-            ctx.fill();
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 1.4;
-            ctx.stroke();
-            ctx.fillStyle = "rgba(248,250,252,0.75)";
-            ctx.font = "800 9px monospace";
-            ctx.fillText(c.lbl, cx * w + 8, cy * h + 3);
+            ctx.beginPath(); ctx.arc(cx * w, cy * h, 4.4, 0, Math.PI * 2);
+            ctx.fillStyle = c.col; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.3; ctx.stroke();
+            ctx.fillStyle = "rgba(248,250,252,0.78)"; ctx.font = "800 9px monospace"; ctx.fillText(c.lbl, cx * w + 8, cy * h + 3);
           }
           ctx.restore();
           requestAnimationFrame(drawHero);
@@ -1040,57 +970,57 @@ curl -s http://127.0.0.1:8001/api/health | jq .
 
       /* 3. Animated KPI Count-Up */
       document.querySelectorAll(".stat b[data-count]").forEach((el) => {
-        const target = parseFloat(el.dataset.count);
-        const dec = parseInt(el.dataset.decimals || "0", 10);
-        const sfx = el.dataset.suffix || "";
-        const dur = 1100;
-        const t0 = performance.now();
+        const target = parseFloat(el.dataset.count), dec = parseInt(el.dataset.decimals || "0", 10), sfx = el.dataset.suffix || "", t0 = performance.now();
         function tick(now) {
-          const p = Math.min(1, (now - t0) / dur);
-          const eased = 1 - Math.pow(1 - p, 3);
+          const p = Math.min(1, (now - t0) / 1000), eased = 1 - Math.pow(1 - p, 3);
           el.textContent = (target * eased).toFixed(dec) + sfx;
           if (p < 1) requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
       });
 
-      /* 4. Interactive Architecture Layer Inspector */
-      const LAYER_INFO = {
-        data: {
-          title: "Data Layer — Five Concurrent WAL SQLite Stores",
-          desc: "Every historical race result, qualifying time, retirement reason, FIA steward ruling, and multi-season career save lives locally in WAL-mode SQLite with zero external DB daemon required. Startup hooks enforce WAL & composite indexes automatically.",
-          tags: ["SQLite WAL", "1.13M F1DB Rows", "11,919 FIA Docs", "Career & Ladder Saves"]
-        },
-        engines: {
-          title: "Domain Engines — Fair Ratings, 5-Tier AI & Physics",
-          desc: "Pure Python engines separate driver skill from car strength (rating_engine.py), resolve year-accurate liveries & finishes (livery_registry.py), run practice/qualifying & Doppler rain crossovers (weekend_engine.py, weather_radar.py), and advance all 5 Ladder tiers simultaneously.",
-          tags: ["rating_engine.py", "livery_registry.py", "ladder_engine.py", "paddock_profiles.py"]
-        },
-        api: {
-          title: "FastAPI Core — Modular Routers & Sub-5ms Caching",
-          desc: "Seven clean APIRouters mounted onto a single Uvicorn ASGI entrypoint with GZipMiddleware (-76% payloads), immutable versioned static caching, startup warmup, /api/health diagnostics, deduplicated car PNG serving, and ReportLab PDF deck generation.",
-          tags: ["FastAPI + Uvicorn", "GZip −76%", "4.4ms Deck Cache", "/api/health"]
-        },
-        clients: {
-          title: "2D & 3D Clients — Three.js Cars & Live Pit Wall Maps",
-          desc: "Zero-scroll dark command centers pair procedural 1950–2026 Three.js F1 cars (with 23 bespoke livery patterns) alongside 79 real 2D circuit maps featuring Pit-Rejoin Ghost markers, thermal tyre cliffs, dirty-air modeling, and 1×–16× smart auto-pause.",
-          tags: ["Three.js 3D", "F1TrackRenderer", "Pit-Rejoin Ghosts", "Zero-Scroll 100vh"]
-        }
-      };
-      const boxes = document.querySelectorAll(".arch-box");
-      boxes.forEach((box) => {
-        box.addEventListener("click", () => {
-          boxes.forEach((b) => b.classList.remove("active"));
-          box.classList.add("active");
-          const info = LAYER_INFO[box.dataset.layer];
-          if (!info) return;
-          document.getElementById("insp-title").textContent = info.title;
-          document.getElementById("insp-desc").textContent = info.desc;
-          document.getElementById("insp-tags").innerHTML = info.tags.map((t) => `<span class="tech-tag">${t}</span>`).join("");
+      /* 4. Interactive Repository Module Ownership Map */
+      const MODULES = [
+        { name: "routers/career.py", kind: "router", loc: 1155, col: "#e10600", desc: "/career page + 49 Team Principal REST endpoints (slots, R&D, weekend, stewards, politics)." },
+        { name: "routers/archive.py", kind: "router", loc: 735, col: "#38bdf8", desc: "Home, seasons, races, drivers, teams, analytics & HTMX inline editing." },
+        { name: "routers/cards.py", kind: "router", loc: 521, col: "#facc15", desc: "Season/Decade/All-Time web card galleries & ReportLab Collector/Game PDF decks." },
+        { name: "routers/game.py", kind: "router", loc: 500, col: "#ff8000", desc: "/play, /sim, cached /api/game/deck, /api/ratings/driver, weather radar, TTS & interviews." },
+        { name: "routers/ladder.py", kind: "router", loc: 199, col: "#22c55e", desc: "/ladder page + 16 Pit Wall: The Ladder endpoints (5 tiers, scouting, fork, F1 R&D)." },
+        { name: "routers/dev.py & f1db.py", kind: "router", loc: 353, col: "#a855f7", desc: "/dev/car-3d studio, render harness, /api/cars/livery & /f1db data browser." },
+        { name: "career.py + extras + db", kind: "engine", loc: 4881, col: "#e10600", desc: "Team Principal Career simulation, SQLite slot/report persistence, stewards & rivalries." },
+        { name: "ladder_engine.py + db", kind: "engine", loc: 2017, col: "#22c55e", desc: "5-tier Karting→F1 unlock matrix, rolling 3-yr SL ledger, Academy deals & Career Fork." },
+        { name: "rating_engine.py + f1db.py", kind: "engine", loc: 1636, col: "#38bdf8", desc: "Bulk F1DB+FIA index, mechanical vs fault DNF split & 8 machinery-adjusted attributes." },
+        { name: "weekend + weather + politics", kind: "engine", loc: 2266, col: "#facc15", desc: "FP1–FP3 programmes, Open-Meteo radar, TP personality/stress & FIA Regulation Architect." },
+        { name: "livery_registry + palettes", kind: "engine", loc: 663, col: "#27f4d2", desc: "Year-accurate 1950–2026 liveries, 23 bespoke styles & 241-file PNG manifest dedup." },
+        { name: "static/js/career.js", kind: "frontend", loc: 4644, col: "#e10600", desc: "Zero-scroll Team Principal Command Center UI (prime ES-module decomposition target)." },
+        { name: "static/js/full_sim.js", kind: "frontend", loc: 3698, col: "#ff8000", desc: "Full CPU Broadcast Director 2D/3D race loop, pit AI, thermal tyres & component wear." },
+        { name: "static/js/f1_track_renderer.js", kind: "frontend", loc: 3556, col: "#27f4d2", desc: "Shared 79-circuit GPS Canvas 2D renderer with kerbs, sectors, DRS zones & pit lane." },
+        { name: "static/js/f1_car_3d.js", kind: "frontend", loc: 2545, col: "#38bdf8", desc: "Procedural 1950–2026 Three.js F1 chassis & 23 bespoke livery pattern meshes." },
+        { name: "static/js/ladder.js + sim", kind: "frontend", loc: 1382, col: "#22c55e", desc: "Zero-scroll Ladder UI + live 2D Pit Wall sim with Pit-Rejoin Ghosts & 1×–16× auto-pause." },
+        { name: "static/js/play.js + arena_3d", kind: "frontend", loc: 4010, col: "#a855f7", desc: "Top Trumps GP 3D showroom duel, 8-stat F1DB evidence cards, Guess the Legend & Hi-Lo." }
+      ];
+      function renderMods(filter) {
+        const grid = document.getElementById("mod-grid");
+        const list = filter === "all" ? MODULES : MODULES.filter((m) => m.kind === filter);
+        const maxLoc = 4881;
+        grid.innerHTML = list.map((m) => `
+          <div class="mod-card" style="--mc:${m.col}">
+            <div class="mod-top"><strong>${m.name}</strong><span class="mod-loc">${m.loc.toLocaleString()} LOC</span></div>
+            <p>${m.desc}</p>
+            <div class="loc-bar"><i style="width:${Math.max(8, Math.round((m.loc / maxLoc) * 100))}%"></i></div>
+          </div>
+        `).join("");
+      }
+      renderMods("all");
+      document.querySelectorAll("#mod-filters button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#mod-filters button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          renderMods(btn.dataset.mfilter);
         });
       });
 
-      /* 5. Scroll Progress Bar + Staggered Reveal + Animated Benchmark Bars */
+      /* 5. Scroll Progress + Staggered Reveal + Animated Benchmark Bars */
       const prog = document.getElementById("scroll-progress");
       window.addEventListener("scroll", () => {
         const h = document.documentElement.scrollHeight - window.innerHeight;
@@ -1101,15 +1031,13 @@ curl -s http://127.0.0.1:8001/api/health | jq .
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add("is-visible");
-            entry.target.querySelectorAll(".meter-fill[data-fill]").forEach((bar) => {
-              bar.style.width = `${bar.dataset.fill}%`;
-            });
+            entry.target.querySelectorAll(".meter-fill[data-fill]").forEach((bar) => { bar.style.width = `${bar.dataset.fill}%`; });
           }
         });
-      }, { threshold: 0.08 });
+      }, { threshold: 0.05 });
       document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
 
-      /* 6. Copy Quickstart Commands */
+      /* 6. Copy Quickstart */
       document.getElementById("copy-cmd")?.addEventListener("click", (e) => {
         const txt = ".venv/bin/python -m unittest discover -s tests -v\n.venv/bin/python -m uvicorn f1data.server:app --port 8001";
         navigator.clipboard?.writeText(txt).catch(() => {});
