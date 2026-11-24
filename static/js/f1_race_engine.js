@@ -327,16 +327,76 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 6-Component Car Health, Wear Diagnostics & F1 Race Engineer Setup Science
+  // 6-Component Car Health, Era-Authentic Subsystems & F1 Race Engineer Setup Science
   // ---------------------------------------------------------------------------
-  const CAR_COMPONENTS = {
-    ice:        { key: "ice",        label: "ICE Power Unit",    short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 108 },
-    ers:        { key: "ers",        label: "ERS / MGU-K",       short: "ERS",  area: "Hybrid",      color: "#22c55e", baseTemp: 72  },
-    gearbox:    { key: "gearbox",    label: "Gearbox & Hydr.",   short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 98  },
-    brakes:     { key: "brakes",     label: "Carbon Brakes",     short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 460 },
-    floor:      { key: "floor",      label: "Aero Floor / Edge", short: "FLR",  area: "Aerodynamics",color: "#38bdf8", baseTemp: 62  },
-    suspension: { key: "suspension", label: "Suspension & Steer",short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 58  },
+  const ERA_COMPONENT_SETS = {
+    classic: {
+      tier: "classic",
+      eraBadge: "1950s–1960s CLASSIC",
+      ice:        { key: "ice",        label: "Naturally Aspirated Engine", short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 96  },
+      ers:        { key: "ers",        label: "Carburettors / Mech. Fuel",  short: "FUEL", area: "Fuel Feed",   color: "#22c55e", baseTemp: 62  },
+      gearbox:    { key: "gearbox",    label: "5-Speed Dogleg Gearbox",     short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 88  },
+      brakes:     { key: "brakes",     label: "Drum / Early Disc Brakes",   short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 290 },
+      floor:      { key: "floor",      label: "Spaceframe / Monocoque",     short: "CHAS", area: "Structure",   color: "#38bdf8", baseTemp: 46  },
+      suspension: { key: "suspension", label: "Coil & Wishbone Susp.",      short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 48  },
+    },
+    turbo: {
+      tier: "turbo",
+      eraBadge: "1970s–1980s TURBO / GE",
+      ice:        { key: "ice",        label: "DFV / V6 Turbo Engine",      short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 106 },
+      ers:        { key: "ers",        label: "Turbocharger / Wastegate",   short: "TURB", area: "Forced Ind.", color: "#22c55e", baseTemp: 145 },
+      gearbox:    { key: "gearbox",    label: "Manual H-Pattern Gearbox",   short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 95  },
+      brakes:     { key: "brakes",     label: "Ventilated Brakes",          short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 370 },
+      floor:      { key: "floor",      label: "Ground-Effect Skirts / Wing",short: "AERO", area: "Aerodynamics",color: "#38bdf8", baseTemp: 55  },
+      suspension: { key: "suspension", label: "Rocker-Arm Suspension",      short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 54  },
+    },
+    v10: {
+      tier: "v10",
+      eraBadge: "1990s–2008 V10 / V8",
+      ice:        { key: "ice",        label: "V10 / V8 Engine",            short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 112 },
+      ers:        { key: "ers",        label: "Hydraulics & ECU",           short: "HYD",  area: "Electronics", color: "#22c55e", baseTemp: 82  },
+      gearbox:    { key: "gearbox",    label: "Semi-Auto Paddle Gearbox",   short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 102 },
+      brakes:     { key: "brakes",     label: "Carbon Brakes",              short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 440 },
+      floor:      { key: "floor",      label: "Multi-Element Aero",         short: "AERO", area: "Aerodynamics",color: "#38bdf8", baseTemp: 60  },
+      suspension: { key: "suspension", label: "Torsion-Bar Suspension",     short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 56  },
+    },
+    hybrid: {
+      tier: "hybrid",
+      eraBadge: "2009–2026 HYBRID",
+      ice:        { key: "ice",        label: "Hybrid ICE Power Unit",      short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 108 },
+      ers:        { key: "ers",        label: "KERS / ERS MGU-K",           short: "ERS",  area: "Hybrid",      color: "#22c55e", baseTemp: 72  },
+      gearbox:    { key: "gearbox",    label: "8-Speed Seamless Gearbox",   short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 98  },
+      brakes:     { key: "brakes",     label: "Carbon Brakes & Ducts",      short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 460 },
+      floor:      { key: "floor",      label: "Venturi Floor & Edge",       short: "FLR",  area: "Aerodynamics",color: "#38bdf8", baseTemp: 62  },
+      suspension: { key: "suspension", label: "Push / Pull-Rod Susp.",      short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 58  },
+    },
   };
+
+  const CAR_COMPONENTS = ERA_COMPONENT_SETS.hybrid;
+  const COMP_KEYS = ["ice", "ers", "gearbox", "brakes", "floor", "suspension"];
+
+  function resolveEraTier(eraOrKey) {
+    const raw = typeof eraOrKey === "string"
+      ? eraOrKey
+      : ((eraOrKey && (eraOrKey.key || eraOrKey.label || eraOrKey.eraKey)) || "2026");
+    const s = String(raw || "2026").toLowerCase();
+    const yrMatch = s.match(/(19\d{2}|20\d{2})/);
+    if (yrMatch) {
+      const y = Number(yrMatch[1]);
+      if (y < 1970) return "classic";
+      if (y < 1990) return "turbo";
+      if (y <= 2008) return "v10";
+      return "hybrid";
+    }
+    if (s.includes("1950") || s.includes("1960") || s.includes("classic") || s.includes("50s") || s.includes("60s")) return "classic";
+    if (s.includes("1970") || s.includes("1980") || s.includes("turbo") || s.includes("70s") || s.includes("80s")) return "turbo";
+    if (s.includes("1990") || s.includes("2000") || s.includes("v10") || s.includes("v8") || s.includes("90s")) return "v10";
+    return "hybrid";
+  }
+
+  function getEraComponents(eraOrKey) {
+    return ERA_COMPONENT_SETS[resolveEraTier(eraOrKey)] || ERA_COMPONENT_SETS.hybrid;
+  }
 
   function _circuitSetupTargets(circuit) {
     const aeroStr = String((circuit && circuit.aero) || "MED").toUpperCase();
@@ -408,11 +468,12 @@
     const balanceBias = Math.round(clamp((actual.aeroBalance - targets.aeroBalance) * 1.4 - (actual.diffLock - targets.diffLock) * 0.9, -85, 85));
     const setupPaceDeltaS = +((78 - setupAccuracy) * 0.011).toFixed(3); // ~ -0.23s elite setup .. +0.33s poor setup
 
-    // 6-Component initial race health (87..100% — reflects season pool wear!)
+    // 6-Component initial race health (87..100% — reflects season pool wear & era thermal baselines!)
     const poolBase = Number(m.poolHealth ?? 95);
+    const eraDefs = getEraComponents(m.eraKey || m.era);
     const components = {};
-    Object.keys(CAR_COMPONENTS).forEach((ck) => {
-      const def = CAR_COMPONENTS[ck];
+    COMP_KEYS.forEach((ck) => {
+      const def = eraDefs[ck];
       const h = clamp(Math.round(poolBase - 4 + Math.random() * 9), 78, 100);
       components[ck] = {
         health: h,
@@ -475,12 +536,14 @@
     // Feedback quality determines how early a driver + engineer detect subtle wear!
     const warnThresh = fb.score >= 82 ? 68 : (fb.score >= 65 ? 62 : 55);
     const critThresh = fb.score >= 82 ? 44 : 38;
+    const eraDefs = getEraComponents(era);
+    const mechSympathy = (car.dna && car.dna.mech_sympathy != null) ? (1.16 - (car.dna.mech_sympathy / 100) * 0.34) : 1.0;
 
-    Object.keys(CAR_COMPONENTS).forEach((ck) => {
+    COMP_KEYS.forEach((ck) => {
       const cState = car.components[ck];
-      const def = CAR_COMPONENTS[ck];
+      const def = eraDefs[ck];
       const jitter = 0.65 + Math.random() * 0.85;
-      const drop = wearRates[ck] * scalePerLap * qualProtect * jitter;
+      const drop = wearRates[ck] * scalePerLap * qualProtect * mechSympathy * jitter;
       cState.health = +clamp(cState.health - drop, 8, 100).toFixed(1);
 
       // Dynamic component operating temperature (°C)
@@ -809,6 +872,10 @@
   global.F1RaceEngine = {
     COMPOUNDS,
     CAR_COMPONENTS,
+    ERA_COMPONENT_SETS,
+    COMP_KEYS,
+    resolveEraTier,
+    getEraComponents,
     DEFAULT_ERA_RULES,
     RISK_PROFILES,
     esc,

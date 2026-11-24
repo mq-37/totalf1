@@ -47,6 +47,8 @@
     playTimer: null,
     focusDrvIdx: -1,
     engDrvIdx: -1,
+    engSubTab: "xray", // xray | setup | feedback | tactics
+    whatIfOverrides: null,
     selectedInterviewIdx: 0,
   };
 
@@ -253,19 +255,112 @@
   // ---------------------------------------------------------------------------
   // TAB 2: ENGINEER LAB & CAR HEALTH (X-Ray Blueprint + Setup Radar + Weights + G-G Circle!)
   // ---------------------------------------------------------------------------
-  function buildChassisXraySvg(compMap) {
+  function buildChassisXraySvg(compMap, eraKey) {
+    const eraDefs = (ENG && ENG.getEraComponents) ? ENG.getEraComponents(eraKey) : COMP_META;
+    const tier = (ENG && ENG.resolveEraTier) ? ENG.resolveEraTier(eraKey) : "hybrid";
     const c = (k) => {
       const v = compMap && compMap[k];
+      const def = eraDefs[k] || COMP_META[k] || { short: k.toUpperCase(), label: k, baseTemp: 85 };
       const h = v ? Number(v.h ?? v.health ?? 95) : 95;
-      const t = v ? Number(v.t ?? v.temp ?? 85) : 85;
-      return { h: Math.round(h), t: Math.round(t), col: healthColor(h), crit: h < 45 };
+      const t = v ? Number(v.t ?? v.temp ?? def.baseTemp ?? 85) : (def.baseTemp || 85);
+      return { h: Math.round(h), t: Math.round(t), col: healthColor(h), crit: h < 45, short: def.short, label: def.label };
     };
     const ice = c("ice"), ers = c("ers"), gbx = c("gearbox"), brk = c("brakes"), flr = c("floor"), sus = c("suspension");
+
+    let silhouette = "";
+    if (tier === "classic") {
+      // 1950s–1960s Classic Cigar / Torpedo Monocoque Silhouette (NO Wings, Exposed Open Wheels!)
+      silhouette = `
+        <path d="M 62,102 C 120,82 280,84 374,104 L 378,110 L 374,116 C 280,136 120,138 62,118 Z" fill="url(#chassisGrad)" stroke="${flr.col}" stroke-width="2.6" filter="url(#neonGlow)"/>
+        <ellipse cx="222" cy="110" rx="28" ry="11" fill="#090d16" stroke="#64748b" stroke-width="1.4"/>
+        <g fill="#090d16" stroke="#475569" stroke-width="1.6">
+          <rect x="292" y="34" width="32" height="15" rx="4"/>
+          <rect x="292" y="171" width="32" height="15" rx="4"/>
+          <rect x="86" y="32" width="36" height="17" rx="4"/>
+          <rect x="86" y="171" width="36" height="17" rx="4"/>
+        </g>
+        <g stroke="${sus.col}" stroke-width="2.6" filter="url(#neonGlow)">
+          <line x1="308" y1="49" x2="296" y2="92"/><line x1="308" y1="49" x2="320" y2="94"/>
+          <line x1="308" y1="171" x2="296" y2="128"/><line x1="308" y1="171" x2="320" y2="126"/>
+          <line x1="104" y1="49" x2="112" y2="94"/><line x1="104" y1="171" x2="112" y2="126"/>
+        </g>
+        <g fill="${brk.col}" filter="url(#neonGlow)">
+          <rect x="301" y="49" width="14" height="7" rx="2"/><rect x="301" y="164" width="14" height="7" rx="2"/>
+          <rect x="97" y="49" width="14" height="7" rx="2"/><rect x="97" y="164" width="14" height="7" rx="2"/>
+        </g>
+      `;
+    } else if (tier === "turbo") {
+      // 1970s–1980s Wide Ground-Effect Wedge Sidepods + Huge Rear Slicks + Boxy Wings!
+      silhouette = `
+        <path d="M 88,60 L 244,66 L 266,92 L 266,128 L 244,154 L 88,160 Z" fill="url(#chassisGrad)" stroke="${flr.col}" stroke-width="2.6" filter="url(#neonGlow)"/>
+        <path d="M 74,94 L 264,92 L 366,102 L 366,118 L 264,128 L 74,126 Z" fill="#0f172a" stroke="#64748b" stroke-width="1.6"/>
+        <rect x="352" y="54" width="22" height="112" rx="3" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <rect x="40" y="60" width="28" height="100" rx="3" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <g fill="#090d16" stroke="#475569" stroke-width="1.5">
+          <rect x="288" y="38" width="34" height="20" rx="4"/>
+          <rect x="288" y="162" width="34" height="20" rx="4"/>
+          <rect x="74" y="24" width="48" height="32" rx="5"/>
+          <rect x="74" y="164" width="48" height="32" rx="5"/>
+        </g>
+        <g stroke="${sus.col}" stroke-width="2.6" filter="url(#neonGlow)">
+          <line x1="305" y1="58" x2="294" y2="96"/><line x1="305" y1="58" x2="318" y2="98"/>
+          <line x1="305" y1="162" x2="294" y2="124"/><line x1="305" y1="162" x2="318" y2="122"/>
+          <line x1="98" y1="56" x2="112" y2="92"/><line x1="98" y1="164" x2="112" y2="128"/>
+        </g>
+        <g fill="${brk.col}" filter="url(#neonGlow)">
+          <rect x="298" y="56" width="15" height="7" rx="2"/><rect x="298" y="157" width="15" height="7" rx="2"/>
+          <rect x="90" y="54" width="16" height="8" rx="2"/><rect x="90" y="158" width="16" height="8" rx="2"/>
+        </g>
+      `;
+    } else if (tier === "v10") {
+      // 1990s–2008 Sculpted Narrow-Waisted V10 Silhouette + Grooved Tyres + Bargeboards!
+      silhouette = `
+        <path d="M 92,72 L 236,64 L 260,84 L 260,136 L 236,156 L 92,148 Z" fill="url(#chassisGrad)" stroke="${flr.col}" stroke-width="2.6" filter="url(#neonGlow)"/>
+        <path d="M 70,96 L 262,92 L 372,105 L 372,115 L 262,128 L 70,124 Z" fill="#0f172a" stroke="#64748b" stroke-width="1.6"/>
+        <path d="M 350,48 L 376,56 L 382,110 L 376,164 L 350,172 L 344,158 L 352,110 L 344,62 Z" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <rect x="44" y="68" width="24" height="84" rx="4" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <g fill="#090d16" stroke="#475569" stroke-width="1.5">
+          <rect x="288" y="34" width="38" height="22" rx="5"/><rect x="288" y="164" width="38" height="22" rx="5"/>
+          <rect x="80" y="30" width="44" height="26" rx="5"/><rect x="80" y="164" width="44" height="26" rx="5"/>
+        </g>
+        <g stroke="${sus.col}" stroke-width="2.8" filter="url(#neonGlow)">
+          <line x1="307" y1="56" x2="294" y2="96"/><line x1="307" y1="56" x2="318" y2="98"/>
+          <line x1="307" y1="164" x2="294" y2="124"/><line x1="307" y1="164" x2="318" y2="122"/>
+          <line x1="102" y1="56" x2="112" y2="92"/><line x1="102" y1="164" x2="112" y2="128"/>
+        </g>
+        <g fill="${brk.col}" filter="url(#neonGlow)">
+          <rect x="299" y="54" width="16" height="8" rx="2"/><rect x="299" y="158" width="16" height="8" rx="2"/>
+          <rect x="94" y="54" width="16" height="8" rx="2"/><rect x="94" y="158" width="16" height="8" rx="2"/>
+        </g>
+      `;
+    } else {
+      // 2009–2026 Modern Hybrid Ground-Effect Venturi Silhouette!
+      silhouette = `
+        <path d="M 88,68 L 240,62 L 265,86 L 265,134 L 240,158 L 88,152 Z" fill="url(#chassisGrad)" stroke="${flr.col}" stroke-width="2.6" filter="url(#neonGlow)"/>
+        <path d="M 70,96 L 265,92 L 368,104 L 368,116 L 265,128 L 70,124 Z" fill="#0f172a" stroke="#64748b" stroke-width="1.6"/>
+        <path d="M 352,44 L 380,52 L 386,110 L 380,168 L 352,176 L 344,162 L 354,110 L 344,58 Z" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <rect x="44" y="66" width="24" height="88" rx="4" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+        <g fill="#090d16" stroke="#475569" stroke-width="1.5">
+          <rect x="288" y="34" width="38" height="22" rx="5"/><rect x="288" y="164" width="38" height="22" rx="5"/>
+          <rect x="80" y="30" width="44" height="26" rx="5"/><rect x="80" y="164" width="44" height="26" rx="5"/>
+        </g>
+        <g stroke="${sus.col}" stroke-width="2.8" filter="url(#neonGlow)">
+          <line x1="307" y1="56" x2="294" y2="96"/><line x1="307" y1="56" x2="318" y2="98"/>
+          <line x1="307" y1="164" x2="294" y2="124"/><line x1="307" y1="164" x2="318" y2="122"/>
+          <line x1="102" y1="56" x2="112" y2="92"/><line x1="102" y1="164" x2="112" y2="128"/>
+        </g>
+        <g fill="${brk.col}" filter="url(#neonGlow)">
+          <rect x="299" y="54" width="16" height="8" rx="2"/><rect x="299" y="158" width="16" height="8" rx="2"/>
+          <rect x="94" y="54" width="16" height="8" rx="2"/><rect x="94" y="158" width="16" height="8" rx="2"/>
+        </g>
+      `;
+    }
+
     return `
-      <svg viewBox="0 0 420 220" class="eng-xray-svg" aria-label="F1 6-Component Thermal X-Ray Blueprint">
+      <svg viewBox="0 0 420 220" class="eng-xray-svg" aria-label="Era-Authentic F1 6-Component Thermal X-Ray Blueprint">
         <defs>
           <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3.2" result="blur"/>
+            <feGaussianBlur stdDeviation="3.0" result="blur"/>
             <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
           <linearGradient id="chassisGrad" x1="0" y1="0" x2="1" y2="0">
@@ -274,64 +369,55 @@
             <stop offset="100%" stop-color="#0f172a"/>
           </linearGradient>
         </defs>
-        <!-- Subtle engineering blueprint grid -->
         <g stroke="rgba(56,189,248,0.10)" stroke-width="1">
           <line x1="0" y1="55" x2="420" y2="55"/><line x1="0" y1="110" x2="420" y2="110"/><line x1="0" y1="165" x2="420" y2="165"/>
           <line x1="70" y1="0" x2="70" y2="220"/><line x1="140" y1="0" x2="140" y2="220"/><line x1="210" y1="0" x2="210" y2="220"/><line x1="280" y1="0" x2="280" y2="220"/><line x1="350" y1="0" x2="350" y2="220"/>
         </g>
+        ${silhouette}
+        <!-- Period-Authentic Internal Subsystems -->
+        <rect x="200" y="96" width="48" height="28" rx="4" fill="${ers.col}" fill-opacity="0.32" stroke="${ers.col}" stroke-width="2.2" filter="url(#neonGlow)"/>
+        <text x="224" y="113" text-anchor="middle" fill="#fff" font-size="8.5" font-weight="800" font-family="monospace">${esc(ers.short)} ${ers.h}%</text>
 
-        <!-- Sculpted Top-Down F1 Silhouette (Nose right -> Rear Wing left) -->
-        <!-- Aero Floor & Sidepods -->
-        <path d="M 88,68 L 240,62 L 265,86 L 265,134 L 240,158 L 88,152 Z" fill="url(#chassisGrad)" stroke="${flr.col}" stroke-width="2.6" filter="url(#neonGlow)"/>
-        <!-- Monocoque & Nose -->
-        <path d="M 70,96 L 265,92 L 368,104 L 368,116 L 265,128 L 70,124 Z" fill="#0f172a" stroke="#64748b" stroke-width="1.6"/>
-        <!-- Front Wing -->
-        <path d="M 352,44 L 380,52 L 386,110 L 380,168 L 352,176 L 344,162 L 354,110 L 344,58 Z" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
-        <!-- Rear Wing -->
-        <rect x="44" y="66" width="24" height="88" rx="4" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
-
-        <!-- 4 Tyres + Glowing Carbon Brake Ducts -->
-        <g fill="#090d16" stroke="#475569" stroke-width="1.5">
-          <rect x="288" y="34" width="38" height="22" rx="5"/>
-          <rect x="288" y="164" width="38" height="22" rx="5"/>
-          <rect x="80" y="30" width="44" height="26" rx="5"/>
-          <rect x="80" y="164" width="44" height="26" rx="5"/>
-        </g>
-        <!-- Suspension wishbones (lit by Suspension health) -->
-        <g stroke="${sus.col}" stroke-width="2.8" filter="url(#neonGlow)">
-          <line x1="307" y1="56" x2="294" y2="96"/><line x1="307" y1="56" x2="318" y2="98"/>
-          <line x1="307" y1="164" x2="294" y2="124"/><line x1="307" y1="164" x2="318" y2="122"/>
-          <line x1="102" y1="56" x2="112" y2="92"/><line x1="102" y1="164" x2="112" y2="128"/>
-        </g>
-        <!-- Brakes (glowing pads inside front & rear wheels) -->
-        <g fill="${brk.col}" filter="url(#neonGlow)">
-          <rect x="299" y="54" width="16" height="8" rx="2"/>
-          <rect x="299" y="158" width="16" height="8" rx="2"/>
-          <rect x="94" y="54" width="16" height="8" rx="2"/>
-          <rect x="94" y="158" width="16" height="8" rx="2"/>
-        </g>
-
-        <!-- Internal Powertrain Subsystems -->
-        <!-- ERS / MGU-K Battery Pack (under cockpit) -->
-        <rect x="200" y="96" width="44" height="28" rx="4" fill="${ers.col}" fill-opacity="0.32" stroke="${ers.col}" stroke-width="2.2" filter="url(#neonGlow)"/>
-        <text x="222" y="114" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="monospace">ERS ${ers.h}%</text>
-
-        <!-- ICE V6 Power Unit -->
         <rect x="136" y="92" width="58" height="36" rx="5" fill="${ice.col}" fill-opacity="0.35" stroke="${ice.col}" stroke-width="2.4" filter="url(#neonGlow)"/>
-        <text x="165" y="114" text-anchor="middle" fill="#fff" font-size="10" font-weight="800" font-family="monospace">ICE ${ice.h}%</text>
+        <text x="165" y="114" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="800" font-family="monospace">${esc(ice.short)} ${ice.h}%</text>
 
-        <!-- Gearbox & Hydraulics -->
         <rect x="86" y="98" width="44" height="24" rx="4" fill="${gbx.col}" fill-opacity="0.35" stroke="${gbx.col}" stroke-width="2.2" filter="url(#neonGlow)"/>
-        <text x="108" y="113" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="monospace">GBX ${gbx.h}%</text>
+        <text x="108" y="113" text-anchor="middle" fill="#fff" font-size="8.5" font-weight="800" font-family="monospace">${esc(gbx.short)} ${gbx.h}%</text>
 
-        <!-- Callout Telemetry Tags -->
         <g font-family="monospace" font-size="9.5" font-weight="700">
-          <text x="20" y="20" fill="${gbx.col}">GBX ${gbx.h}% · ${gbx.t}°C</text>
-          <text x="155" y="20" fill="${ice.col}">ICE ${ice.h}% · ${ice.t}°C</text>
-          <text x="292" y="20" fill="${brk.col}">BRK ${brk.h}% · ${brk.t}°C</text>
-          <text x="20" y="208" fill="${flr.col}">FLOOR ${flr.h}%</text>
-          <text x="155" y="208" fill="${ers.col}">ERS ${ers.h}% · ${ers.t}°C</text>
-          <text x="292" y="208" fill="${sus.col}">SUSP ${sus.h}%</text>
+          <text x="16" y="19" fill="${gbx.col}">${esc(gbx.short)} ${gbx.h}% · ${gbx.t}°C</text>
+          <text x="150" y="19" fill="${ice.col}">${esc(ice.short)} ${ice.h}% · ${ice.t}°C</text>
+          <text x="288" y="19" fill="${brk.col}">${esc(brk.short)} ${brk.h}% · ${brk.t}°C</text>
+          <text x="16" y="209" fill="${flr.col}">${esc(flr.short)} ${flr.h}%</text>
+          <text x="150" y="209" fill="${ers.col}">${esc(ers.short)} ${ers.h}% · ${ers.t}°C</text>
+          <text x="288" y="209" fill="${sus.col}">${esc(sus.short)} ${sus.h}%</text>
+        </g>
+      </svg>
+    `;
+  }
+
+  function buildTacticsTrajectorySvg(dna) {
+    const vScore = Number((dna && dna.corner_style_v) ?? 50); // 0=Pure U-Line .. 100=Pure V-Line
+    const wetMastery = Number((dna && dna.wet_mastery) ?? 75);
+    const isV = vScore >= 52;
+    return `
+      <svg viewBox="0 0 420 215" class="eng-xray-svg" aria-label="V-Line vs U-Line Cornering Trajectory Diagram">
+        <!-- Corner Asphalt Ribbon (90-degree heavy braking hairpin) -->
+        <path d="M 36,184 L 36,68 Q 36,36 74,36 L 386,36 L 386,104 L 122,104 Q 108,104 108,118 L 108,184 Z" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+        <!-- Apex Kerb -->
+        <path d="M 104,104 L 126,104 L 126,112 L 112,112 L 112,126 L 104,126 Z" fill="#ef4444"/>
+        <!-- Wet Off-Line Anti-Rubber Groove (outer unpolished tarmac) -->
+        <path d="M 52,182 L 52,58 Q 52,48 72,48 L 380,48" fill="none" stroke="rgba(56,189,248,0.55)" stroke-width="3" stroke-dasharray="6,4"/>
+        <!-- U-Line (Momentum Arc — Prost / Clark / Button) -->
+        <path d="M 62,182 C 62,112 78,76 154,70 L 380,72" fill="none" stroke="#22c55e" stroke-width="${isV ? 2.2 : 4.2}" stroke-opacity="${isV ? 0.55 : 0.98}"/>
+        <!-- V-Line (Point & Squirt — Verstappen / Senna / Ricciardo) -->
+        <path d="M 58,182 L 60,72 Q 66,58 106,96 L 380,82" fill="none" stroke="#f97316" stroke-width="${isV ? 4.2 : 2.2}" stroke-opacity="${isV ? 0.98 : 0.55}"/>
+        <!-- Labels -->
+        <g font-family="monospace" font-size="9.5" font-weight="700">
+          <text x="140" y="138" fill="#f97316">● V-LINE "POINT &amp; SQUIRT" (Late Brake · Sharp Rotation)</text>
+          <text x="140" y="156" fill="#22c55e">● U-LINE "MOMENTUM ARC" (High Min-Speed · Tyre Save)</text>
+          <text x="140" y="174" fill="#38bdf8">┅ WET ANTI-RUBBER OFF-LINE (${wetMastery}/100 Grip Hunt)</text>
+          <text x="140" y="196" fill="#fde047">SIGNATURE: ${isV ? `V-LINE BIAS (${vScore}%)` : `U-LINE BIAS (${100 - vScore}%)`}</text>
         </g>
       </svg>
     `;
@@ -507,6 +593,10 @@
     const fr = frames[state.scrubIdx] || frames[frames.length - 1] || {};
     const frCar = (fr.cars || []).find((c) => c.idx === drv.idx) || {};
     const compSnap = (frCar.components && Object.keys(frCar.components).length) ? frCar.components : (stint.components || {});
+    const eraKey = p.eraKey || p.eraLabel || "2026";
+    const eraDefs = (ENG && ENG.getEraComponents) ? ENG.getEraComponents(eraKey) : COMP_META;
+    const compKeys = (ENG && ENG.COMP_KEYS) || ["ice", "ers", "gearbox", "brakes", "floor", "suspension"];
+
     const engObj = stint.engineering || {
       setupAccuracy: 82, balanceBias: 0, setupPaceDeltaS: 0,
       targets: { aeroBalance: 60, rideHeight: 55, diffLock: 58, brakeBias: 66, camberWindow: 65 },
@@ -525,51 +615,177 @@
     };
     const fb = engObj.feedback || {};
     const weights = fb.weights || {};
-    const balBias = Number(engObj.balanceBias || 0);
-    const balPct = Math.max(4, Math.min(96, 50 + balBias * 0.55));
-    const balText = balBias < -18 ? `UNDERSTEER (${balBias})` : (balBias > 18 ? `OVERSTEER (+${balBias})` : `NEUTRAL SWEET-SPOT (${balBias >= 0 ? "+" : ""}${balBias})`);
+    const simActual = Object.assign({}, engObj.actual || {}, state.whatIfOverrides || {});
+    const targets = engObj.targets || { aeroBalance: 60, rideHeight: 55, diffLock: 58, brakeBias: 66, camberWindow: 65 };
+    const simAvgErr = ["aeroBalance", "rideHeight", "diffLock", "brakeBias", "camberWindow"].reduce(
+      (acc, k) => acc + Math.abs((simActual[k] || 60) - (targets[k] || 60)), 0
+    ) / 5;
+    const simAcc = Math.round(Math.max(48, Math.min(99, 100 - simAvgErr * 1.85)));
+    const simDeltaS = +((78 - simAcc) * 0.011).toFixed(3);
+    const simBalBias = Math.round(Math.max(-85, Math.min(85, ((simActual.aeroBalance || 60) - (targets.aeroBalance || 60)) * 1.4 - ((simActual.diffLock || 58) - (targets.diffLock || 58)) * 0.9)));
+    const balPct = Math.max(4, Math.min(96, 50 + simBalBias * 0.55));
+    const balText = simBalBias < -18 ? `UNDERSTEER (${simBalBias})` : (simBalBias > 18 ? `OVERSTEER (+${simBalBias})` : `NEUTRAL SWEET-SPOT (${simBalBias >= 0 ? "+" : ""}${simBalBias})`);
     const issues = stint.compIssues || [];
 
-    const drvPills = sortedStints.slice(0, 12).map((s) => `
+    const drvPills = sortedStints.slice(0, 14).map((s) => `
       <button type="button" class="eng-drv-pill${s.idx === drv.idx ? " active" : ""}" data-eng-drv="${s.idx}" style="--ec:${esc(s.color)}">
         <i></i><b>${esc(s.code3)}</b><span>P${s.finishPos || "-"}</span>
         ${(s.compIssues && s.compIssues.length) ? `<em class="eng-pill-warn" title="${s.compIssues.length} component alerts">⚠</em>` : ""}
       </button>
     `).join("");
 
-    const weightSegs = Object.keys(weights).map((wk) => {
-      const wObj = weights[wk];
-      const lbl = wk.slice(0, 4).toUpperCase();
-      return `<div class="eng-w-seg" style="width:${wObj.pct}%;background:${wObj.color}" title="${wk}: ${wObj.raw}/100 × ${wObj.pct}% = +${wObj.contrib}">${lbl} ${wObj.pct}%</div>`;
-    }).join("");
+    const subTab = state.engSubTab || "xray";
+    let stageHtml = "";
 
-    const weightRows = Object.keys(weights).map((wk) => {
-      const wObj = weights[wk];
-      return `
-        <div class="eng-w-row">
-          <span class="eng-w-name"><i style="background:${wObj.color}"></i>${wk.toUpperCase()} (${wObj.pct}% wt)</span>
-          <div class="eng-w-bar"><b style="width:${wObj.raw}%;background:${wObj.color}"></b></div>
-          <span class="eng-w-val">${wObj.raw} <small>(+${wObj.contrib})</small></span>
+    if (subTab === "xray") {
+      const compCards = compKeys.map((ck) => {
+        const def = eraDefs[ck] || COMP_META[ck] || { label: ck, short: ck.toUpperCase(), area: "System", baseTemp: 85 };
+        const v = compSnap[ck] || {};
+        const h = Math.round(Number(v.h ?? v.health ?? 95));
+        const t = Math.round(Number(v.t ?? v.temp ?? def.baseTemp ?? 85));
+        const col = healthColor(h);
+        return `
+          <div class="eng-comp-tile" style="--cc:${col}">
+            <div class="eng-comp-top"><b>${esc(def.label)}</b><span style="color:${col}">${h}%</span></div>
+            <div class="eng-comp-bar"><i style="width:${h}%;background:${col}"></i></div>
+            <div class="eng-comp-meta"><span>${esc(def.area)}</span><span>${t}°C</span></div>
+          </div>
+        `;
+      }).join("");
+      const issueHtml = issues.length
+        ? issues.slice(-4).map((iss) => `
+            <div class="eng-iss-row sev-${esc(iss.severity)}">
+              <b>L${iss.lap}</b>
+              <span>${esc(iss.label)} (${iss.health}% · ${iss.temp}°C)${iss.kphLoss ? ` · -${iss.kphLoss} kph` : ""}</span>
+              <small>+${iss.paceLossS}s/L</small>
+            </div>
+          `).join("")
+        : `<div class="eng-iss-ok"><i class="fas fa-check-circle"></i> All 6 ${esc(eraDefs.eraBadge || "F1")} subsystems within nominal envelope.</div>`;
+
+      stageHtml = `
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-car"></i> ${esc(eraDefs.eraBadge || "F1")} THERMAL X-RAY (LAP ${fr.lap || 0})</span><small>Era-Authentic Chassis</small></div>
+          ${buildChassisXraySvg(compSnap, eraKey)}
+          <div class="eng-iss-list">${issueHtml}</div>
+        </div>
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-microchip"></i> 6 LIVE SUBSYSTEM TELEMETRY CHANNELS</span><small>Wear · Temp °C</small></div>
+          <div class="eng-comp-grid">${compCards}</div>
+          <p class="muted small" style="margin:8px 0 0;line-height:1.35;">
+            Subsystems automatically match the <b>${esc(eraDefs.eraBadge || "2026")}</b> technical regulations — no anachronistic hybrid/ERS telemetry on classic chassis.
+          </p>
         </div>
       `;
-    }).join("");
-
-    const issueHtml = issues.length
-      ? issues.map((iss) => `
-          <div class="eng-iss-row sev-${esc(iss.severity)}">
-            <b>L${iss.lap}</b>
-            <span>${esc(iss.label)} dropped to <b>${iss.health}%</b> (${iss.temp}°C)${iss.kphLoss ? ` · -${iss.kphLoss} kph straight-line` : ""}</span>
-            <small>+${iss.paceLossS}s/L${iss.earlyDetect ? " · ⚡ Early Detect" : ""}</small>
+    } else if (subTab === "setup") {
+      const sliders = [
+        { k: "aeroBalance",  lbl: "Front Wing / CoP" },
+        { k: "rideHeight",   lbl: "Ride Height" },
+        { k: "diffLock",     lbl: "Diff Entry Lock" },
+        { k: "brakeBias",    lbl: "Brake Migration" },
+        { k: "camberWindow", lbl: "Camber Window" },
+      ].map((s) => `
+        <div class="eng-sim-row">
+          <label for="eng-sl-${s.k}">${s.lbl}</label>
+          <input id="eng-sl-${s.k}" type="range" min="15" max="95" value="${Math.round(simActual[s.k] || 60)}" data-eng-sim="${s.k}">
+          <span id="eng-sv-${s.k}">${Math.round(simActual[s.k] || 60)}</span>
+        </div>
+      `).join("");
+      stageHtml = `
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-drafting-compass"></i> 5-AXIS SETUP RADAR &amp; UNCERTAINTY HALO</span><small>Green=Target · Cyan=Car · Pink=Noise</small></div>
+          <canvas id="ras-cv-radar" class="eng-sub-canvas"></canvas>
+          <div class="eng-bal-meter">
+            <div class="eng-bal-labels"><span>◀ UNDERSTEER</span><b id="eng-bal-txt">${balText}</b><span>OVERSTEER ▶</span></div>
+            <div class="eng-bal-track"><i id="eng-bal-pin" style="left:${balPct}%"></i></div>
           </div>
-        `).join("")
-      : `<div class="eng-iss-ok"><i class="fas fa-check-circle"></i> All 6 car subsystems operating cleanly within nominal wear envelope.</div>`;
+        </div>
+        <div class="ras-card">
+          <div class="ras-card-head">
+            <span><i class="fas fa-sliders-h"></i> INTERACTIVE WHAT-IF SETUP SIMULATOR</span>
+            <button type="button" id="eng-sim-reset" class="ras-play-btn" style="padding:2px 8px;font-size:.66rem;">Reset</button>
+          </div>
+          <div class="eng-sim-list">${sliders}</div>
+          <div class="eng-sim-readout">
+            <span>Predicted Convergence: <b id="eng-sim-acc" style="color:#22c55e">${simAcc}%</b></span>
+            <span>Lap Delta: <b id="eng-sim-delta" style="color:${simDeltaS <= 0 ? "#4ade80" : "#facc15"}">${simDeltaS <= 0 ? "" : "+"}${simDeltaS.toFixed(3)}s/L</b></span>
+          </div>
+        </div>
+      `;
+    } else if (subTab === "feedback") {
+      const weightSegs = Object.keys(weights).map((wk) => {
+        const wObj = weights[wk];
+        const lbl = wk.slice(0, 4).toUpperCase();
+        return `<div class="eng-w-seg" style="width:${wObj.pct}%;background:${wObj.color}" title="${wk}: ${wObj.raw}/100 × ${wObj.pct}% = +${wObj.contrib}">${lbl} ${wObj.pct}%</div>`;
+      }).join("");
+      const weightRows = Object.keys(weights).map((wk) => {
+        const wObj = weights[wk];
+        return `
+          <div class="eng-w-row">
+            <span class="eng-w-name"><i style="background:${wObj.color}"></i>${wk.toUpperCase()} (${wObj.pct}% wt)</span>
+            <div class="eng-w-bar"><b style="width:${wObj.raw}%;background:${wObj.color}"></b></div>
+            <span class="eng-w-val">${wObj.raw} <small>(+${wObj.contrib})</small></span>
+          </div>
+        `;
+      }).join("");
+      stageHtml = `
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-wave-square"></i> WEIGHTED FEEDBACK SIGNAL MATRIX</span><small>Exp · Eng · Qual · Conf · Mom</small></div>
+          <div class="eng-w-stacked">${weightSegs}</div>
+          <div class="eng-w-rows">${weightRows}</div>
+          <p class="muted small" style="margin:8px 0 0;line-height:1.35;">
+            Signal Quality <b>${fb.score || 75}/100 (${esc(fb.tier || "CLEAR")})</b> narrows the setup uncertainty halo to <b>±${fb.noiseBand || 7}%</b> and flags mechanical wear <b>3–5 laps earlier</b>.
+          </p>
+        </div>
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-bullseye"></i> G-G FRICTION CIRCLE &amp; TYRE THERMAL WINDOW</span><small>Blue=Cold · Green=Sweet · Red=Hot</small></div>
+          <canvas id="ras-cv-gg" class="eng-sub-canvas"></canvas>
+        </div>
+      `;
+    } else {
+      const dna = drv.dna || stint.dna || {
+        corner_style_v: 55, wet_mastery: 78, street_precision: 76,
+        launch_reaction_s: 0.21, late_braking: 80, defense_ruthless: 74,
+        tyre_preservation: 76, mech_sympathy: 75, archetype: "All-Round Racer",
+        radio_style: "Rhythmic Strategist", traits: ["Adaptive Line", "Balanced Traction"],
+      };
+      const meters = [
+        { lbl: "Wet Off-Line Mastery", val: dna.wet_mastery ?? 75, txt: `${Math.round(dna.wet_mastery ?? 75)}`, col: "#38bdf8" },
+        { lbl: "Street Precision",     val: dna.street_precision ?? 75, txt: `${Math.round(dna.street_precision ?? 75)}`, col: "#a855f7" },
+        { lbl: "Late-Braking Send",    val: dna.late_braking ?? 76, txt: `${Math.round(dna.late_braking ?? 76)}`, col: "#f97316" },
+        { lbl: "Defensive Craft",      val: dna.defense_ruthless ?? 74, txt: `${Math.round(dna.defense_ruthless ?? 74)}`, col: "#ef4444" },
+        { lbl: "Tyre Preservation",    val: dna.tyre_preservation ?? 76, txt: `${Math.round(dna.tyre_preservation ?? 76)}`, col: "#22c55e" },
+        { lbl: "Mechanical Sympathy",  val: dna.mech_sympathy ?? 75, txt: `${Math.round(dna.mech_sympathy ?? 75)}`, col: "#facc15" },
+      ].map((m) => `
+        <div class="eng-dna-row">
+          <span>${m.lbl}</span>
+          <div class="eng-w-bar"><b style="width:${Math.max(10, Math.min(100, m.val))}%;background:${m.col}"></b></div>
+          <b>${m.txt}</b>
+        </div>
+      `).join("");
+      const traits = (dna.traits || []).map((t) => `<span class="eng-dna-chip">${esc(t)}</span>`).join("");
+      stageHtml = `
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-route"></i> CORNERING GEOMETRY: V-LINE VS U-LINE</span><small>Wet Off-Line Grip</small></div>
+          ${buildTacticsTrajectorySvg(dna)}
+        </div>
+        <div class="ras-card">
+          <div class="ras-card-head"><span><i class="fas fa-dna"></i> DRIVER DNA &amp; TACTICAL SIGNATURE</span><small>Launch ${(dna.launch_reaction_s || 0.22).toFixed(2)}s</small></div>
+          <div class="eng-dna-badges">
+            <span class="eng-dna-chip" style="background:rgba(250,204,21,.16);border-color:rgba(250,204,21,.45);color:#fde047;">★ ${esc(dna.archetype || "Grand Prix Racer")}</span>
+            <span class="eng-dna-chip" style="background:rgba(168,85,247,.16);border-color:rgba(168,85,247,.45);color:#e9d5ff;">🎙 ${esc(dna.radio_style || "Balanced Comms")}</span>
+            ${traits}
+          </div>
+          <div class="eng-dna-meters">${meters}</div>
+        </div>
+      `;
+    }
 
     box.innerHTML = `
-      <div class="eng-lab-wrap ras-scroll">
-        <div class="eng-drv-strip">${drvPills}</div>
+      <div class="eng-lab-wrap">
+        <div class="eng-top-row"><div class="eng-drv-strip">${drvPills}</div></div>
         <div class="eng-lab-banner" style="border-left:4px solid ${esc(drv.color)}">
           <div>
-            <strong>${esc(drv.name)} <small class="muted">(${esc(drv.team)})</small></strong>
+            <strong>${esc(drv.name)} <small class="muted">(${esc(drv.team)})</small><span class="eng-era-badge">${esc(eraDefs.eraBadge || "2026")}</span></strong>
             <div class="muted small">Race Engineer: <b>${esc(drv.engineerName || "Race Engineer")}</b> (OVR ${drv.engineerRating || 84}) · Scrubbed Lap ${fr.lap || 0}</div>
           </div>
           <div class="eng-kpis">
@@ -579,50 +795,64 @@
           </div>
         </div>
 
-        <div class="eng-grid-4">
-          <div class="ras-card eng-card-xray">
-            <div class="ras-card-head"><span><i class="fas fa-car"></i> 6-COMPONENT THERMAL X-RAY (LAP ${fr.lap || 0})</span><small>Click driver above</small></div>
-            ${buildChassisXraySvg(compSnap)}
-            <div class="eng-iss-list">${issueHtml}</div>
-          </div>
-
-          <div class="ras-card">
-            <div class="ras-card-head"><span><i class="fas fa-drafting-compass"></i> 5-AXIS SETUP RADAR &amp; UNCERTAINTY HALO</span><small>Green=Target · Cyan=Car · Pink=Noise</small></div>
-            <canvas id="ras-cv-radar" class="eng-sub-canvas"></canvas>
-            <div class="eng-bal-meter">
-              <div class="eng-bal-labels"><span>◀ UNDERSTEER</span><b>${balText}</b><span>OVERSTEER ▶</span></div>
-              <div class="eng-bal-track"><i style="left:${balPct}%"></i></div>
-            </div>
-          </div>
-
-          <div class="ras-card">
-            <div class="ras-card-head"><span><i class="fas fa-sliders-h"></i> WEIGHTED FEEDBACK SIGNAL MATRIX</span><small>Exp · Eng · Qual · Conf · Mom</small></div>
-            <div class="eng-w-stacked">${weightSegs}</div>
-            <div class="eng-w-rows">${weightRows}</div>
-            <p class="muted small" style="margin:8px 0 0;line-height:1.35;">
-              High <b>Experience + Engineer Quality + Confidence</b> shrinks the setup uncertainty halo (currently <b>±${fb.noiseBand || 7}%</b>) and detects mechanical wear <b>3–5 laps earlier</b> on team radio.
-            </p>
-          </div>
-
-          <div class="ras-card">
-            <div class="ras-card-head"><span><i class="fas fa-bullseye"></i> G-G FRICTION CIRCLE &amp; TYRE THERMAL WINDOW</span><small>Blue=Cold · Green=Sweet · Red=Hot</small></div>
-            <canvas id="ras-cv-gg" class="eng-sub-canvas"></canvas>
-          </div>
+        <div class="eng-subtabs" role="tablist" aria-label="Engineer Lab Views">
+          <button type="button" class="eng-stab${subTab === "xray" ? " active" : ""}" data-eng-stab="xray"><i class="fas fa-car"></i> Chassis X-Ray &amp; Wear</button>
+          <button type="button" class="eng-stab${subTab === "setup" ? " active" : ""}" data-eng-stab="setup"><i class="fas fa-drafting-compass"></i> Setup Radar &amp; What-If Sim</button>
+          <button type="button" class="eng-stab${subTab === "feedback" ? " active" : ""}" data-eng-stab="feedback"><i class="fas fa-bullseye"></i> Feedback Signal &amp; G-G Lab</button>
+          <button type="button" class="eng-stab${subTab === "tactics" ? " active" : ""}" data-eng-stab="tactics"><i class="fas fa-dna"></i> Tactics &amp; Driver DNA</button>
         </div>
+
+        <div class="eng-stage-grid">${stageHtml}</div>
       </div>
     `;
 
     box.querySelectorAll("[data-eng-drv]").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.engDrvIdx = Number(btn.dataset.engDrv);
+        state.whatIfOverrides = null;
         renderEngineerLab();
       });
     });
-
-    requestAnimationFrame(() => {
-      drawSetupRadar("ras-cv-radar", engObj);
-      drawGGFrictionCircle("ras-cv-gg", engObj.ggPoints || []);
+    box.querySelectorAll("[data-eng-stab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.engSubTab = btn.dataset.engStab;
+        renderEngineerLab();
+      });
     });
+    if (subTab === "setup") {
+      const simObj = Object.assign({}, engObj, { actual: simActual });
+      requestAnimationFrame(() => drawSetupRadar("ras-cv-radar", simObj));
+      box.querySelectorAll("[data-eng-sim]").forEach((sl) => {
+        sl.addEventListener("input", () => {
+          const k = sl.dataset.engSim;
+          if (!state.whatIfOverrides) state.whatIfOverrides = Object.assign({}, engObj.actual || {});
+          state.whatIfOverrides[k] = Number(sl.value);
+          const sv = box.querySelector(`#eng-sv-${k}`);
+          if (sv) sv.textContent = sl.value;
+          const avgErr = ["aeroBalance", "rideHeight", "diffLock", "brakeBias", "camberWindow"].reduce(
+            (acc, key) => acc + Math.abs((state.whatIfOverrides[key] ?? 60) - (targets[key] ?? 60)), 0
+          ) / 5;
+          const acc = Math.round(Math.max(48, Math.min(99, 100 - avgErr * 1.85)));
+          const dS = +((78 - acc) * 0.011).toFixed(3);
+          const bBias = Math.round(Math.max(-85, Math.min(85, ((state.whatIfOverrides.aeroBalance ?? 60) - (targets.aeroBalance ?? 60)) * 1.4 - ((state.whatIfOverrides.diffLock ?? 58) - (targets.diffLock ?? 58)) * 0.9)));
+          const aEl = box.querySelector("#eng-sim-acc");
+          const dEl = box.querySelector("#eng-sim-delta");
+          const bTxt = box.querySelector("#eng-bal-txt");
+          const bPin = box.querySelector("#eng-bal-pin");
+          if (aEl) aEl.textContent = `${acc}%`;
+          if (dEl) { dEl.textContent = `${dS <= 0 ? "" : "+"}${dS.toFixed(3)}s/L`; dEl.style.color = dS <= 0 ? "#4ade80" : "#facc15"; }
+          if (bTxt) bTxt.textContent = bBias < -18 ? `UNDERSTEER (${bBias})` : (bBias > 18 ? `OVERSTEER (+${bBias})` : `NEUTRAL SWEET-SPOT (${bBias >= 0 ? "+" : ""}${bBias})`);
+          if (bPin) bPin.style.left = `${Math.max(4, Math.min(96, 50 + bBias * 0.55))}%`;
+          drawSetupRadar("ras-cv-radar", Object.assign({}, engObj, { actual: state.whatIfOverrides }));
+        });
+      });
+      box.querySelector("#eng-sim-reset")?.addEventListener("click", () => {
+        state.whatIfOverrides = null;
+        renderEngineerLab();
+      });
+    } else if (subTab === "feedback") {
+      requestAnimationFrame(() => drawGGFrictionCircle("ras-cv-gg", engObj.ggPoints || []));
+    }
   }
 
   function setupCanvas(id) {

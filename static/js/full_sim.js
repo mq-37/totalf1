@@ -1511,8 +1511,8 @@
           const compAlerts = ENG.stepComponentWear(car, fs.circuit, era, { totalLaps: fs.totalLaps, wetness: fs.wetness });
           compAlerts.forEach((al) => {
             const rType = `comp_${al.comp}`;
-            const rObj = { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap };
-            const rCtx = { lap: al.lap, health: al.health, temp: al.temp, kphLoss: al.kphLoss, severity: al.severity, component: al.comp, feedbackQuality: car.eng?.feedback?.score || 72 };
+            const rObj = { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap, eraKey: (fs.eraRule && fs.eraRule.key) || "2026" };
+            const rCtx = { lap: al.lap, health: al.health, temp: al.temp, kphLoss: al.kphLoss, severity: al.severity, component: al.comp, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", feedbackQuality: car.eng?.feedback?.score || 72 };
             if (fs.telemetry) {
               fs.telemetry.addEvent(al.lap, "component", `${car.card.code3} ${al.label} (${al.health}%)`, al.kphLoss ? `Losing ~${al.kphLoss} kph on straights (+${al.paceLossS}s/L)` : `Wear alert (+${al.paceLossS}s/L)`, car.idx);
             }
@@ -2198,6 +2198,7 @@
           experience: card.experience,
           seasons: card.experience_seasons || 4,
           overall: card.overall,
+          eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
         });
       }
       car.currentLapS = computeCarLapTime(car, selCir, fs.wetness);

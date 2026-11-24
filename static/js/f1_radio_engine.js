@@ -151,13 +151,25 @@
       case "comp_ice": {
         const kph = (ctx && ctx.kphLoss) || 8;
         const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        const tier = (global.F1RaceEngine && global.F1RaceEngine.resolveEraTier) ? global.F1RaceEngine.resolveEraTier((ctx && ctx.eraKey) || car.eraKey || "2026") : "hybrid";
+        if (tier === "classic") {
+          return {
+            speaker: "PIT BOARD",
+            to: drv,
+            text: `CHALKBOARD: Engine oil temp climbing (${ctx?.temp || 104}°C · ${ctx?.health || 58}%) — short-shift 500 RPM down the straight!`,
+            engReply: `MARSHAL OBS: ${drv}'s naturally aspirated engine sounding slightly flat (-${kph} kph trap) on top end.`,
+            tone: ctx && ctx.severity === "critical" ? "warn" : "info",
+            category: "mechanical",
+            component: "ice",
+          };
+        }
         return {
           speaker: drv,
           to: eng.short,
           text: sharp
-            ? `${eng.short}, losing ~${kph} kph at the end of the main straight — feels like ICE cylinder derate or exhaust heat clipping!`
-            : `${eng.short}, I'm losing power down the straight! Car feels flat above 7th gear, check the engine!`,
-          engReply: `${eng.short}: Copy ${drv}, confirmed on telemetry — ICE thermal derate (+${Math.round(kph * 0.9)}°C, health ${ctx?.health || 55}%). Switch Strat Mode 4 & lift-and-coast 35m!`,
+            ? `${eng.short}, losing ~${kph} kph at the end of the main straight — feels like ${tier === "turbo" ? "boost drop" : (tier === "v10" ? "top-end V10 misfire" : "ICE cylinder derate")}!`
+            : `${eng.short}, I'm losing power down the straight! Car feels flat at the top of the rev range, check the engine!`,
+          engReply: `${eng.short}: Copy ${drv}, confirmed on telemetry — engine thermal derate (+${Math.round(kph * 0.9)}°C, health ${ctx?.health || 55}%). ${tier === "hybrid" ? "Switch Strat Mode 4 & lift-and-coast 35m!" : "Short-shift 300 RPM & nurse temps!"}`,
           tone: ctx && ctx.severity === "critical" ? "warn" : "info",
           category: "mechanical",
           component: "ice",
@@ -166,6 +178,44 @@
       case "comp_ers": {
         const kph = (ctx && ctx.kphLoss) || 6;
         const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        const tier = (global.F1RaceEngine && global.F1RaceEngine.resolveEraTier) ? global.F1RaceEngine.resolveEraTier((ctx && ctx.eraKey) || car.eraKey || "2026") : "hybrid";
+        if (tier === "classic") {
+          return {
+            speaker: "PIT BOARD",
+            to: drv,
+            text: `CHALKBOARD: Fuel pressure / Weber carburettors running rich (${ctx?.health || 58}%) — smooth throttle out of slow bends!`,
+            engReply: `MARSHAL OBS: ${drv}'s Lotus/chassis stumbling briefly on carburettor pickup (-${kph} kph exit).`,
+            tone: "warn",
+            category: "mechanical",
+            component: "ers",
+          };
+        }
+        if (tier === "turbo") {
+          return {
+            speaker: drv,
+            to: eng.short,
+            text: sharp
+              ? `Turbo wastegate sticking out of the slow corners — boost lag is costing ~${kph} kph down the straight!`
+              : `No boost coming off the apex! Turbo feels super laggy, check the pressure!`,
+            engReply: `${eng.short}: Confirmed ${drv}, turbo wastegate temp ${ctx?.temp || 168}°C (${ctx?.health || 56}%). Dial boost knob back two clicks!`,
+            tone: "warn",
+            category: "mechanical",
+            component: "ers",
+          };
+        }
+        if (tier === "v10") {
+          return {
+            speaker: drv,
+            to: eng.short,
+            text: sharp
+              ? `Hydraulic pressure dipping on upshifts — ECU sensor flag on the dash, losing ~${kph} kph on exit!`
+              : `Car feels hesitant on upshifts — electronics or hydraulics acting up!`,
+            engReply: `${eng.short}: Understood ${drv}, hydraulic manifold at ${ctx?.health || 58}% (${ctx?.temp || 96}°C). Switch Multi-Function Default 04.`,
+            tone: "warn",
+            category: "mechanical",
+            component: "ers",
+          };
+        }
         return {
           speaker: drv,
           to: eng.short,
@@ -180,13 +230,25 @@
       }
       case "comp_gearbox": {
         const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        const tier = (global.F1RaceEngine && global.F1RaceEngine.resolveEraTier) ? global.F1RaceEngine.resolveEraTier((ctx && ctx.eraKey) || car.eraKey || "2026") : "hybrid";
+        if (tier === "classic") {
+          return {
+            speaker: "PIT BOARD",
+            to: drv,
+            text: `CHALKBOARD: 5-speed dogleg synchros worn (${ctx?.health || 56}%) — double-declutch down into slow hairpins!`,
+            engReply: `MARSHAL OBS: ${drv} carefully nursing manual dogleg gear shifts at ${ctx?.temp || 98}°C.`,
+            tone: "warn",
+            category: "mechanical",
+            component: "gearbox",
+          };
+        }
         return {
           speaker: drv,
           to: eng.short,
           text: sharp
-            ? `Syncro hesitation shifting 4th to 5th on traction exit — hydraulic pressure feels sluggish!`
+            ? `Syncro hesitation shifting 4th to 5th on traction exit — ${tier === "turbo" ? "H-pattern linkage" : "hydraulic pressure"} feels sluggish!`
             : `Shifts feel clunky coming off the apex, losing drive out of the tight turns!`,
-          engReply: `${eng.short}: Copy, gearbox hydraulic wear at ${ctx?.health || 56}% (${ctx?.temp || 114}°C). Short-shift 4th/5th slightly — keeping you out of neutral.`,
+          engReply: `${eng.short}: Copy, gearbox wear at ${ctx?.health || 56}% (${ctx?.temp || 114}°C). Short-shift 4th/5th slightly — keeping you out of neutral.`,
           tone: "warn",
           category: "mechanical",
           component: "gearbox",
@@ -194,11 +256,23 @@
       }
       case "comp_brakes": {
         const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        const tier = (global.F1RaceEngine && global.F1RaceEngine.resolveEraTier) ? global.F1RaceEngine.resolveEraTier((ctx && ctx.eraKey) || car.eraKey || "2026") : "hybrid";
+        if (tier === "classic") {
+          return {
+            speaker: "PIT BOARD",
+            to: drv,
+            text: `CHALKBOARD: Early disc/drum fade (${ctx?.temp || 335}°C · ${ctx?.health || 56}%) — brake 25m earlier into Turn 1!`,
+            engReply: `MARSHAL OBS: ${drv} pumping the brake pedal entering the heavy stop.`,
+            tone: "warn",
+            category: "mechanical",
+            component: "brakes",
+          };
+        }
         return {
           speaker: drv,
           to: eng.short,
           text: sharp
-            ? `Front-left carbon disc glazing into the heavy braking zone — pedal went long by 15m! Moving bias 1.5% rearward.`
+            ? `Front-left ${tier === "turbo" ? "ventilated disc" : "carbon disc"} glazing into the heavy braking zone — pedal went long by 15m! Moving B-Bal 1.5% rearward.`
             : `Brakes feel super spongy into the hairpin! Nearly locked up twice in dirty air.`,
           engReply: `${eng.short}: Telemetry confirms brake duct temp ${ctx?.temp || 640}°C (health ${ctx?.health || 55}%). Pull out of slipstream on straights & lift-coast 40m.`,
           tone: "warn",
@@ -208,13 +282,25 @@
       }
       case "comp_floor": {
         const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        const tier = (global.F1RaceEngine && global.F1RaceEngine.resolveEraTier) ? global.F1RaceEngine.resolveEraTier((ctx && ctx.eraKey) || car.eraKey || "2026") : "hybrid";
+        if (tier === "classic") {
+          return {
+            speaker: "PIT BOARD",
+            to: drv,
+            text: `CHALKBOARD: Spaceframe / monocoque rivet fatigue (${ctx?.health || 58}%) — avoid rough apex kerbs!`,
+            engReply: `MARSHAL OBS: ${drv}'s classic monocoque flexing noticeably over high-speed bumps.`,
+            tone: "warn",
+            category: "mechanical",
+            component: "floor",
+          };
+        }
         return {
           speaker: drv,
           to: eng.short,
           text: sharp
-            ? `Lost ~12 points of rear downforce through the high-speed sweepers — floor edge seal must be damaged from that kerb!`
+            ? `Lost ~12 points of rear downforce through the high-speed sweepers — ${tier === "turbo" ? "ground-effect side skirt" : (tier === "v10" ? "bargeboard/diffuser" : "Venturi floor edge seal")} must be damaged!`
             : `Rear end suddenly feels super loose in the fast corners — zero aero bite!`,
-          engReply: `${eng.short}: Confirmed — aero load sensor shows floor edge degradation (${ctx?.health || 58}%). Compensating with diff entry +1 click.`,
+          engReply: `${eng.short}: Confirmed — aero load shows ${tier === "turbo" ? "skirt/wing" : "floor edge"} degradation (${ctx?.health || 58}%). Compensating with diff entry +1 click.`,
           tone: "warn",
           category: "mechanical",
           component: "floor",
