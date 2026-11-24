@@ -835,8 +835,12 @@
       circuitName: "",
       trackPts: [],
       trackSpline: null,
+      layout: null,
       pitPts: [],
       pitSide: 1,
+      pitBoxCrews: [],
+      pitBoxGantries: [],
+      gantryBulbMats: [],
       tvCams: [],
       worldGroup: null,
       envRT: null,
@@ -894,6 +898,10 @@
       state.carMeshes.clear();
       state.carPhysics.clear();
       state.trackSpline = null;
+      state.layout = null;
+      state.pitBoxCrews = [];
+      state.pitBoxGantries = [];
+      state.gantryBulbMats = [];
       state.flagUniforms = [];
       state.smokePuffs = [];
       state.djBeams = [];
@@ -1096,9 +1104,17 @@
       grp.add(new THREE.Mesh(buildRibbonGeo(pts, -8.8, -7.25, 0.065, true, 0.22), kerbMat));
       grp.add(new THREE.Mesh(buildRibbonGeo(pts, 7.25, 8.8, 0.065, true, 0.22), kerbMat));
 
-      // Vibrant Trackside Sponsor Walls + Subtle Catch Fencing Posts
+      // 6. Standardised FIA Circuit Layout Solver (Zero Obstructions across all 79 Tracks!)
+      const ARCH = global.F1TrackArchitect;
+      const layout = ARCH ? ARCH.buildCircuitLayout(pts, sample3DTrack, circuit, rng) : null;
+      state.layout = layout;
+      const pitSide = layout ? layout.pitSide : (((-pts[0].x) * (-pts[0].tz) + (-pts[0].z) * pts[0].tx) >= 0 ? 1 : -1);
+      state.pitSide = pitSide;
+
+      // Vibrant Trackside Sponsor Walls (with clean Pit Entry & Exit opening on pitSide!)
       const wallMat = new THREE.MeshStandardMaterial({ map: state.sponsorTex, roughness: 0.45, metalness: 0.18, side: THREE.DoubleSide });
-      const buildSponsorWall = (offset) => {
+      const pitOpenSpan = (layout && layout.pitLayout && layout.pitLayout.pitSpan) ? (layout.pitLayout.pitSpan + 0.012) : 0.095;
+      const buildSponsorWall = (offset, skipPitGap) => {
         const count = n + 1;
         const pos = new Float32Array(count * 2 * 3);
         const uvs = new Float32Array(count * 2 * 2);
@@ -1119,8 +1135,12 @@
           uvs[ui] = dAcc * 0.015; uvs[ui + 1] = 0;
           uvs[ui + 2] = dAcc * 0.015; uvs[ui + 3] = 1;
           if (i < count - 1) {
-            const b = i * 2;
-            idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+            const segProg = (i + 0.5) / n;
+            const inPitGap = skipPitGap && (segProg < pitOpenSpan || segProg > (1 - pitOpenSpan));
+            if (!inPitGap) {
+              const b = i * 2;
+              idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+            }
           }
         }
         const g = new THREE.BufferGeometry();
@@ -1130,37 +1150,141 @@
         g.computeVertexNormals();
         return new THREE.Mesh(g, wallMat);
       };
-      grp.add(buildSponsorWall(-15.2));
-      grp.add(buildSponsorWall(15.2));
+      grp.add(buildSponsorWall(-15.2, pitSide < 0));
+      grp.add(buildSponsorWall(15.2, pitSide > 0));
 
-      // 6. Pit Lane Bypass + Architectural Per-Track Pit Building + Start/Finish Gantry + Checkered Line
-      const p0 = pts[0];
-      const rx0 = -p0.tz, rz0 = p0.tx;
-      const toCenter = (-p0.x) * rx0 + (-p0.z) * rz0;
-      const pitSide = toCenter >= 0 ? 1 : -1;
-      state.pitSide = pitSide;
-
-      const pitPts = [];
-      const pitSpan = 0.085;
-      for (let i = 0; i <= 44; i++) {
-        const u = i / 44;
-        const prog = ((1 - pitSpan + u * pitSpan * 2) % 1 + 1) % 1;
-        const sp = sample3DTrack(prog);
-        const off = pitSide * (19.5 * Math.pow(Math.sin(u * Math.PI), 0.65));
-        pitPts.push({ x: sp.x + (-sp.tz) * off, z: sp.z + sp.tx * off, tx: sp.tx, tz: sp.tz });
-      }
+      const pitPts = layout ? layout.pitLayout.fastPts : (() => {
+        const arr = [];
+        for (let i = 0; i <= 44; i++) {
+          const u = i / 44;
+          const prog = ((1 - 0.085 + u * 0.17) % 1 + 1) % 1;
+          const sp = sample3DTrack(prog);
+          const off = pitSide * (19.5 * Math.pow(Math.sin(u * Math.PI), 0.65));
+          arr.push({ x: sp.x + (-sp.tz) * off, z: sp.z + sp.tx * off, tx: sp.tx, tz: sp.tz });
+        }
+        return arr;
+      })();
       state.pitPts = pitPts;
+
+      // Dedicated FIA Pit Fast Lane + Working Apron + Pit Wall Barrier + 80 KPH Speed-Limit Lines
       grp.add(new THREE.Mesh(
-        buildRibbonGeo(pitPts, -4.4, 4.4, 0.055, false, 0.08),
+        buildRibbonGeo(pitPts, -3.6, 3.6, 0.055, false, 0.08),
         new THREE.MeshStandardMaterial({ color: 0x262f3e, roughness: 0.72, side: THREE.DoubleSide })
       ));
+      if (layout && layout.pitLayout.workPts.length > 2) {
+        grp.add(new THREE.Mesh(
+          buildRibbonGeo(layout.pitLayout.workPts, -4.6, 4.6, 0.052, false, 0.08),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.80, side: THREE.DoubleSide })
+        ));
+      }
+      if (layout && layout.pitLayout.wallPts.length > 2) {
+        const wPts = layout.pitLayout.wallPts;
+        const wMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.55, metalness: 0.25, side: THREE.DoubleSide });
+        const count = wPts.length;
+        const pos = new Float32Array(count * 2 * 3);
+        const idx = [];
+        for (let i = 0; i < count; i++) {
+          const wp = wPts[i];
+          const vi = i * 6;
+          pos[vi] = wp.x; pos[vi + 1] = 0.0; pos[vi + 2] = wp.z;
+          pos[vi + 3] = wp.x; pos[vi + 4] = 1.25; pos[vi + 5] = wp.z;
+          if (i < count - 1) {
+            const b = i * 2;
+            idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+          }
+        }
+        const wg = new THREE.BufferGeometry();
+        wg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        wg.setIndex(idx);
+        wg.computeVertexNormals();
+        grp.add(new THREE.Mesh(wg, wMat));
+      }
+      // 80 KPH Pit Entry & Exit Speed-Limit White Lines + FIA Bollards
+      if (layout && layout.pitLayout.speedLimitIn && layout.pitLayout.speedLimitOut) {
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc, side: THREE.DoubleSide });
+        const postMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        [layout.pitLayout.speedLimitIn, layout.pitLayout.speedLimitOut].forEach((sl, sIdx) => {
+          const slGrp = new THREE.Group();
+          slGrp.position.set(sl.x, 0.07, sl.z);
+          slGrp.rotation.y = Math.atan2(sl.tx, sl.tz);
+          const bar = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 0.55), lineMat);
+          bar.rotation.x = -Math.PI * 0.5;
+          slGrp.add(bar);
+          const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.35, 8), sIdx === 0 ? postMat : new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+          bollard.position.set(-pitSide * 3.8, 0.68, 0);
+          slGrp.add(bollard);
+          grp.add(slGrp);
+        });
+      }
 
+      // 10 Painted Colour-Coded Team Pit Boxes + Overhead Red/Amber/Green Pit Gantry + Animated 3D Pit Crews!
+      state.pitBoxCrews = [];
+      state.pitBoxGantries = [];
+      if (layout && layout.pitLayout.boxes.length) {
+        const boxLineMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc, side: THREE.DoubleSide });
+        const gantrySteel = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.65 });
+        const helmMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
+        layout.pitLayout.boxes.forEach((box) => {
+          const bGrp = new THREE.Group();
+          bGrp.position.set(box.x, 0, box.z);
+          bGrp.rotation.y = box.yaw;
+          grp.add(bGrp);
+
+          // Coloured team pit-box pad + crisp white FIA stop lines
+          const pad = new THREE.Mesh(
+            new THREE.PlaneGeometry(3.4, 6.8),
+            new THREE.MeshBasicMaterial({ color: box.color, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
+          );
+          pad.rotation.x = -Math.PI * 0.5;
+          pad.position.y = 0.068;
+          bGrp.add(pad);
+          const stopBar = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.35), boxLineMat);
+          stopBar.rotation.x = -Math.PI * 0.5;
+          stopBar.position.set(0, 0.072, 2.75);
+          bGrp.add(stopBar);
+
+          // Overhead Pit Boom Gantry + Dynamic Red/Amber/Green Release Light
+          const boom = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.28, 0.32), gantrySteel);
+          boom.position.set(-pitSide * 1.4, 3.6, 1.8);
+          bGrp.add(boom);
+          const lightMat = new THREE.MeshBasicMaterial({ color: 0x334155 });
+          const lightLamp = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.42, 0.42), lightMat);
+          lightLamp.position.set(0, 3.3, 2.0);
+          bGrp.add(lightLamp);
+          state.pitBoxGantries.push({ mat: lightMat, state: "off" });
+
+          // 5 Animated 3D Pit Crew Figures (4 Wheel-Gun Mechanics + Front Jack!)
+          const suitMat = new THREE.MeshStandardMaterial({ color: box.color, roughness: 0.55 });
+          const members = [];
+          const crewSpecs = [
+            { restX: -2.2, workX: -1.45, z:  1.75 }, // Front-Left gun
+            { restX:  2.2, workX:  1.45, z:  1.75 }, // Front-Right gun
+            { restX: -2.2, workX: -1.45, z: -1.55 }, // Rear-Left gun
+            { restX:  2.2, workX:  1.45, z: -1.55 }, // Rear-Right gun
+            { restX: -pitSide * 2.4, workX: 0.0, z: 3.35 }, // Front Jack
+          ];
+          crewSpecs.forEach((sp) => {
+            const fig = new THREE.Group();
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 1.25, 7), suitMat);
+            torso.position.y = 0.65;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 7, 6), helmMat);
+            head.position.y = 1.42;
+            fig.add(torso, head);
+            fig.position.set(sp.restX, 0, sp.z);
+            bGrp.add(fig);
+            members.push({ fig, restX: sp.restX, workX: sp.workX, z: sp.z });
+          });
+          state.pitBoxCrews.push({ members, activeAmt: 0 });
+        });
+      }
+
+      // Start/Finish Checkered Line + Dynamic 5-Red-Lights Overhead FIA Start Gantry
+      const p0 = pts[0];
       const sfGroup = new THREE.Group();
       sfGroup.position.set(p0.x, 0, p0.z);
       sfGroup.rotation.y = Math.atan2(p0.tx, p0.tz);
       grp.add(sfGroup);
 
-      // Painted Checkered Start/Finish Line + Grid Boxes
       const sfLine = new THREE.Mesh(
         new THREE.PlaneGeometry(14.2, 2.8),
         new THREE.MeshBasicMaterial({ map: state.checkerTex, side: THREE.DoubleSide })
@@ -1169,7 +1293,28 @@
       sfLine.position.set(0, 0.075, 0);
       sfGroup.add(sfLine);
 
-      // FIA Overhead Start Gantry + 5 Glowing Red Lights + Illuminated Sponsor Fascia
+      // Painted Staggered 2x2 FIA Starting Grid Boxes along track spline!
+      if (layout && layout.gridSlots.length) {
+        const gridLineMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc, side: THREE.DoubleSide });
+        layout.gridSlots.slice(0, 20).forEach((slot) => {
+          const gBox = new THREE.Group();
+          gBox.position.set(slot.x, 0.072, slot.z);
+          gBox.rotation.y = slot.yaw;
+          const front = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.26), gridLineMat);
+          front.rotation.x = -Math.PI * 0.5;
+          front.position.set(0, 0, 2.85);
+          const sideL = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 2.2), gridLineMat);
+          sideL.rotation.x = -Math.PI * 0.5;
+          sideL.position.set(-1.32, 0, 1.85);
+          const sideR = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 2.2), gridLineMat);
+          sideR.rotation.x = -Math.PI * 0.5;
+          sideR.position.set(1.32, 0, 1.85);
+          gBox.add(front, sideL, sideR);
+          grp.add(gBox);
+        });
+      }
+
+      // FIA Overhead Start Gantry + 5 Independent Dynamic Red/Green Light Pods!
       const gantryMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.65 });
       const legL = new THREE.Mesh(new THREE.BoxGeometry(1.1, 9.2, 1.1), gantryMat); legL.position.set(-10.5, 4.6, 0); sfGroup.add(legL);
       const legR = new THREE.Mesh(new THREE.BoxGeometry(1.1, 9.2, 1.1), gantryMat); legR.position.set(10.5, 4.6, 0); sfGroup.add(legR);
@@ -1177,64 +1322,62 @@
       const bannerStrip = new THREE.Mesh(new THREE.BoxGeometry(21.6, 1.3, 2.12), new THREE.MeshBasicMaterial({ color: 0xe10600 }));
       bannerStrip.position.set(0, 8.7, 0);
       sfGroup.add(bannerStrip);
-      const redGlow = new THREE.MeshBasicMaterial({ color: 0xff2222 });
-      for (let li = -2; li <= 2; li++) {
-        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), redGlow);
-        bulb.position.set(li * 1.55, 7.6, -1.0);
-        sfGroup.add(bulb);
+      state.gantryBulbMats = [];
+      for (let li = 2; li >= -2; li--) {
+        const pod = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.55, 0.55), gantryMat);
+        pod.position.set(li * 1.65, 7.25, -0.95);
+        sfGroup.add(pod);
+        const bulbMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+        state.gantryBulbMats.push(bulbMat);
+        const bulbTop = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), bulbMat);
+        bulbTop.position.set(li * 1.65, 7.55, -1.24);
+        const bulbBot = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), bulbMat);
+        bulbBot.position.set(li * 1.65, 6.95, -1.24);
+        sfGroup.add(bulbTop, bulbBot);
       }
 
-      // Per-Track Architectural Pit Building + Illuminated Team Garages + Paddock Club Rooftop
-      const pStyle = circuit.pit_building || "modern_glass";
-      const pitX = -pitSide * 31;
+      // Per-Track Architectural Pit Building (Positioned via Spatial Clearance Solver behind the 10 Pit Boxes!)
+      const pb = layout ? layout.pitLayout.pitBuilding : { x: p0.x + (-p0.tz) * pitSide * 31, z: p0.z + p0.tx * pitSide * 31, yaw: Math.atan2(p0.tx, p0.tz), depth: 11.5, length: 122, style: circuit.pit_building || "modern_glass" };
+      const pStyle = pb.style || "modern_glass";
       const bldgColor = pStyle === "vintage_wood" ? 0x7c5333
         : (pStyle === "classic_brick" ? 0x8f3a3a
           : (pStyle === "desert_wing" ? 0xf1f5f9
             : (pStyle === "street_canopy" ? 0x334155 : 0x26354d)));
       const bldgH = pStyle === "vintage_wood" ? 6.2 : (pStyle === "desert_wing" ? 12.2 : 10.5);
+      const pitBldgGrp = new THREE.Group();
+      pitBldgGrp.position.set(pb.x, 0, pb.z);
+      pitBldgGrp.rotation.y = pb.yaw;
+      grp.add(pitBldgGrp);
+
       const bldg = new THREE.Mesh(
-        new THREE.BoxGeometry(12, bldgH, 134),
+        new THREE.BoxGeometry(pb.depth, bldgH, pb.length),
         new THREE.MeshStandardMaterial({ color: bldgColor, roughness: pStyle === "modern_glass" ? 0.2 : 0.68, metalness: pStyle === "modern_glass" ? 0.65 : 0.15 })
       );
-      bldg.position.set(pitX, bldgH * 0.5, 0);
+      bldg.position.set(0, bldgH * 0.5, 0);
       bldg.castShadow = true;
       bldg.receiveShadow = true;
-      sfGroup.add(bldg);
+      pitBldgGrp.add(bldg);
 
       const canopy = new THREE.Mesh(
-        new THREE.BoxGeometry(16.8, 0.85, 140),
+        new THREE.BoxGeometry(pb.depth + 4.8, 0.85, pb.length + 6),
         new THREE.MeshStandardMaterial({ color: pStyle === "vintage_wood" ? 0xb45309 : 0xf8fafc, roughness: 0.25, metalness: 0.4 })
       );
-      canopy.position.set(pitX + pitSide * 2.4, bldgH + 0.45, 0);
-      sfGroup.add(canopy);
+      canopy.position.set(pitSide * 2.4, bldgH + 0.45, 0);
+      pitBldgGrp.add(canopy);
 
-      const bayCols = [0xe10600, 0xff8700, 0x00d2be, 0x1e41ff, 0x006f62, 0x0090ff, 0x6692ff, 0xfacc15, 0x22c55e, 0xffffff];
+      const bayCols = ARCH ? ARCH.PIT_BOX_COLORS : [0xe10600, 0xff8700, 0x00d2be, 0x1e41ff, 0x006f62, 0x0090ff, 0x6692ff, 0xfacc15, 0x22c55e, 0xffffff];
+      const baySpacing = (pb.length - 14) / 9;
       for (let b = 0; b < 10; b++) {
-        const bz = -54 + b * 12;
-        const bayDoor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.8, 8.6), new THREE.MeshBasicMaterial({ color: 0x0b1222 }));
-        bayDoor.position.set(pitX + pitSide * 6.1, 1.95, bz);
-        sfGroup.add(bayDoor);
-        const fascia = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.1, 10.2), new THREE.MeshBasicMaterial({ color: bayCols[b] }));
-        fascia.position.set(pitX + pitSide * 6.2, 4.5, bz);
-        sfGroup.add(fascia);
+        const bz = -(pb.length - 14) * 0.5 + b * baySpacing;
+        const bayDoor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 3.8, Math.min(8.2, baySpacing * 0.72)), new THREE.MeshBasicMaterial({ color: 0x0b1222 }));
+        bayDoor.position.set(pitSide * (pb.depth * 0.5 + 0.12), 1.95, bz);
+        pitBldgGrp.add(bayDoor);
+        const fascia = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.1, Math.min(9.4, baySpacing * 0.86)), new THREE.MeshBasicMaterial({ color: bayCols[b] }));
+        fascia.position.set(pitSide * (pb.depth * 0.5 + 0.22), 4.5, bz);
+        pitBldgGrp.add(fascia);
       }
 
-      // 3D Pit Crew figures along the pit wall
-      const crewGrp = new THREE.Group();
-      const suitMat = new THREE.MeshStandardMaterial({ color: 0xe10600, roughness: 0.55 });
-      const helmMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
-      for (let c = 0; c < 10; c++) {
-        const fig = new THREE.Group();
-        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 1.35, 8), suitMat); torso.position.y = 0.7;
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), helmMat); head.position.y = 1.55;
-        fig.add(torso, head);
-        fig.position.set(pitX + pitSide * 8.6, 0, -36 + c * 8);
-        crewGrp.add(fig);
-      }
-      sfGroup.add(crewGrp);
-      state.pitCrewGroup = crewGrp;
-
-      // 7. MASSIVE MULTI-TIER STADIUMS, GRANDSTANDS, 5,500+ CHEERING FANS W/ BEERS, FLAGS & SMOKE FLARES!
+      // 7. OBSTRUCTION-FREE MULTI-TIER STADIUMS, GRANDSTANDS, CHEERING FANS W/ BEERS, FLAGS & SMOKE FLARES!
       const crowdSpots = [];
       const beerSpots = [];
       const standAccentCols = [0xe10600, 0xff8700, 0x0ea5e9, 0xfacc15, 0x22c55e, 0x6366f1, 0xec4899, 0x14b8a6];
@@ -1243,49 +1386,31 @@
       const standMatRoof = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.32, metalness: 0.25, side: THREE.DoubleSide });
       const poleMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3, metalness: 0.7 });
 
-      // Place 10 huge multi-tier grandstands around the entire circuit (Main Straight + Turn 1 + Stadiums!)
-      const standSlots = [
-        { prog: 0.00, side: pitSide, len: 126, tiers: 7, dist: 27 },   // Main Grandstand
-        { prog: 0.07, side: -pitSide, len: 86, tiers: 6, dist: 25 },   // Turn 1 Mega Stand
-        { prog: 0.17, side: 1, len: 74, tiers: 5, dist: 26 },
-        { prog: 0.28, side: -1, len: 82, tiers: 6, dist: 27 },
-        { prog: 0.40, side: 1, len: 78, tiers: 6, dist: 26 },
-        { prog: 0.52, side: -1, len: 92, tiers: 7, dist: 27 },         // Back-Straight Stadium Bowl
-        { prog: 0.64, side: 1, len: 74, tiers: 5, dist: 26 },
-        { prog: 0.76, side: -1, len: 84, tiers: 6, dist: 27 },
-        { prog: 0.87, side: 1, len: 78, tiers: 6, dist: 26 },
-        { prog: 0.94, side: pitSide, len: 76, tiers: 6, dist: 27 },    // Final Corner Grandstand
-      ];
-
-      standSlots.forEach((slot, sIdx) => {
-        const sp = sample3DTrack(slot.prog);
-        const rx = -sp.tz, rz = sp.tx;
-        const sx = sp.x + rx * slot.side * slot.dist;
-        const sz = sp.z + rz * slot.side * slot.dist;
-        const yaw = Math.atan2(sp.tx, sp.tz);
+      const standList = layout ? layout.grandstands : [];
+      standList.forEach((slot, sIdx) => {
+        const sx = slot.x;
+        const sz = slot.z;
+        const yaw = slot.yaw;
 
         const stand = new THREE.Group();
         stand.position.set(sx, 0, sz);
         stand.rotation.y = yaw;
         grp.add(stand);
 
-        const faceSign = slot.side; // Local +X = (+tz, 0, -tx) = -rightVec, so +slot.side faces directly toward the track!
-        const depth = slot.tiers * 2.2 + 3.0;
+        const faceSign = slot.side;
+        const depth = slot.depth || (slot.tiers * 2.2 + 3.0);
         const maxH = slot.tiers * 1.45 + 2.5;
         const accentHex = standAccentCols[sIdx % standAccentCols.length];
 
-        // Stepped concrete foundation & back wall
         const backWall = new THREE.Mesh(new THREE.BoxGeometry(2.2, maxH + 2.0, slot.len), standMatConcrete);
         backWall.position.set(-faceSign * (depth * 0.5), (maxH + 2.0) * 0.5, 0);
         backWall.castShadow = true;
         stand.add(backWall);
 
-        // Bright colourful stadium team-fascia ribbon along the front balcony!
         const fascia = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, slot.len + 1), new THREE.MeshBasicMaterial({ color: accentHex }));
         fascia.position.set(faceSign * (depth * 0.45), 1.4, 0);
         stand.add(fascia);
 
-        // Tiered seating steps + populate cheering colourful fans & beer cups on every tier!
         const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
         for (let t = 0; t < slot.tiers; t++) {
           const lx = faceSign * (depth * 0.42 - t * 2.1);
@@ -1294,25 +1419,19 @@
           step.position.set(lx, ly * 0.5, 0);
           stand.add(step);
 
-          // Pack 45-70 cheering fans per tier across the grandstand length
           const fanStep = 2.05;
           for (let lz = -slot.len * 0.46; lz <= slot.len * 0.46; lz += fanStep) {
-            if (rng() < 0.14) continue; // natural aisle gaps
+            if (rng() < 0.14) continue;
             const jx = lx + (rng() - 0.5) * 0.55;
             const jz = lz + (rng() - 0.5) * 0.55;
-            // Transform local (jx, ly, jz) to world space for single-draw-call InstancedMesh!
             const wx = sx + jx * cosY + jz * sinY;
             const wz = sz - jx * sinY + jz * cosY;
-            // Cluster some stands with fan army colours (Tifosi Red / Orange Army / Papaya) + rainbow mix!
             const fanCol = rng() < 0.34 ? accentHex : FAN_PALETTE[Math.floor(rng() * FAN_PALETTE.length)];
             crowdSpots.push({ x: wx, y: ly, z: wz, ry: yaw, color: fanCol });
-            if (rng() < 0.22) {
-              beerSpots.push({ x: wx, y: ly, z: wz, ry: yaw });
-            }
+            if (rng() < 0.22) beerSpots.push({ x: wx, y: ly, z: wz, ry: yaw });
           }
         }
 
-        // Swept Tensile Cantilevered Stadium Roof Canopy + Bright Trim
         const roof = new THREE.Mesh(new THREE.BoxGeometry(depth + 5.5, 0.55, slot.len + 4), standMatRoof);
         roof.position.set(faceSign * 1.2, maxH + 4.4, 0);
         roof.rotation.z = faceSign * 0.14;
@@ -1321,7 +1440,6 @@
         roofTrim.position.set(faceSign * (depth * 0.5 + 3.2), maxH + 3.5, 0);
         stand.add(roofTrim);
 
-        // Tall Waving GLSL Flags atop every grandstand roof!
         for (let fi = -2; fi <= 2; fi++) {
           const fz = fi * (slot.len * 0.2);
           const fPole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 7.5, 6), poleMat);
@@ -1337,7 +1455,6 @@
           stand.add(fMesh);
         }
 
-        // Party Smoke Flares rising above 4 iconic grandstands (Orange Army, Tifosi Red, Papaya, Yellow!)
         if (sIdx % 2 === 1) {
           const flareCol = sIdx === 1 ? 0xff6b00 : (sIdx === 3 ? 0xef4444 : (sIdx === 5 ? 0xff8700 : 0xfacc15));
           for (let p = 0; p < 5; p++) {
@@ -1353,16 +1470,13 @@
         }
       });
 
-      // 8. LIVE CANVAS2D GIANT LED JUMBOTRON SCREENS AROUND THE CIRCUIT (4 massive screens!)
+      // 8. OBSTRUCTION-FREE LIVE LED JUMBOTRON SCREENS
       const jumboMat = new THREE.MeshBasicMaterial({ map: jumbotron.tex });
       const jumboFrameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.6 });
-      [0.05, 0.30, 0.56, 0.82].forEach((prog, ji) => {
-        const sp = sample3DTrack(prog);
-        const side = ji % 2 === 0 ? -1 : 1;
-        const rx = -sp.tz, rz = sp.tx;
+      (layout ? layout.jumbotrons : []).forEach((jb) => {
         const jg = new THREE.Group();
-        jg.position.set(sp.x + rx * side * 24, 0, sp.z + rz * side * 24);
-        jg.rotation.y = Math.atan2(sp.tx, sp.tz) + (side > 0 ? -Math.PI * 0.35 : Math.PI * 0.35);
+        jg.position.set(jb.x, 0, jb.z);
+        jg.rotation.y = jb.yaw;
         const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 9.5, 8), jumboFrameMat); leg.position.y = 4.75; jg.add(leg);
         const frame = new THREE.Mesh(new THREE.BoxGeometry(19.2, 10.4, 1.2), jumboFrameMat); frame.position.y = 12.6; jg.add(frame);
         const screen = new THREE.Mesh(new THREE.PlaneGeometry(18.0, 9.2), jumboMat); screen.position.set(0, 12.6, 0.66); jg.add(screen);
@@ -1370,16 +1484,15 @@
         grp.add(jg);
       });
 
-      // 9. OVERHEAD SPONSOR BRIDGES ACROSS THE TRACK (3 vibrant racing arches!)
+      // 9. OBSTRUCTION-FREE OVERHEAD SPONSOR BRIDGES
       const bridgeCols = [0xe10600, 0x0284c7, 0xf97316];
-      [0.22, 0.50, 0.78].forEach((prog, bi) => {
-        const sp = sample3DTrack(prog);
+      (layout ? layout.bridges : []).forEach((br, bi) => {
         const bg = new THREE.Group();
-        bg.position.set(sp.x, 0, sp.z);
-        bg.rotation.y = Math.atan2(sp.tx, sp.tz);
+        bg.position.set(br.x, 0, br.z);
+        bg.rotation.y = br.yaw;
         const pillarL = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9.5, 2.4), gantryMat); pillarL.position.set(-12.5, 4.75, 0); bg.add(pillarL);
         const pillarR = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9.5, 2.4), gantryMat); pillarR.position.set( 12.5, 4.75, 0); bg.add(pillarR);
-        const deck = new THREE.Mesh(new THREE.BoxGeometry(27.0, 2.8, 3.6), new THREE.MeshStandardMaterial({ color: bridgeCols[bi], roughness: 0.35, metalness: 0.25 }));
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(27.0, 2.8, 3.6), new THREE.MeshStandardMaterial({ color: bridgeCols[bi % bridgeCols.length], roughness: 0.35, metalness: 0.25 }));
         deck.position.set(0, 9.2, 0);
         bg.add(deck);
         const trim = new THREE.Mesh(new THREE.BoxGeometry(27.2, 0.45, 3.75), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
@@ -1388,78 +1501,70 @@
         grp.add(bg);
       });
 
-      // 10. ACTIVE FAN FESTIVAL & PARTY VILLAGE (Ferris Wheel, Beer Garden Tents, DJ Stage & Dancing Crowd!)
-      const festBase = sample3DTrack(0.12);
-      const frx = -festBase.tz, frz = festBase.tx;
-      const festX = festBase.x + frx * (-pitSide) * 76;
-      const festZ = festBase.z + frz * (-pitSide) * 76;
+      // 10. OBSTRUCTION-FREE ACTIVE FAN FESTIVAL & PARTY VILLAGE
+      const fest = layout && layout.festival;
+      if (fest) {
+        const fw = buildFerrisWheel(fest.x, fest.z, theme);
+        grp.add(fw.group);
+        state.ferrisWheel = fw.wheel;
 
-      // Rotating Illuminated Giant Ferris Wheel!
-      const fw = buildFerrisWheel(festX, festZ, theme);
-      grp.add(fw.group);
-      state.ferrisWheel = fw.wheel;
+        const tentCols = [0xef4444, 0xfacc15, 0x0ea5e9, 0xf97316, 0x22c55e, 0xa855f7];
+        (layout.festivalTents || []).forEach((tSpec, ti) => {
+          const tent = new THREE.Group();
+          tent.position.set(tSpec.x, 0, tSpec.z);
+          const roof = new THREE.Mesh(
+            new THREE.ConeGeometry(7.2, 4.2, 6),
+            new THREE.MeshStandardMaterial({ color: tentCols[ti % tentCols.length], roughness: 0.55 })
+          );
+          roof.position.y = 5.6;
+          tent.add(roof);
+          const trim = new THREE.Mesh(new THREE.CylinderGeometry(6.8, 6.8, 0.55, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+          trim.position.y = 3.55;
+          tent.add(trim);
+          for (let p = 0; p < 6; p++) {
+            const pa = (p / 6) * Math.PI * 2;
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.6, 5), poleMat);
+            post.position.set(Math.cos(pa) * 5.8, 1.8, Math.sin(pa) * 5.8);
+            tent.add(post);
+          }
+          grp.add(tent);
+          for (let f = 0; f < 24; f++) {
+            const fa = rng() * Math.PI * 2;
+            const fr = 4 + rng() * 9;
+            const px = tSpec.x + Math.cos(fa) * fr;
+            const pz = tSpec.z + Math.sin(fa) * fr;
+            crowdSpots.push({ x: px, y: 0, z: pz, ry: rng() * Math.PI * 2, color: FAN_PALETTE[Math.floor(rng() * FAN_PALETTE.length)] });
+            if (f % 2 === 0) beerSpots.push({ x: px, y: 0, z: pz, ry: fa });
+          }
+        });
 
-      // Colourful Striped Beer Garden Marquee Tents + Picnic Tables + Party Fans Drinking Beers!
-      const tentCols = [0xef4444, 0xfacc15, 0x0ea5e9, 0xf97316, 0x22c55e, 0xa855f7];
-      for (let ti = 0; ti < 6; ti++) {
-        const angle = (ti / 6) * Math.PI * 2;
-        const tx = festX + Math.cos(angle) * 44;
-        const tz = festZ + Math.sin(angle) * 44;
-        const tent = new THREE.Group();
-        tent.position.set(tx, 0, tz);
-        const roof = new THREE.Mesh(
-          new THREE.ConeGeometry(7.2, 4.2, 6),
-          new THREE.MeshStandardMaterial({ color: tentCols[ti], roughness: 0.55 })
-        );
-        roof.position.y = 5.6;
-        tent.add(roof);
-        const trim = new THREE.Mesh(new THREE.CylinderGeometry(6.8, 6.8, 0.55, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        trim.position.y = 3.55;
-        tent.add(trim);
-        for (let p = 0; p < 6; p++) {
-          const pa = (p / 6) * Math.PI * 2;
-          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.6, 5), poleMat);
-          post.position.set(Math.cos(pa) * 5.8, 1.8, Math.sin(pa) * 5.8);
-          tent.add(post);
-        }
-        grp.add(tent);
-
-        // Cluster 28 festival partygoers with beers around each beer garden tent!
-        for (let f = 0; f < 28; f++) {
-          const fa = rng() * Math.PI * 2;
-          const fr = 4 + rng() * 11;
-          const px = tx + Math.cos(fa) * fr;
-          const pz = tz + Math.sin(fa) * fr;
-          crowdSpots.push({ x: px, y: 0, z: pz, ry: rng() * Math.PI * 2, color: FAN_PALETTE[Math.floor(rng() * FAN_PALETTE.length)] });
-          if (f % 2 === 0) beerSpots.push({ x: px, y: 0, z: pz, ry: fa });
+        if (layout.djStage) {
+          const stageGrp = new THREE.Group();
+          stageGrp.position.set(layout.djStage.x, 0, layout.djStage.z);
+          const stageDeck = new THREE.Mesh(new THREE.BoxGeometry(20, 2.2, 12), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 }));
+          stageDeck.position.y = 1.1; stageGrp.add(stageDeck);
+          const stageBack = new THREE.Mesh(new THREE.BoxGeometry(19, 9.5, 1.0), new THREE.MeshBasicMaterial({ color: 0x3b0764 }));
+          stageBack.position.set(0, 6.8, -5.2); stageGrp.add(stageBack);
+          const stageRoof = new THREE.Mesh(new THREE.BoxGeometry(21, 0.9, 13), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+          stageRoof.position.y = 11.8; stageGrp.add(stageRoof);
+          const beamCols = [0xec4899, 0x38bdf8, 0xfacc15, 0x22c55e];
+          beamCols.forEach((bc, bi) => {
+            const bMat = new THREE.MeshBasicMaterial({ color: bc, transparent: true, opacity: 0.34, depthWrite: false });
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 16, 10, 1, true), bMat);
+            cone.position.set(-6 + bi * 4, 8.5, 2.0);
+            cone.rotation.x = 0.55;
+            stageGrp.add(cone);
+            state.djBeams.push({ mesh: cone, mat: bMat, phase: bi * 1.5 });
+          });
+          grp.add(stageGrp);
         }
       }
-
-      // Live Fan-Zone Music / DJ Festival Stage with Pulsing Rainbow Stage Beams!
-      const stageGrp = new THREE.Group();
-      stageGrp.position.set(festX + 24, 0, festZ - 26);
-      const stageDeck = new THREE.Mesh(new THREE.BoxGeometry(20, 2.2, 12), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5 }));
-      stageDeck.position.y = 1.1; stageGrp.add(stageDeck);
-      const stageBack = new THREE.Mesh(new THREE.BoxGeometry(19, 9.5, 1.0), new THREE.MeshBasicMaterial({ color: 0x3b0764 }));
-      stageBack.position.set(0, 6.8, -5.2); stageGrp.add(stageBack);
-      const stageRoof = new THREE.Mesh(new THREE.BoxGeometry(21, 0.9, 13), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
-      stageRoof.position.y = 11.8; stageGrp.add(stageRoof);
-      const beamCols = [0xec4899, 0x38bdf8, 0xfacc15, 0x22c55e];
-      beamCols.forEach((bc, bi) => {
-        const bMat = new THREE.MeshBasicMaterial({ color: bc, transparent: true, opacity: 0.34, depthWrite: false });
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 16, 10, 1, true), bMat);
-        cone.position.set(-6 + bi * 4, 8.5, 2.0);
-        cone.rotation.x = 0.55;
-        stageGrp.add(cone);
-        state.djBeams.push({ mesh: cone, mat: bMat, phase: bi * 1.5 });
-      });
-      grp.add(stageGrp);
 
       // Build single-draw-call GPU-instanced cheering crowd + raised beer cups!
       state.crowdRef = buildAnimatedCrowd(crowdSpots, beerSpots);
       grp.add(state.crowdRef.group);
 
-      // 11. Diverse Sunlit Trees / Urban Skylines / Floodlights & Signature Circuit Landmarks
+      // 11. OBSTRUCTION-FREE SUNLIT TREES / URBAN SKYLINES / FLOODLIGHTS (Every prop >= 26m from track & pit!)
       const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3d24, roughness: 0.9 });
       const foliageMats = [
         new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.85 }),
@@ -1467,27 +1572,20 @@
         new THREE.MeshStandardMaterial({ color: 0x558b2f, roughness: 0.85 }),
         new THREE.MeshStandardMaterial({ color: 0x1b5e20, roughness: 0.88 }),
       ];
-      const propCount = 96;
-      for (let i = 0; i < propCount; i++) {
-        const prog = (i + 0.25) / propCount;
-        const p = sample3DTrack(prog);
-        const side = i % 2 === 0 ? 1 : -1;
-        const rx = -p.tz, rz = p.tx;
-        const dist = 42 + (i % 5) * 14 + rng() * 14;
-        const px = p.x + rx * side * dist;
-        const pz = p.z + rz * side * dist;
+      (layout ? layout.props : []).forEach((pr) => {
+        const i = pr.idx;
+        const px = pr.x;
+        const pz = pr.z;
 
         if (theme.isNight && i % 3 === 0) {
-          // Towering Floodlight Masts with glowing white LED banks
           const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.45, 24, 6), gantryMat);
           pole.position.set(px, 12, pz);
           grp.add(pole);
           const bank = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.2, 1.0), new THREE.MeshBasicMaterial({ color: 0xf0f9ff }));
           bank.position.set(px, 24, pz);
-          bank.lookAt(p.x, 1, p.z);
+          bank.lookAt(pr.lookX, 1, pr.lookZ);
           grp.add(bank);
         } else if (circuit.biome === "street" || circuit.biome === "night_street" || (circuit.id === "melbourne" && i % 4 === 0)) {
-          // Modern Architectural City Towers with lit glass facades
           const h = 22 + Math.floor(rng() * 55);
           const w = 12 + Math.floor(rng() * 14);
           const cCol = theme.isNight ? (0x1e293b + (i % 4) * 0x081020) : (0x64748b + (i % 4) * 0x101418);
@@ -1503,7 +1601,6 @@
             grp.add(neon);
           }
         } else if (circuit.biome === "desert" || circuit.biome === "night_desert") {
-          // Sculpted Desert Palm Trees
           const h = 8 + rng() * 5;
           const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, h, 6), trunkMat);
           trunk.position.set(px, h * 0.5, pz);
@@ -1513,7 +1610,6 @@
           crown.position.set(px, h + 0.8, pz);
           grp.add(crown);
         } else {
-          // Layered Lush Multi-Tone Broadleaf Parkland Trees (no flat dark cones!)
           const tree = new THREE.Group();
           tree.position.set(px, 0, pz);
           const h = 5.5 + rng() * 5.0;
@@ -1529,19 +1625,18 @@
           tree.add(c2);
           grp.add(tree);
         }
-      }
+      });
 
-      // Signature Landmark: Las Vegas Glowing Sphere or COTA Observation Tower!
-      if (circuit.id === "vegas") {
+      if (fest && circuit.id === "vegas") {
         const sphere = new THREE.Mesh(
           new THREE.SphereGeometry(42, 24, 18),
           new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
         );
-        sphere.position.set(festX - 95, 36, festZ + 70);
+        sphere.position.set(fest.x - 95, 36, fest.z + 70);
         grp.add(sphere);
-      } else if (circuit.id === "austin") {
+      } else if (fest && circuit.id === "austin") {
         const cotaTower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 4.5, 76, 10), new THREE.MeshStandardMaterial({ color: 0xe10600, roughness: 0.35, metalness: 0.5 }));
-        cotaTower.position.set(festX - 60, 38, festZ + 40);
+        cotaTower.position.set(fest.x - 60, 38, fest.z + 40);
         grp.add(cotaTower);
       }
 
@@ -1600,25 +1695,15 @@
         grp.add(ptsMesh);
         return { geo, pos, vel, life, cursor: 0, count };
       };
-      // Fine, crisp fiery titanium sparks (ONLY fired on real chassis bottoming-out!)
       state.sparkSystem = makePool(360, 0xffb326, 0.34, 0.95, sparkTex, false);
-      // 1980s/90s bright white-gold magnesium skid sparks
       state.magSparkSystem = makePool(180, 0xfff3b0, 0.36, 0.95, sparkTex, false);
-      // Subtle translucent slate rain mist (NormalBlending — NEVER blinding white orbs!)
       state.spraySystem = makePool(240, 0x9fb4ca, 0.72, 0.24, mistTex, false);
 
-      // 14. Place 14 Elevated Off-Side Trackside TV Broadcast Cameras
-      state.tvCams = [];
-      for (let i = 0; i < 14; i++) {
-        const prog = (i + 0.35) / 14;
-        const sp = sample3DTrack(prog);
-        const side = i % 2 === 0 ? 1 : -1;
-        const rx = -sp.tz, rz = sp.tx;
-        state.tvCams.push({
-          prog,
-          pos: new THREE.Vector3(sp.x + rx * side * 24, 7.8 + (i % 3) * 3.2, sp.z + rz * side * 24),
-        });
-      }
+      // 14. Obstruction-Free Elevated Trackside TV Broadcast Cameras
+      state.tvCams = (layout ? layout.tvCams : []).map((tc) => ({
+        prog: tc.prog,
+        pos: new THREE.Vector3(tc.x, tc.y, tc.z),
+      }));
     }
 
     function spawnParticle(pool, x, y, z, vx, vy, vz, maxLife) {
@@ -1760,10 +1845,33 @@
       let focPos = new THREE.Vector3();
       let focFwd = new THREE.Vector3(0, 0, 1);
       let focDyn = null;
+      let focPitMotion = null;
       let pittingCarPos = null;
+      let pittingBoxIdx = -1;
       const rainBlink = (Math.floor(state.elapsed * 5) % 2 === 0) ? 0.95 : 0.15;
       const VP = global.F1VehiclePhysics;
+      const ARCH = global.F1TrackArchitect;
       const eraKey = (rs && rs.eraKey) || "2026";
+      const startSeq = rs && rs.startSeq;
+
+      // Update Overhead 3D FIA 5-Red-Lights Start Gantry Bulbs!
+      if (state.gantryBulbMats && state.gantryBulbMats.length) {
+        const isHold = startSeq && startSeq.active && !startSeq.lightsOut;
+        const isGreenFlash = startSeq && startSeq.lightsOut && (startSeq.lightsOutElapsed || 0) < 2.2;
+        const lit = isHold ? (startSeq.litCount || 0) : 0;
+        for (let bi = 0; bi < state.gantryBulbMats.length; bi++) {
+          if (isHold) {
+            state.gantryBulbMats[bi].color.setHex(bi < lit ? 0xff1e1e : 0x1e293b);
+          } else if (isGreenFlash) {
+            state.gantryBulbMats[bi].color.setHex(0x22c55e);
+          } else {
+            state.gantryBulbMats[bi].color.setHex(0x1e293b);
+          }
+        }
+      }
+
+      // Reset pit box states each frame before animating active pitting cars
+      const activeBoxState = new Map();
 
       cars.forEach((car) => {
         const existing = state.carMeshes.get(car.idx);
@@ -1775,45 +1883,71 @@
         const mesh = entry.group;
         mesh.visible = true;
         const inPit = car.inPit > 0 && car.pitDuration > 0;
-        const pose = inPit
-          ? sample3DPit(1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration)))
-          : sample3DTrack(car.totalProg);
-        const latTarget = inPit ? 0 : Math.max(-5.6, Math.min(5.6, (car.latOffset || 0) * 1.12));
+        const pitU = inPit ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : 0;
+        const pitMotion = (inPit && ARCH && state.layout && state.layout.pitLayout)
+          ? ARCH.samplePitStopMotion(state.layout.pitLayout, pitU, car.pitBoxIdx != null ? car.pitBoxIdx : (car.idx % 10))
+          : null;
 
-        let wx, wz, heaveY = 0.06, yaw = Math.atan2(pose.tx, pose.tz), pitchRad = 0, rollRad = 0, dyn = null;
-        if (VP && VP.stepCarPhysics) {
-          let pState = state.carPhysics.get(car.idx);
-          if (!pState) {
-            pState = VP.createCarPhysicsState(car, eraKey);
-            state.carPhysics.set(car.idx, pState);
+        let wx, wz, heaveY = 0.06, yaw = 0, pitchRad = 0, rollRad = 0, dyn = null;
+        if (pitMotion) {
+          wx = pitMotion.x;
+          wz = pitMotion.z;
+          heaveY = 0.055 + (pitMotion.jackLift || 0);
+          yaw = pitMotion.yaw;
+          pitchRad = pitMotion.jackLift > 0.01 ? -0.024 : 0;
+          rollRad = 0;
+          activeBoxState.set(pitMotion.boxIdx, pitMotion);
+          // Keep per-car physics state synced cleanly so pit exit has zero jump
+          const pState = state.carPhysics.get(car.idx);
+          if (pState) {
+            pState.wx = wx;
+            pState.wz = wz;
+            pState.yaw = yaw;
+            pState.latPos = 0;
+            pState.latVel = 0;
           }
-          dyn = VP.stepCarPhysics(pState, {
-            x: pose.x,
-            z: pose.z,
-            tx: pose.tx,
-            tz: pose.tz,
-            curv: pose.curv || 0,
-            bumpMm: pose.bumpMm || 0,
-            targetLat: latTarget,
-            liveKph: car.liveKph || 220,
-            liveLongG: car.liveLongG || 0,
-            drsOpen: !!car.drsOpen,
-            fuelKg: car.fuelKg,
-            floorHealth: car.floorHealth,
-            suspHealth: car.suspHealth,
-            balanceBias: car.balanceBias,
-            inPit,
-          }, stepDt > 0 ? stepDt : 0.016, { wetness });
-          wx = dyn.wx;
-          wz = dyn.wz;
-          heaveY = dyn.heaveY;
-          yaw = dyn.yaw;
-          pitchRad = dyn.pitchRad;
-          rollRad = dyn.rollRad;
         } else {
-          const rx = -pose.tz, rz = pose.tx;
-          wx = pose.x + rx * latTarget;
-          wz = pose.z + rz * latTarget;
+          const pose = inPit
+            ? sample3DPit(pitU)
+            : sample3DTrack(car.totalProg);
+          const latTarget = inPit ? 0 : Math.max(-5.6, Math.min(5.6, (car.latOffset || 0) * 1.12));
+          yaw = Math.atan2(pose.tx, pose.tz);
+          const effectiveKph = car.liveKph != null ? car.liveKph : 220;
+
+          if (VP && VP.stepCarPhysics) {
+            let pState = state.carPhysics.get(car.idx);
+            if (!pState) {
+              pState = VP.createCarPhysicsState(car, eraKey);
+              state.carPhysics.set(car.idx, pState);
+            }
+            dyn = VP.stepCarPhysics(pState, {
+              x: pose.x,
+              z: pose.z,
+              tx: pose.tx,
+              tz: pose.tz,
+              curv: pose.curv || 0,
+              bumpMm: pose.bumpMm || 0,
+              targetLat: latTarget,
+              liveKph: effectiveKph,
+              liveLongG: car.liveLongG || 0,
+              drsOpen: !!car.drsOpen,
+              fuelKg: car.fuelKg,
+              floorHealth: car.floorHealth,
+              suspHealth: car.suspHealth,
+              balanceBias: car.balanceBias,
+              inPit,
+            }, stepDt > 0 ? stepDt : 0.016, { wetness });
+            wx = dyn.wx;
+            wz = dyn.wz;
+            heaveY = dyn.heaveY;
+            yaw = dyn.yaw;
+            pitchRad = dyn.pitchRad;
+            rollRad = dyn.rollRad;
+          } else {
+            const rx = -pose.tz, rz = pose.tx;
+            wx = pose.x + rx * latTarget;
+            wz = pose.z + rz * latTarget;
+          }
         }
 
         mesh.position.set(wx, heaveY, wz);
@@ -1823,9 +1957,9 @@
         // Update dynamic Pirelli tyre compound ring, glowing brakes, DRS & wet rain light
         if (entry.fx) {
           entry.fx.ringMat.color.setHex(COMPOUND_HEX[car.compound] || 0xfacc15);
-          const braking = (car.liveLongG || 0) < -1.1;
+          const braking = (car.liveLongG || 0) < -1.1 || (pitMotion && pitMotion.phase === "turn_in");
           entry.fx.brakeMat.opacity = braking ? 0.92 : 0.0;
-          entry.fx.drsMat.opacity = (car.drsOpen || (dyn && dyn.inXMode)) ? 0.95 : 0.0;
+          entry.fx.drsMat.opacity = (!inPit && (car.drsOpen || (dyn && dyn.inXMode))) ? 0.95 : 0.0;
           entry.fx.rainMat.opacity = wetness >= 20 ? rainBlink : 0.08;
         }
 
@@ -1853,7 +1987,7 @@
             }
           }
           // Subtle low rear-diffuser water mist (only for cars ahead/around, never blinding!)
-          if (wetness >= 28 && (!focCar || car.idx !== focCar.idx) && Math.random() < (wetness / 100) * 0.36) {
+          if (wetness >= 28 && (!focCar || car.idx !== focCar.idx) && (car.liveKph || 0) > 65 && Math.random() < (wetness / 100) * 0.36) {
             spawnParticle(
               state.spraySystem,
               wx - fwdX * 2.7 + (Math.random() - 0.5) * 1.1,
@@ -1868,14 +2002,44 @@
         }
 
         if (inPit && !pittingCarPos) {
-          pittingCarPos = new THREE.Vector3(wx, 0.8, wz);
+          pittingCarPos = new THREE.Vector3(wx, 0.85, wz);
+          if (pitMotion) pittingBoxIdx = pitMotion.boxIdx;
         }
         if (focCar && car.idx === focCar.idx) {
           focPos.set(wx, heaveY, wz);
           focFwd.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
           focDyn = dyn;
+          focPitMotion = pitMotion;
         }
       });
+
+      // Animate 3D Pit Box Crews & Overhead Red/Amber/Green Pit Release Gantries!
+      if (state.pitBoxCrews && state.pitBoxCrews.length) {
+        for (let b = 0; b < state.pitBoxCrews.length; b++) {
+          const crew = state.pitBoxCrews[b];
+          const gantry = state.pitBoxGantries && state.pitBoxGantries[b];
+          const pm = activeBoxState.get(b);
+          const targetAmt = pm && pm.crewActive ? 1.0 : 0.0;
+          crew.activeAmt += (targetAmt - crew.activeAmt) * Math.min(1, (stepDt || 0.016) * 8.5);
+          const bob = (pm && pm.stopped) ? Math.abs(Math.sin(state.elapsed * 18 + b)) * 0.14 : 0;
+          for (let m = 0; m < crew.members.length; m++) {
+            const mem = crew.members[m];
+            mem.fig.position.x = mem.restX + (mem.workX - mem.restX) * crew.activeAmt;
+            mem.fig.position.y = bob * (m < 4 ? 1 : 0.45);
+          }
+          if (gantry && gantry.mat) {
+            const gs = pm ? pm.gantryState : "off";
+            if (gs !== gantry.state) {
+              gantry.state = gs;
+              gantry.mat.color.setHex(
+                gs === "red" ? 0xef4444
+                  : (gs === "amber" ? 0xf59e0b
+                    : (gs === "green" ? 0x22c55e : 0x334155))
+              );
+            }
+          }
+        }
+      }
 
       stepPool(state.sparkSystem, stepDt, 12.5);
       stepPool(state.magSparkSystem, stepDt, 12.0);
@@ -1928,11 +2092,22 @@
         state.camPosSmooth.lerp(desiredPos, lerpF);
         state.camLookSmooth.lerp(desiredLook, lerpF);
       } else if (effMode === "pitlane") {
-        const pMid = state.pitPts[Math.floor(state.pitPts.length * 0.25)] || sample3DTrack(0);
-        const pEnd = state.pitPts[Math.floor(state.pitPts.length * 0.65)] || sample3DTrack(0.02);
-        desiredPos.set(pMid.x, 4.4, pMid.z);
-        if (pittingCarPos) desiredLook.copy(pittingCarPos);
-        else desiredLook.set(pEnd.x, 1.3, pEnd.z);
+        const boxes = state.layout && state.layout.pitLayout && state.layout.pitLayout.boxes;
+        const pBox = (boxes && pittingBoxIdx >= 0 && boxes[pittingBoxIdx]) ? boxes[pittingBoxIdx] : null;
+        if (pBox && pittingCarPos) {
+          desiredPos.set(
+            pBox.fastX - pBox.tx * 11.0 - pBox.rx * state.pitSide * 2.8,
+            4.2,
+            pBox.fastZ - pBox.tz * 11.0 - pBox.rz * state.pitSide * 2.8
+          );
+          desiredLook.copy(pittingCarPos);
+        } else {
+          const pMid = state.pitPts[Math.floor(state.pitPts.length * 0.25)] || sample3DTrack(0);
+          const pEnd = state.pitPts[Math.floor(state.pitPts.length * 0.65)] || sample3DTrack(0.02);
+          desiredPos.set(pMid.x, 4.4, pMid.z);
+          if (pittingCarPos) desiredLook.copy(pittingCarPos);
+          else desiredLook.set(pEnd.x, 1.3, pEnd.z);
+        }
         desiredFov = 46;
         const lerpF = state.camInit ? Math.min(1, (dt || 0.016) * 5.0) : 1;
         state.camPosSmooth.lerp(desiredPos, lerpF);
@@ -1968,14 +2143,23 @@
         const camLabel = effMode === "pov" ? "ONBOARD T-CAM POV"
           : (effMode === "chase" ? "3RD PERSON CHASE"
             : (effMode === "pitlane" ? "PITLANE CAM" : "TRACKSIDE TV CAM"));
-        const physTag = focDyn
-          ? `<span class="b3d-phys-tag">RH <b>${focDyn.minRideMm}mm</b> · DF <b>${(focDyn.downforceKg / 1000).toFixed(1)}t</b>${focDyn.bottoming > 0.15 ? ` · <em style="color:#fbbf24;font-style:normal;font-weight:900;">⚡ PLANK</em>` : (focDyn.inXMode ? ` · <em style="color:#38bdf8;font-style:normal;font-weight:800;">X-MODE</em>` : "")}</span>`
-          : "";
+        const isHold = startSeq && startSeq.active && !startSeq.lightsOut;
+        const dispKph = isHold ? 0 : (focPitMotion ? Math.round(focPitMotion.speedKph) : Math.round(focCar.liveKph != null ? focCar.liveKph : 260));
+        const dispGear = isHold ? 1 : (focPitMotion && focPitMotion.stopped ? "N" : (focCar.liveGear || 6));
+        let statusTag = "";
+        if (isHold) {
+          const dots = "🔴".repeat(startSeq.litCount || 0) + "⚫".repeat(Math.max(0, 5 - (startSeq.litCount || 0)));
+          statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(239,68,68,.55);color:#fca5a5;">${dots} <b>GRID HOLD</b></span>`;
+        } else if (focPitMotion && focPitMotion.stopped) {
+          statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(250,204,21,.55);color:#fde047;">🔧 <b>PIT BOX SERVICE</b></span>`;
+        } else if (focDyn) {
+          statusTag = `<span class="b3d-phys-tag">RH <b>${focDyn.minRideMm}mm</b> · DF <b>${(focDyn.downforceKg / 1000).toFixed(1)}t</b>${focDyn.bottoming > 0.15 ? ` · <em style="color:#fbbf24;font-style:normal;font-weight:900;">⚡ PLANK</em>` : (focDyn.inXMode ? ` · <em style="color:#38bdf8;font-style:normal;font-weight:800;">X-MODE</em>` : "")}</span>`;
+        }
         hudEl.innerHTML = `
           <span class="b3d-cam-tag"><i class="fas fa-video"></i> ${camLabel}${state.mode === "director" ? " · AUTO" : ""}</span>
           <span class="b3d-drv-tag"><i style="background:${focCar.color || "#e10600"}"></i>P${focCar.pos || 1} <b>${focCar.code3 || "DRV"}</b></span>
-          <span class="b3d-speed-tag"><b>${Math.round(focCar.liveKph || 260)}</b> KPH · G${focCar.liveGear || 6}</span>
-          ${physTag}
+          <span class="b3d-speed-tag"><b>${dispKph}</b> KPH · G${dispGear}</span>
+          ${statusTag}
         `;
       }
     }
@@ -1999,6 +2183,11 @@
         state.camInit = false;
       },
       getMode() { return state.mode; },
+      getLayout() { return state.layout; },
+      auditClearance() {
+        if (!state.layout || !global.F1TrackArchitect) return null;
+        return global.F1TrackArchitect.auditLayoutClearance(state.layout, state.trackPts);
+      },
       updateAndRender,
       dispose() {
         disposeWorld();

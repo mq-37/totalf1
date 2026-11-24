@@ -736,7 +736,7 @@
       const inPit = car.inPit > 0 && car.pitDuration > 0;
       const pitProgress = inPit ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : null;
       const pose = inPit
-        ? R.samplePitLane(fs.geom, pitProgress)
+        ? R.samplePitLane(fs.geom, pitProgress, car.pitBoxIdx)
         : R.sampleTrack(fs.geom, car.totalProg);
       const lat = inPit ? 0 : (car.latOffset || 0);
       const wx = pose.x + (pose.nx || 0) * lat;
@@ -845,7 +845,7 @@
         progress: fs.replay.playPos / Math.max(1, fs.replay.frames.length - 1),
       }, cssW, cssH);
     } else if (R.drawStartLightsOverlay) {
-      R.drawStartLightsOverlay(ctx, fs.raceClock, cssW, cssH);
+      R.drawStartLightsOverlay(ctx, fs.startSeq || fs.raceClock, cssW, cssH);
     }
 
     if (fs.cam.zoom > 1.15) {
@@ -877,12 +877,13 @@
     const flagEl = getEl("fsim-flag-pill");
     if (flagEl) {
       if (fs.finished) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
-      else if (fs.chequeredFlag) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
-      else if (fs.safetyCarLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
-      else if (fs.vscLaps > 0) { flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> VSC`; }
-      else if (fs.yellowSector > 0) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
-      else if (fs.drsEnabled) { flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN · DRS ON`; }
-      else { flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN FLAG`; }
+      else if (fs.startSeq && fs.startSeq.active && !fs.startSeq.lightsOut) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.style.background = "rgba(239,68,68,.24)"; flagEl.style.borderColor = "rgba(239,68,68,.65)"; flagEl.style.color = "#fca5a5"; flagEl.innerHTML = `<i class="fas fa-traffic-light"></i> GRID ${fs.startSeq.litCount || 0}/5`; }
+      else if (fs.chequeredFlag) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
+      else if (fs.safetyCarLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
+      else if (fs.vscLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> VSC`; }
+      else if (fs.yellowSector > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
+      else if (fs.drsEnabled) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN · DRS ON`; }
+      else { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN FLAG`; }
     }
 
     const wetPct = Math.round(fs.wetness);
@@ -1095,6 +1096,33 @@
     const dt = effDt;
     const lapScale = (fs.circuit.base_lap_s / 22.0);
     const simDt = dt * lapScale;
+
+    // FIA 5-Red-Lights Standing Start Sequence (0 kph grid hold -> randomized hold -> LIGHTS OUT!)
+    if (fs.startSeq && fs.startSeq.active && window.F1TrackArchitect) {
+      const sRes = window.F1TrackArchitect.stepStandingStart(fs.startSeq, fs.cars, dt, fastMode);
+      if (sRes.newLight > 0 && !fastMode) {
+        playSfx("startLight", sRes.newLight);
+        updateChyron(`🔴 ${"●".repeat(sRes.newLight)}${"○".repeat(5 - sRes.newLight)} · FIA STANDING START`);
+      }
+      if (sRes.lightsOutNow) {
+        const pole = fs.cars[0];
+        if (!fastMode) {
+          playSfx("lightsOut");
+          showToast(`🟢 LIGHTS OUT — ${fs.circuit.name.toUpperCase()}!`, "win");
+        }
+        const fastest = fs.cars.slice().sort((a, b) => (a.launchReactionS || 0.3) - (b.launchReactionS || 0.3))[0];
+        const stalled = fs.cars.find((c) => c.launchAntiStall);
+        let msg = `🟢 LIGHTS OUT at ${fs.circuit.name}! ${pole ? pole.card.clean_name : "Pole"} leads the pack away!`;
+        if (fastest && !fastMode) msg += ` Lightning ${(fastest.launchReactionS || 0.18).toFixed(2)}s reaction from ${fastest.card.code3}!`;
+        if (stalled && !fastMode) msg += ` ⚠️ ${stalled.card.code3} triggers anti-stall off the line!`;
+        addCommentary(1, msg, "win");
+        updateChyron(`🟢 LIGHTS OUT · POLE: ${pole ? pole.card.code3 : "P1"}`);
+      }
+      if (sRes.holding) {
+        return false;
+      }
+    }
+
     fs.raceClock += simDt;
 
     const leaderLap = Math.max(...fs.cars.map((c) => c.lap), 0);
@@ -1967,14 +1995,31 @@
       if (fs.season.active) rPill.textContent = `R${fs.season.roundIdx + 1}/${fs.season.rounds.length}`;
     }
 
+    // Initialize FIA 5-Red-Lights Standing Start Sequence (0 kph Staggered Grid + Per-Driver Launch DNA!)
+    fs.startSeq = window.F1TrackArchitect
+      ? window.F1TrackArchitect.createStandingStartState(fs.cars, selCir)
+      : null;
+
+    if (fs.cam && fs.geom && window.F1TrackRenderer && fs.cars[0]) {
+      const p0 = window.F1TrackRenderer.sampleTrack(fs.geom, fs.cars[0].totalProg);
+      fs.cam.x = p0.x;
+      fs.cam.y = p0.y;
+    }
+
     renderHud();
     renderSeasonStandings();
-    playSfx("lightsOut");
     const pole = fs.cars[0];
-    const startMsg = `🟢 LIGHTS OUT at ${selCir.name} (${selCir.gp})! ${pole.card.clean_name} leads ${fs.cars.length} CPU cars away from Pole!`;
-    addCommentary(1, startMsg, "win");
-    showToast(`📺 LIVE — ${selCir.name.toUpperCase()}`, "win");
-    updateChyron(`🟢 LIGHTS OUT · POLE: ${pole.card.code3}`);
+    if (fs.startSeq) {
+      addCommentary(1, `🔴 Formation complete at ${selCir.name} (${selCir.gp}) — ${fs.cars.length} cars locked on the staggered FIA starting grid! Pole: ${pole.card.clean_name}.`, "info");
+      showToast(`🔴 GRID FORMED — ${selCir.name.toUpperCase()}`, "info");
+      updateChyron(`🔴 STANDING START · POLE: ${pole.card.code3}`);
+    } else {
+      playSfx("lightsOut");
+      const startMsg = `🟢 LIGHTS OUT at ${selCir.name} (${selCir.gp})! ${pole.card.clean_name} leads ${fs.cars.length} CPU cars away from Pole!`;
+      addCommentary(1, startMsg, "win");
+      showToast(`📺 LIVE — ${selCir.name.toUpperCase()}`, "win");
+      updateChyron(`🟢 LIGHTS OUT · POLE: ${pole.card.code3}`);
+    }
   }
 
   // =========================================================================
@@ -2049,8 +2094,8 @@
         circuit: fs.circuit,
         cars: fs.cars.map((c) => ({
           idx: c.idx, code3: c.card.code3, team: c.card.hero_team, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
-          inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
-          liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+          inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
+          liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
           fuelKg: c.fuelKg,
@@ -2070,6 +2115,7 @@
           vscActive: fs.vscLaps > 0,
           yellowSector: fs.yellowSector,
           chequered: fs.chequeredFlag || fs.finished,
+          startSeq: fs.startSeq,
           top3: sorted3d.slice(0, 3).map((x) => ({ code3: x.card.code3, color: x.card.hero_color || "#e10600" })),
         },
         focusIdx: fs.focusIdx,
@@ -2260,10 +2306,15 @@
           circuit: fs.circuit,
           cars: fs.cars.map((c) => ({
             idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
-            inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
-            liveKph: c.liveKph, liveGear: c.liveGear,
+            inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
+            liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear,
             palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
           })),
+          raceState: {
+            eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
+            wetness: fs.wetness,
+            startSeq: fs.startSeq,
+          },
           focusIdx: fs.focusIdx,
           dt: 0.016,
           paused: fs.paused,

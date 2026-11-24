@@ -309,34 +309,73 @@
     return Math.min(ttcCap, base * bMult);
   }
 
-  function samplePitLane(geom, u) {
+  function samplePitLane(geom, u, boxIdx) {
     const arr = geom.pitPts;
     const c = Math.max(0, Math.min(1, u));
-    const f = c * (arr.length - 1);
+    // Realistic 5-phase 2D pitstop: enter (0..0.24) -> turn in (0.24..0.34) -> FULL STOP in team box (0.34..0.68) -> pull out (0.68..0.78) -> exit (0.78..1.0)
+    const bSlot = (boxIdx != null && Number.isFinite(boxIdx)) ? (Math.abs(Math.floor(boxIdx)) % 10) : 4;
+    const boxU = 0.30 + (bSlot / 9) * 0.40;
+    let laneU = c;
+    let boxOff = 0;
+    let stopped = false;
+    if (c < 0.24) {
+      laneU = (c / 0.24) * Math.max(0.06, boxU - 0.05);
+    } else if (c < 0.34) {
+      const f = (c - 0.24) / 0.10;
+      laneU = Math.max(0.06, boxU - 0.05) + (boxU - Math.max(0.06, boxU - 0.05)) * f;
+      boxOff = f * 2.2 * (geom.pitSide || 1);
+    } else if (c < 0.68) {
+      laneU = boxU;
+      boxOff = 2.2 * (geom.pitSide || 1);
+      stopped = true;
+    } else if (c < 0.78) {
+      const f = (c - 0.68) / 0.10;
+      const exitU = Math.min(0.94, boxU + 0.05);
+      laneU = boxU + (exitU - boxU) * f;
+      boxOff = (1 - f) * 2.2 * (geom.pitSide || 1);
+    } else {
+      const f = (c - 0.78) / 0.22;
+      const exitU = Math.min(0.94, boxU + 0.05);
+      laneU = exitU + (1.0 - exitU) * f;
+    }
+    const f = Math.max(0, Math.min(1, laneU)) * (arr.length - 1);
     const iA = Math.floor(f), iB = Math.min(arr.length - 1, iA + 1);
     const fr = f - iA;
     const a = arr[iA], b = arr[iB];
+    const nx = (a.nx || 0) + ((b.nx || 0) - (a.nx || 0)) * fr;
+    const ny = (a.ny || 0) + ((b.ny || 0) - (a.ny || 0)) * fr;
     return {
-      x: a.x + (b.x - a.x) * fr,
-      y: a.y + (b.y - a.y) * fr,
+      x: a.x + (b.x - a.x) * fr + nx * boxOff,
+      y: a.y + (b.y - a.y) * fr + ny * boxOff,
       tx: a.tx + (b.tx - a.tx) * fr,
       ty: a.ty + (b.ty - a.ty) * fr,
+      stopped,
     };
   }
 
   // Single-Source F1 TV Telemetry: Driven directly from unified physical speed profile & live car velocity!
   function computeCarTelemetry(geom, circuit, prog, opts) {
     const o = opts || {};
-    if (o.inPit) {
+    const car = o.car || null;
+    if (o.startHolding || (car && car.launchScale === 0)) {
+      const revOsc = Math.round(Math.sin((Date.now() * 0.022) + ((car && car.idx) || 0)) * 420);
       return {
-        kph: 80, gear: 2, rpm: 7400, maxRpm: 12800,
-        throttle: 35, brake: 0, braking: false,
-        latG: 0, longG: 0, steerAngle: 0, brakeTemp: 340, slipAngle: 0,
+        kph: 0, gear: 1, rpm: 10650 + revOsc, maxRpm: 12800,
+        throttle: 74, brake: 0, braking: false,
+        latG: 0, longG: 0, steerAngle: 0, brakeTemp: 410, slipAngle: 0,
+      };
+    }
+    if (o.inPit) {
+      const pitProg = (car && car.pitDuration > 0) ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : 0.5;
+      const isStopped = pitProg >= 0.34 && pitProg <= 0.68;
+      return {
+        kph: isStopped ? 0 : 80, gear: isStopped ? 1 : 2, rpm: isStopped ? 4850 : 7400, maxRpm: 12800,
+        throttle: isStopped ? 0 : 35, brake: isStopped ? 100 : 0, braking: isStopped,
+        latG: 0, longG: 0, steerAngle: 0, brakeTemp: isStopped ? 420 : 340, slipAngle: 0,
       };
     }
     const sample = sampleTrack(geom, prog);
     const top = circuit.top_speed_kph || 330;
-    const car = o.car || null;
 
     let kph = (car && Number.isFinite(car.livePhysKph))
       ? car.livePhysKph
@@ -349,7 +388,8 @@
       if (o.vscActive) kph *= 0.72;
       if (o.scActive) kph = Math.min(kph, 155);
     }
-    kph = Math.max(60, Math.min(top + 42, kph));
+    const minFloor = (car && car.launchScale != null && car.launchScale < 0.99) ? 0 : 60;
+    kph = Math.max(minFloor, Math.min(top + 42, kph));
 
     const longG = (car && Number.isFinite(car.liveLongG))
       ? car.liveLongG
@@ -845,6 +885,30 @@
           ctx.restore();
         });
       }
+    }
+    ctx.restore();
+
+    // Painted Staggered 2x2 FIA Starting Grid Slots behind S/F Line
+    ctx.save();
+    const perimM = Math.max(1800, (circuit.length_km || 4.8) * 1000);
+    const gStep = Math.max(0.0020, Math.min(0.0052, 16.5 / perimM));
+    const gStart = Math.max(0.0020, 9.0 / perimM);
+    ctx.strokeStyle = "rgba(248, 250, 252, 0.58)";
+    ctx.lineWidth = 0.72;
+    for (let gi = 0; gi < 20; gi++) {
+      const gp = sampleTrack({ pts, n }, -(gStart + gi * gStep));
+      const gLat = gi % 2 === 0 ? -2.55 : 2.55;
+      ctx.save();
+      ctx.translate(gp.x + gp.nx * gLat, gp.y + gp.ny * gLat);
+      ctx.rotate(Math.atan2(gp.ty, gp.tx));
+      // FIA U-shaped grid slot bracket facing forward (+X)
+      ctx.beginPath();
+      ctx.moveTo(0.8, -1.35);
+      ctx.lineTo(2.9, -1.35);
+      ctx.lineTo(2.9, 1.35);
+      ctx.lineTo(0.8, 1.35);
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.restore();
 
@@ -2626,7 +2690,10 @@
           const car = active[i];
           const pNow = sampleTrack(geom, car.totalProg);
           const baseMult = (pNow.speedMult || 1.0) * (car.battleSpeedMult || 1.0);
-          let desiredRate = (1.0 / Math.max(20, car.currentLapS || lapS)) * baseMult;
+          const launchMult = (car.launchScale != null && Number.isFinite(car.launchScale))
+            ? Math.max(0, Math.min(1.18, car.launchScale))
+            : 1.0;
+          let desiredRate = (1.0 / Math.max(20, car.currentLapS || lapS)) * baseMult * launchMult;
           if (car.spinTimer > 0) desiredRate *= 0.45;
 
           // Predictive TTC Check: if any car is directly ahead within 2.5 car lengths in the same lane, match its speed smoothly!
@@ -2781,8 +2848,11 @@
         const car = active[i];
         const actualDProg = Math.max(0, car.totalProg - car._frameStartProg);
         const actualKph = ((circuit.length_km || 5.0) * (actualDProg / simDtTotal)) * 3600;
-        car.livePhysKph = Math.max(60, Math.min(topKph + 42, actualKph));
-        car.liveLongG = sampleTrack(geom, car.totalProg).aLongG;
+        const floorKph = (car.launchScale != null && car.launchScale < 0.99) ? 0 : 60;
+        car.livePhysKph = Math.max(floorKph, Math.min(topKph + 42, actualKph));
+        car.liveLongG = (car.launchScale != null && car.launchScale < 0.98)
+          ? (car.liveLongG || 0)
+          : sampleTrack(geom, car.totalProg).aLongG;
       }
     }
 
@@ -2985,48 +3055,72 @@
   // =========================================================================
   // F1 TV LIVE TELEMETRY HALO WIDGET + 5-RED-LIGHTS-OUT START GANTRY OVERLAY
   // =========================================================================
-  function drawStartLightsOverlay(ctx, raceClock, cssW, cssH) {
-    if (raceClock == null || raceClock < 0 || raceClock > 12.5 || cssW < 340) return;
-    const w = Math.min(268, cssW - 32);
-    const h = 50;
+  function drawStartLightsOverlay(ctx, clockOrSeq, cssW, cssH) {
+    if (clockOrSeq == null || cssW < 340) return;
+    let litCount = 0;
+    let lightsOut = false;
+    let fade = 1;
+    let label = "";
+
+    if (typeof clockOrSeq === "object") {
+      const seq = clockOrSeq;
+      if (!seq.active && (!seq.lightsOut || (seq.lightsOutElapsed || 0) > 2.4)) return;
+      lightsOut = !!seq.lightsOut;
+      litCount = lightsOut ? 0 : Math.max(0, Math.min(5, seq.litCount || 0));
+      if (lightsOut) {
+        const el = seq.lightsOutElapsed || 0;
+        if (el > 2.4) return;
+        fade = el > 1.35 ? Math.max(0, 1 - (el - 1.35) / 1.05) : 1;
+        label = seq.isRestart ? "STANDING RESTART — LIGHTS OUT!" : "LIGHTS OUT & AWAY WE GO!";
+      } else {
+        label = `${seq.bannerLabel || "FIA STANDING START"} · ${litCount} / 5 LIGHTS${litCount >= 5 ? " · HOLD…" : ""}`;
+      }
+    } else {
+      const raceClock = clockOrSeq;
+      if (raceClock < 0 || raceClock > 12.5) return;
+      lightsOut = raceClock >= 9.0;
+      litCount = lightsOut ? 0 : Math.min(5, Math.floor(raceClock / 1.75) + 1);
+      fade = raceClock > 10.6 ? Math.max(0, 1 - (raceClock - 10.6) / 1.9) : 1;
+      label = lightsOut ? "LIGHTS OUT & AWAY WE GO!" : `FIA START SEQUENCE · ${litCount} / 5 LIGHTS`;
+    }
+
+    const w = Math.min(286, cssW - 32);
+    const h = 52;
     const x0 = (cssW - w) * 0.5;
     const y0 = 12;
-    const lightsOut = raceClock >= 9.0;
-    const litCount = lightsOut ? 0 : Math.min(5, Math.floor(raceClock / 1.75) + 1);
-    const fade = raceClock > 10.6 ? Math.max(0, 1 - (raceClock - 10.6) / 1.9) : 1;
 
     ctx.save();
     ctx.globalAlpha = fade;
-    ctx.fillStyle = "rgba(6, 10, 18, 0.92)";
-    ctx.strokeStyle = lightsOut ? "#22c55e" : "rgba(239, 68, 68, 0.65)";
-    ctx.lineWidth = 1.5;
+    ctx.fillStyle = "rgba(6, 10, 18, 0.94)";
+    ctx.strokeStyle = lightsOut ? "#22c55e" : "rgba(239, 68, 68, 0.72)";
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, 10); else ctx.rect(x0, y0, w, h);
     ctx.fill();
     ctx.stroke();
 
-    const podSpacing = (w - 36) / 4;
+    const podSpacing = (w - 40) / 4;
     for (let i = 0; i < 5; i++) {
-      const px = x0 + 18 + i * podSpacing;
-      const py = y0 + 18;
+      const px = x0 + 20 + i * podSpacing;
+      const py = y0 + 19;
       const isLit = !lightsOut && i < litCount;
       ctx.fillStyle = "#0f172a";
       ctx.fillRect(px - 10, py - 11, 20, 22);
-      ctx.strokeStyle = "rgba(148, 163, 184, 0.3)";
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.32)";
       ctx.lineWidth = 0.8;
       ctx.strokeRect(px - 10, py - 11, 20, 22);
       // Dual stacked FIA red lamps per pod
       [-4.5, 4.5].forEach((dy) => {
         ctx.beginPath();
-        ctx.arc(px, py + dy, 3.6, 0, Math.PI * 2);
+        ctx.arc(px, py + dy, 3.7, 0, Math.PI * 2);
         if (isLit) {
           ctx.fillStyle = "#ef4444";
           ctx.shadowColor = "#ef4444";
-          ctx.shadowBlur = 9;
+          ctx.shadowBlur = 10;
         } else if (lightsOut) {
           ctx.fillStyle = "#22c55e";
           ctx.shadowColor = "#22c55e";
-          ctx.shadowBlur = 7;
+          ctx.shadowBlur = 8;
         } else {
           ctx.fillStyle = "#1e293b";
           ctx.shadowBlur = 0;
@@ -3039,7 +3133,7 @@
     ctx.font = "800 8.5px Orbitron, sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = lightsOut ? "#86efac" : "#fca5a5";
-    ctx.fillText(lightsOut ? "LIGHTS OUT & AWAY WE GO!" : `FIA START SEQUENCE · ${litCount} / 5 LIGHTS`, cssW * 0.5, y0 + h - 6);
+    ctx.fillText(label, cssW * 0.5, y0 + h - 6);
     ctx.restore();
   }
 

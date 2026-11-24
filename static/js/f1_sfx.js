@@ -596,15 +596,18 @@
     click() {
       softTone(587.33, 0.045, "sine", 0.032, 0, 1800);
     },
+    startLight(n) {
+      duckMusic(1.1);
+      // Authentic FIA gantry tone for lights 1..5
+      const f = n >= 5 ? 440.0 : 392.0;
+      softTone(f, 0.14, "triangle", 0.062, 0, 1500);
+    },
     lightsOut() {
       duckMusic(1.6);
-      [0.0, 0.24, 0.48, 0.72, 0.96].forEach((d) => {
-        softTone(392.0, 0.12, "triangle", 0.06, d, 1400);
-      });
-      // Green release harmonic chord
-      softTone(523.25, 0.36, "triangle", 0.065, 1.24, 2200);
-      softTone(659.25, 0.36, "sine", 0.055, 1.24, 2200);
-      softTone(783.99, 0.42, "sine", 0.05, 1.26, 2200);
+      // Green release harmonic chord + grid launch roar
+      softTone(523.25, 0.32, "triangle", 0.068, 0.0, 2200);
+      softTone(659.25, 0.34, "sine", 0.058, 0.02, 2200);
+      softTone(783.99, 0.40, "sine", 0.052, 0.04, 2200);
       F1Sfx.engineSurge();
     },
     ersArm() {

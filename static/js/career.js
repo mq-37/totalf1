@@ -1845,7 +1845,7 @@
       const inPit = car.inPit > 0 && car.pitDuration > 0;
       const pitProgress = inPit ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : null;
       const pose = inPit
-        ? R.samplePitLane(cr.geom, pitProgress)
+        ? R.samplePitLane(cr.geom, pitProgress, car.pitBoxIdx)
         : R.sampleTrack(cr.geom, car.totalProg);
       const lat = inPit ? 0 : (car.latOffset || 0);
       const wx = pose.x + (pose.nx || 0) * lat;
@@ -1934,7 +1934,7 @@
       R.drawBroadcastTelemetryHud(ctx, focusHudInfo, cssW, cssH);
     }
     if (R.drawStartLightsOverlay) {
-      R.drawStartLightsOverlay(ctx, cr.raceClock, cssW, cssH);
+      R.drawStartLightsOverlay(ctx, cr.startSeq || cr.raceClock, cssW, cssH);
     }
 
     // Picture-in-Picture Full Circuit Radar when zoomed into a wheel-to-wheel fight!
@@ -2203,6 +2203,25 @@
   function stepCrCore(dt, fastMode) {
     if (!cr.running || cr.finished) return false;
     const simDt = dt * (cr.circuit.base_lap_s / 22.0);
+
+    // FIA 5-Red-Lights Standing Start Sequence (0 kph grid hold -> randomized hold -> LIGHTS OUT!)
+    if (cr.startSeq && cr.startSeq.active && window.F1TrackArchitect) {
+      const sRes = window.F1TrackArchitect.stepStandingStart(cr.startSeq, cr.cars, dt, fastMode);
+      if (sRes.newLight > 0 && !fastMode) {
+        if (window.F1Sfx && window.F1Sfx.startLight) window.F1Sfx.startLight(sRes.newLight);
+        const rEl = getEl("cr-radio-latest");
+        if (rEl) rEl.textContent = `🔴 ${"●".repeat(sRes.newLight)}${"○".repeat(5 - sRes.newLight)} — Hold clutch on the grid at ${cr.circuit.name}…`;
+      }
+      if (sRes.lightsOutNow) {
+        if (!fastMode && window.F1Sfx) window.F1Sfx.lightsOut();
+        const rEl = getEl("cr-radio-latest");
+        if (rEl) rEl.textContent = `🟢 LIGHTS OUT at ${cr.circuit.name} (${cr.cars.length}-car grid)! Command BOTH ${DATA.player_team.name} cars (Tab to switch)!`;
+      }
+      if (sRes.holding) {
+        return false;
+      }
+    }
+
     cr.raceClock += simDt;
 
     const leaderLap = Math.max(...cr.cars.map((c) => c.lap), 0);
@@ -2957,7 +2976,6 @@
     cr.carScreenPos = [];
     cr.fx = window.F1TrackRenderer ? window.F1TrackRenderer.createFxState() : null;
     getEl("cr-pit-banner")?.classList.add("hidden");
-    if (window.F1Sfx) window.F1Sfx.lightsOut();
     renderSfxBtn();
     cr.bestSectors = [999, 999, 999];
     cr.raceClock = 0;
@@ -3087,9 +3105,17 @@
     );
     cr.telemetry.recordLapSnapshot(0, cr.cars, { wetness: cr.wetness, scActive: false, vscActive: false });
 
+    // Initialize FIA 5-Red-Lights Standing Start Sequence (0 kph grid + Per-Driver Launch DNA!)
+    cr.startSeq = window.F1TrackArchitect
+      ? window.F1TrackArchitect.createStandingStartState(cr.cars, cr.circuit)
+      : null;
+
     getEl("cr-dir-name").textContent = cr.circuit.name;
     getEl("cr-dir-specs").textContent = `${cr.circuit.length_km}km · ${cr.circuit.turns}T · ${cr.circuit.drs_zones} DRS · ${cr.circuit.aero} AERO · Track ${cr.circuit.track_temp_c || 32}°C`;
-    getEl("cr-radio-latest").textContent = `🟢 LIGHTS OUT at ${cr.circuit.name} (${cr.cars.length}-car grid)! Command BOTH ${DATA.player_team.name} cars (Tab to switch)!`;
+    getEl("cr-radio-latest").textContent = cr.startSeq
+      ? `🔴 CARS ON THE GRID at ${cr.circuit.name} (${cr.cars.length}-car grid) — waiting for 5 red lights!`
+      : `🟢 LIGHTS OUT at ${cr.circuit.name} (${cr.cars.length}-car grid)! Command BOTH ${DATA.player_team.name} cars (Tab to switch)!`;
+    if (!cr.startSeq && window.F1Sfx) window.F1Sfx.lightsOut();
     renderCrHud();
     if (!cr.rafId) cr.rafId = requestAnimationFrame(crLoop);
   }
@@ -3111,8 +3137,8 @@
         circuit: cr.circuit,
         cars: cr.cars.map((c) => ({
           idx: c.idx, code3: c.code3, team: c.teamName, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
-          inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.color,
-          liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+          inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.color,
+          liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
           fuelKg: Math.max(8, (1 - (c.lap / Math.max(1, cr.totalLaps))) * 95),
@@ -3131,6 +3157,7 @@
           vscActive: cr.vscLaps > 0,
           yellowSector: cr.yellowSector,
           chequered: cr.chequeredFlag || cr.finished,
+          startSeq: cr.startSeq,
           top3: sorted3d.slice(0, 3).map((x) => ({ code3: x.code3, color: x.color || "#e10600" })),
         },
         focusIdx: targetCar ? targetCar.idx : 0,

@@ -234,7 +234,8 @@
   // ---------------------------------------------------------------------------
   function stepCarPhysics(phys, target, dt, env) {
     const stepDt = Math.max(0.001, Math.min(0.04, dt || 0.016));
-    const speedKph = Math.max(20, Number(target.liveKph || 210));
+    const rawKph = target.liveKph != null ? Number(target.liveKph) : 210;
+    const speedKph = Math.max(0, Number.isFinite(rawKph) ? rawKph : 210);
     const vMps = speedKph / 3.6;
     const trackYaw = Math.atan2(target.tx, target.tz);
 
