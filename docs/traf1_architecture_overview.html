@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TRAF1 (Local F1) — Architecture &amp; Engineering Dossier</title>
+  <style>
+    :root {
+      --bg: #070a12;
+      --surface: #0e1424;
+      --surface-2: #141d33;
+      --border: rgba(148, 163, 184, 0.18);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --red: #e10600;
+      --teal: #27f4d2;
+      --papaya: #ff8000;
+      --gold: #facc15;
+      --blue: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(225, 6, 0, 0.16), transparent 36%),
+        radial-gradient(circle at 88% 12%, rgba(39, 244, 210, 0.12), transparent 34%),
+        linear-gradient(180deg, #060911 0%, #0a1020 100%);
+      color: var(--text);
+      line-height: 1.72;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page {
+      max-width: 980px;
+      margin: 36px auto 56px;
+      padding: 0 24px;
+    }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 36px 38px 32px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(16, 23, 42, 0.96), rgba(9, 13, 24, 0.98));
+      border: 1px solid rgba(225, 6, 0, 0.35);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--red), var(--papaya), var(--gold), var(--teal));
+    }
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 10px;
+    }
+    .kicker .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 10px var(--red);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.9rem, 3.6vw, 2.75rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #f8fafc;
+      line-height: 1.12;
+    }
+    .subtitle {
+      margin: 10px 0 22px;
+      font-size: 1.02rem;
+      color: var(--muted);
+      max-width: 720px;
+    }
+    .stat-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.86);
+      border: 1px solid var(--border);
+    }
+    .stat b {
+      display: block;
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #f8fafc;
+      letter-spacing: -0.01em;
+    }
+    .stat span {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .prose-shell {
+      margin-top: 26px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    .section-card {
+      padding: 28px 32px;
+      border-radius: 16px;
+      background: rgba(14, 20, 36, 0.92);
+      border: 1px solid var(--border);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: 0.01em;
+    }
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(56, 189, 248, 0.14);
+      color: var(--blue);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .pill.red { background: rgba(225, 6, 0, 0.16); color: #fca5a5; border-color: rgba(225, 6, 0, 0.4); }
+    .pill.teal { background: rgba(39, 244, 210, 0.14); color: var(--teal); border-color: rgba(39, 244, 210, 0.38); }
+    .pill.gold { background: rgba(250, 204, 21, 0.14); color: var(--gold); border-color: rgba(250, 204, 21, 0.38); }
+    .pill.papaya { background: rgba(255, 128, 0, 0.14); color: #fdba74; border-color: rgba(255, 128, 0, 0.4); }
+
+    article p {
+      margin: 0 0 14px;
+      font-size: 0.97rem;
+      color: #dbe4f0;
+    }
+    article p:last-child { margin-bottom: 0; }
+    strong { color: #ffffff; }
+    code {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.85em;
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #7dd3fc;
+    }
+
+    /* Visual Architecture Diagram */
+    .arch-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .arch-box {
+      padding: 14px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(20, 29, 51, 0.95), rgba(11, 16, 30, 0.95));
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--accent, var(--blue));
+    }
+    .arch-box h3 {
+      margin: 0 0 6px;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f8fafc;
+    }
+    .arch-box ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 0.76rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+    @media (max-width: 780px) {
+      .stat-strip { grid-template-columns: repeat(2, 1fr); }
+      .arch-flow { grid-template-columns: 1fr; }
+      .hero, .section-card { padding: 22px 20px; }
+    }
+    @media print {
+      body { background: #fff; color: #0f172a; }
+      .hero, .section-card, .stat, .arch-box { background: #fff !important; color: #0f172a !important; box-shadow: none !important; border-color: #cbd5e1 !important; }
+      h1, h2, h3, strong, .stat b { color: #0f172a !important; }
+      article p, .subtitle, .stat span, .arch-box ul { color: #334155 !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="kicker"><span class="dot"></span>Technical Overview &amp; System Architecture</div>
+      <h1>TRAF1 — Local Formula 1 Archive, Simulator &amp; Management Suite</h1>
+      <p class="subtitle">A self-hosted motorsport platform fusing 77 seasons of Formula 1 data, procedural 3D chassis modeling, fair multi-source driver scoring, live race simulation, and multi-tier management careers.</p>
+      <div class="stat-strip">
+        <div class="stat"><b>1950–2026</b><span>77 F1 Seasons</span></div>
+        <div class="stat"><b>1.13M Rows</b><span>F1DB + FIA Docs</span></div>
+        <div class="stat"><b>79 Circuits</b><span>Real 2D &amp; 3D Maps</span></div>
+        <div class="stat"><b>23 Liveries</b><span>Year-Faithful 3D</span></div>
+        <div class="stat"><b>5 Tiers</b><span>Karting to F1</span></div>
+      </div>
+    </header>
+
+    <article class="prose-shell" id="narrative-doc">
+      <section class="section-card">
+        <div class="section-head">
+          <h2>1. Vision &amp; Interactive Game Modes</h2>
+          <span class="pill red">Product Architecture</span>
+        </div>
+        <p><strong>TRAF1 (Local F1)</strong> is a local-first Formula 1 web application that unites deep historical motorsport analytics with interactive racing, card battles, and team-management gameplay. Designed to run cleanly on localhost with zero cloud lock-in, the platform spans six tightly integrated experiences: a complete 1950–2026 Driver and Constructor Archive, printable Collector and Game Card decks exported as ReportLab PDFs, the 3D <strong>F1 Card Arena</strong> (Top Trumps GP, Track Simulator, Guess the Legend, and Higher/Lower), a <strong>Full CPU Broadcast Simulator</strong> with live telemetry and director cameras, a zero-scroll <strong>Team Principal Career</strong>, and <strong>Pit Wall: The Ladder</strong>—a persistent five-tier career rising from grassroots Karting through Formula 4, Formula 3, and Formula 2 into Formula 1, complete with a hybrid F2-to-F1 Career Fork.</p>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head">
+          <h2>2. Data Foundation &amp; Fair Scoring Engine</h2>
+          <span class="pill blue">Data &amp; Telemetry</span>
+        </div>
+        <p>Under the hood, TRAF1 combines five local SQLite databases running in concurrent WAL mode: <code>f1.sqlite</code> for season standings and team palettes, <code>f1db.sqlite</code> (1.13 million rows of qualifying, race results, retirements, and lap records), <code>fia_docs.sqlite</code> (11,919 official steward and regulatory documents), plus relational career save stores <code>career_saves.sqlite</code> and <code>ladder_saves.sqlite</code>. Rather than relying on raw career win totals that disproportionately reward dominant machinery, <code>rating_engine.py</code> executes a cached bulk pass across F1DB, FIA steward infringements, and Driver DNA to compute eight era-normalized, machinery-adjusted attributes—Pace, Racecraft, Consistency, Duels, Clutch, Wet Weather, Tyre Care, and Driver-Fault DNF%. Mechanical failures are strictly separated from driver-fault crashes, while qualifying and race teammate head-to-head rates distinguish pure driver skill from estimated car strength across cards, live races, and careers.</p>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head">
+          <h2>3. Procedural 3D Cars, Live 2D Tracks &amp; Weather</h2>
+          <span class="pill teal">Visual &amp; Simulation</span>
+        </div>
+        <p>Every vehicle in TRAF1 is procedurally sculpted in <strong>Three.js</strong> via <code>f1_car_3d.js</code> using year-faithful chassis geometry spanning 1950s cigar torpedoes, 1968 high wings, 1975 periscope airboxes, 2017 shark-fin T-wings, and 2026 compact active-aero cars. A year-aware livery registry resolves constructors onto 23 bespoke 3D pattern styles—including matte Red Bull bull-nose liveries, Ferrari HP blue-and-white accents, exposed-carbon Mercedes arrows, and classic heritage stripes—paired with matte, gloss, metallic, or carbon finishes. A headless Chrome studio renderer pre-bakes 1,231 team-year car icons deduplicated through a <code>manifest.json</code> alias map into 241 canonical PNGs, cutting disk usage by 80%. On race day, <code>f1_track_renderer.js</code> draws 79 authentic circuit layouts featuring Open-Meteo Doppler weather radar, surface-versus-core tyre cliffs, dirty-air downforce loss, pit-rejoin ghost predictors, and dynamic team radio.</p>
+      </section>
+
+      <section class="section-card">
+        <div class="section-head">
+          <h2>4. Backend Engineering &amp; Infrastructure</h2>
+          <span class="pill gold">FastAPI &amp; Performance</span>
+        </div>
+        <p>The server runs on <strong>Python, FastAPI, Uvicorn, and Jinja2</strong>, cleanly structured into seven domain routers (<code>archive</code>, <code>cards</code>, <code>game</code>, <code>career</code>, <code>ladder</code>, <code>f1db</code>, and <code>dev</code>) backed by decoupled engines for practice programmes, wind-tunnel R&amp;D correlation, cost-cap accounting, FIA regulation voting, paddock politics, and five-tier world AI. Infrastructure middleware provides GZip compression (shrinking HTML and JS payloads by over 72%), immutable versioned static caching, startup index warmups, sub-5-millisecond cached deck APIs, a live <code>/api/health</code> diagnostics endpoint, and a 38-test automated verification suite ensuring rock-solid reliability across every layer.</p>
+      </section>
+    </article>
+
+    <section class="section-card" style="margin-top:20px;">
+      <div class="section-head">
+        <h2>System Stack Blueprint</h2>
+        <span class="pill papaya">End-to-End Flow</span>
+      </div>
+      <div class="arch-flow">
+        <div class="arch-box" style="--accent:#38bdf8">
+          <h3>Data Layer</h3>
+          <ul>
+            <li><code>f1.sqlite</code> (1950–2026)</li>
+            <li><code>f1db.sqlite</code> (1.13M rows)</li>
+            <li><code>fia_docs.sqlite</code> (11.9k docs)</li>
+            <li><code>career</code> &amp; <code>ladder</code> SQLite WAL</li>
+          </ul>
+        </div>
+        <div class="arch-box" style="--accent:#facc15">
+          <h3>Domain Engines</h3>
+          <ul>
+            <li><code>rating_engine.py</code> (8 stats)</li>
+            <li><code>livery_registry.py</code> (23 styles)</li>
+            <li><code>weekend_engine.py</code> &amp; Radar</li>
+            <li><code>career.py</code> &amp; <code>ladder_engine.py</code></li>
+          </ul>
+        </div>
+        <div class="arch-box" style="--accent:#e10600">
+          <h3>FastAPI Core</h3>
+          <ul>
+            <li>7 Modular APIRouters</li>
+            <li>GZip + Immutable Cache</li>
+            <li>Warm Startup &amp; Deck Cache</li>
+            <li><code>/api/health</code> + ReportLab PDF</li>
+          </ul>
+        </div>
+        <div class="arch-box" style="--accent:#27f4d2">
+          <h3>2D &amp; 3D Frontend</h3>
+          <ul>
+            <li>Three.js 1950–2026 Cars</li>
+            <li>79-Circuit 2D Track Canvas</li>
+            <li>Live Pit Wall &amp; Rejoin Ghosts</li>
+            <li>Zero-Scroll Command Centers</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>TRAF1 (Local F1) · Engineering Documentation</span>
+      <span>Built with FastAPI, SQLite WAL, Three.js, Canvas 2D &amp; ReportLab</span>
+    </footer>
+  </main>
+</body>
+</html>
