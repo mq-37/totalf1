@@ -347,6 +347,11 @@
         eff += 8;
         bonuses.push(`Marina Bay +8`);
       }
+      if (statKey === "wet" && (track.weather === "WET" || track.weather === "CHAOS")) {
+        const wBoost = track.weather === "WET" ? 10 : 5;
+        eff += wBoost;
+        bonuses.push(`${track.weather === "WET" ? "Full Wet" : "Mixed Rain"} +${wBoost}`);
+      }
       if (track.underdog_bonus > 0 && Number(card.overall) < 78) {
         if (isLow) {
           eff = Math.max(0, +(eff - track.underdog_bonus * 0.4).toFixed(1));
@@ -364,9 +369,10 @@
       if (ty === "soft") {
         if (statKey === "pace") { eff += 8; bonuses.push("Soft Tyre +8"); }
         else if (statKey === "racecraft") { eff += 5; bonuses.push("Soft Tyre +5"); }
+        else if (statKey === "tyre_care") { eff = Math.max(20, eff - 3); bonuses.push("Soft Deg -3"); }
         else if (isLow) { eff = +(eff + 4.0).toFixed(1); bonuses.push("Soft Wear +4%"); }
       } else if (ty === "hard") {
-        if (statKey === "reliability") { eff += 8; bonuses.push("Hard Tyre +8"); }
+        if (statKey === "reliability" || statKey === "tyre_care") { eff += 8; bonuses.push("Hard Tyre +8"); }
         else if (isLow) { eff = +(eff * 0.5).toFixed(1); bonuses.push("Hard Tyre ÷2"); }
         else if (statKey === "pace") { eff = Math.max(20, eff - 4); bonuses.push("Hard Tyre -4"); }
       }
@@ -408,8 +414,13 @@
         eff += 8; bonuses.push("Undercut +8");
       } else if (ab.key === "championship_aura" && statKey === "clutch") {
         eff += 5; bonuses.push("Champion Aura +5");
+      } else if (ab.key === "rain_master") {
+        const isRainy = track && (track.weather === "WET" || track.weather === "CHAOS");
+        if (statKey === "wet") { eff += isRainy ? 8 : 4; bonuses.push(`Rain Master +${isRainy ? 8 : 4}`); }
+        else if (statKey === "racecraft" && isRainy) { eff += 6; bonuses.push("Rain Master +6"); }
       } else if (ab.key === "tyre_whisperer") {
-        if (statKey === "reliability") { eff += 7; bonuses.push("Tyre Whisperer +7"); }
+        if (statKey === "tyre_care") { eff += 8; bonuses.push("Tyre Whisperer +8"); }
+        else if (statKey === "reliability") { eff += 6; bonuses.push("Tyre Whisperer +6"); }
         else if (isLow) { eff = +(eff * 0.5).toFixed(1); bonuses.push("Tyre Whisperer ÷2"); }
       } else if (ab.key === "late_braker" && statKey === "racecraft" && trailScoreDiff <= 0) {
         eff += 7; bonuses.push("Late Braker +7");
@@ -499,7 +510,7 @@
       launchSub.textContent = "Pick a stat pill & hit LAUNCH BATTLE (or click any stat bar on your card)";
     }
 
-    const STAT_SHORT = { pace: "PAC", racecraft: "RC", reliability: "REL", duels: "DUL", clutch: "CLU", dnf_rate: "DNF" };
+    const STAT_SHORT = { pace: "PAC", racecraft: "RC", reliability: "CON", duels: "DUL", clutch: "CLU", wet: "WET", tyre_care: "TYR", dnf_rate: "DNF" };
     pillsEl.innerHTML = BATTLE_STATS.map((st) => {
       const val = activeCard ? activeCard.game.stats[st.key] : 0;
       const valStr = st.dir === "low" ? `${val.toFixed(0)}%` : `${val}`;
@@ -672,9 +683,20 @@
           <div class="gc-mini-kpis">
             <div><b>${card.wins}</b><span>WINS</span></div>
             <div><b>${card.podiums}</b><span>PODIUMS</span></div>
-            <div><b>${card.fastest_laps}</b><span>FASTEST</span></div>
+            <div><b>${g.telemetry && g.telemetry.poles != null ? g.telemetry.poles : card.fastest_laps}</b><span>${g.telemetry && g.telemetry.poles != null ? "POLES" : "FASTEST"}</span></div>
             <div><b>${card.starts}</b><span>STARTS</span></div>
           </div>
+
+          ${(() => {
+            const tel = g.telemetry || {};
+            const pills = [];
+            if (tel.quali_h2h_pct != null) pills.push(`<span title="F1DB Qualifying Head-to-Head vs Teammates">Q-H2H <b>${tel.quali_h2h_pct}%</b></span>`);
+            if (tel.race_h2h_pct != null) pills.push(`<span title="F1DB Race Finish Head-to-Head vs Teammates (excl. mech DNFs)">R-H2H <b>${tel.race_h2h_pct}%</b></span>`);
+            if (tel.avg_pos_gained != null) pills.push(`<span title="Average Grid-to-Finish Positions Gained">ΔPOS <b>${tel.avg_pos_gained >= 0 ? "+" : ""}${tel.avg_pos_gained}</b></span>`);
+            if (tel.mech_dnf_pct != null) pills.push(`<span title="Driver-Fault DNF% vs Mechanical DNF% (Mechanical DNFs excluded from driver penalty)">MECH <b>${tel.mech_dnf_pct}%</b></span>`);
+            if (g.car_strength_est != null) pills.push(`<span title="Machinery-adjusted Car Strength Estimate vs Pure Driver Skill">CAR <b>${Math.round(g.car_strength_est)}</b></span>`);
+            return pills.length ? `<div class="gc-f1db-ev">${pills.join("")}</div>` : "";
+          })()}
 
           <div class="gc-stats-list">${statRows}</div>
 
@@ -1526,8 +1548,9 @@
     { key: "podiums", label: "Career Podiums", fmt: (c) => `${c.podiums}`, val: (c) => c.podiums },
     { key: "fastest_laps", label: "Fastest Laps", fmt: (c) => `${c.fastest_laps}`, val: (c) => c.fastest_laps },
     { key: "starts", label: "Grand Prix Starts", fmt: (c) => `${c.starts}`, val: (c) => c.starts },
-    { key: "overall", label: "All-Time Overall Rating", fmt: (c) => `${c.overall.toFixed(1)}`, val: (c) => c.overall },
-    { key: "dnf_rate", label: "DNF Rate %", fmt: (c) => `${c.game.stats.dnf_rate.toFixed(1)}%`, val: (c) => c.game.stats.dnf_rate },
+    { key: "overall", label: "Fair Overall Rating", fmt: (c) => `${c.overall.toFixed(1)}`, val: (c) => c.overall },
+    { key: "dnf_rate", label: "Driver-Fault DNF %", fmt: (c) => `${c.game.stats.dnf_rate.toFixed(1)}%`, val: (c) => c.game.stats.dnf_rate },
+    { key: "wet", label: "Wet Weather Rating", fmt: (c) => `${c.game.stats.wet}`, val: (c) => c.game.stats.wet },
   ];
 
   const hiloState = {
@@ -1656,7 +1679,7 @@
     const tutModal = document.getElementById("tutorial-modal");
     if (tutModal && !tutModal.classList.contains("hidden")) return;
 
-    if (e.key >= "1" && e.key <= "6") {
+    if (e.key >= "1" && e.key <= "8") {
       const st = BATTLE_STATS[Number(e.key) - 1];
       if (st && !duelState.revealed && !duelState.battling && !duelState.finished && !(duelState.opponent === "ai" && duelState.turn === "p2")) {
         duelState.pendingStat = st.key;

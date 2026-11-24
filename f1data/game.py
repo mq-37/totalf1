@@ -199,12 +199,14 @@ TRACK_DECK: list[dict[str, Any]] = [
 
 
 BATTLE_STATS: list[dict[str, Any]] = [
-    {"key": "pace", "label": "PACE", "dir": "high", "color": "#7c3aed", "desc": "Fastest-lap rate & raw speed"},
-    {"key": "racecraft", "label": "RACECRAFT", "dir": "high", "color": "#e10600", "desc": "Win rate & podium conversion"},
-    {"key": "reliability", "label": "RELIABILITY", "dir": "high", "color": "#0284c7", "desc": "Finish rate & top-10 consistency"},
-    {"key": "duels", "label": "DUELS", "dir": "high", "color": "#0d9488", "desc": "Teammate head-to-head ratio"},
-    {"key": "clutch", "label": "CLUTCH", "dir": "high", "color": "#d97706", "desc": "Titles, streaks & big-moment wins"},
-    {"key": "dnf_rate", "label": "DNF RATE", "dir": "low", "color": "#475569", "desc": "Lower % wins!"},
+    {"key": "pace", "label": "PACE", "dir": "high", "color": "#7c3aed", "desc": "Qualifying speed, poles & teammate Q-H2H"},
+    {"key": "racecraft", "label": "RACECRAFT", "dir": "high", "color": "#e10600", "desc": "Positions gained, race H2H & conversion"},
+    {"key": "reliability", "label": "CONSISTENCY", "dir": "high", "color": "#0284c7", "desc": "Fault-adjusted cleanliness (excludes mech DNFs)"},
+    {"key": "duels", "label": "DUELS", "dir": "high", "color": "#0d9488", "desc": "Quali + race teammate head-to-head dominance"},
+    {"key": "clutch", "label": "CLUTCH", "dir": "high", "color": "#d97706", "desc": "Titles, Grand Slams, DOTD & big-moment wins"},
+    {"key": "wet", "label": "WET", "dir": "high", "color": "#0ea5e9", "desc": "Wet-weather & street-circuit overperformance"},
+    {"key": "tyre_care", "label": "TYRE CARE", "dir": "high", "color": "#10b981", "desc": "Stint pace retention & mechanical sympathy"},
+    {"key": "dnf_rate", "label": "FAULT DNF", "dir": "low", "color": "#475569", "desc": "Driver-fault crash % only (lower wins!)"},
 ]
 
 
@@ -220,16 +222,30 @@ def clean_driver_name(raw: str) -> tuple[str, str]:
     return s, ""
 
 
-def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
+def compute_game_profile(card: dict[str, Any], year: int | None = None) -> dict[str, Any]:
     """
-    Compute balanced game attributes, inverted DNF rate, draft salary cost, tier,
-    and Pit Wall Ability from any season, decade, or all-time card dict.
+    Compute fair, era-normalized, machinery-adjusted game attributes (F1DB + FIA Docs + Driver DNA),
+    driver-fault DNF rate, draft salary cost, tier, and Pit Wall Ability from any card dict.
     """
+    from .rating_engine import compute_fair_attributes
+
+    fair = compute_fair_attributes(card, year=year)
+    st = fair["stats"]
+    tel = fair["telemetry"]
+
+    pace = int(st["pace"])
+    racecraft = int(st["racecraft"])
+    reliability = int(st["reliability"])
+    duels = int(st["duels"])
+    clutch = int(st["clutch"])
+    wet = int(st["wet"])
+    tyre_care = int(st["tyre_care"])
+    discipline = int(st["discipline"])
+    dnf_rate = float(st["dnf_rate"])
+
     starts = max(0, int(card.get("starts") or 0))
-    wins = max(0, int(card.get("wins") or 0))
     podiums = max(0, int(card.get("podiums") or 0))
     fl = max(0, int(card.get("fastest_laps") or 0))
-    dnfs = max(0, int(card.get("dnfs") or 0))
     seasons = max(
         1,
         int(
@@ -249,118 +265,30 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             or seasons
         ),
     )
-
-    overall = float(card.get("overall") or 65.0)
-    legacy_ovr = float(card.get("legacy_overall") or overall)
-    dominance = float(card.get("dominance_index") or 0.0)
-    speed_idx = float(card.get("speed_index") or 0.0)
-    win_streak = max(0, int(card.get("win_streak") or 0))
-    clutch_wins = max(0, int(card.get("clutch_wins") or 0))
-
+    overall = float(fair["fair_overall"])
     champ_years = card.get("champion_years") or []
     championships = max(
         int(card.get("championships") or 0),
         len(champ_years) if isinstance(champ_years, (list, tuple)) else 0,
     )
     titles_period = int(card.get("titles_decade") or 0)
-
-    # Accurate per-start percentages with Bayesian sample shrinkage (prevents 1-start anomalies!)
-    if starts > 0:
-        win_rate = (wins / starts) * 100.0
-        fl_rate = (fl / starts) * 100.0
-        pod_rate = (podiums / starts) * 100.0
-        dnf_rate = round(_clamp((dnfs / starts) * 100.0, 0.0, 100.0), 1)
-        # Bayesian-smoothed finish rate (prior 79% over 4 virtual races)
-        smooth_finish_rate = (((starts - dnfs) + 4.0 * 0.79) / (starts + 4.0)) * 100.0
-    else:
-        win_rate = float(card.get("win_rate") or 0.0)
-        fl_rate = float(card.get("fl_rate") or 0.0)
-        pod_rate = float(card.get("podium_rate") or 0.0)
-        dnf_rate = 18.0  # neutral fallback when race_results unavailable (1950s)
-        smooth_finish_rate = 80.0
-
-    top10_rate = float(card.get("top10_rate") or 0.0)
-    if starts == 0 and top10_rate == 0.0:
-        top10_rate = _clamp((overall - 58.0) * 1.9, 25.0, 88.0)
-    smooth_top10 = ((top10_rate / 100.0 * max(1, starts) + 2.0 * 0.45) / (max(1, starts) + 2.0)) * 100.0 if starts > 0 else top10_rate
-
-    modern_pps = float(card.get("modern_pps") or 0.0)
-    avg_finish = card.get("avg_finish")
-    if avg_finish is not None and float(avg_finish) > 0:
-        fin_pace_norm = _clamp((19.5 - float(avg_finish)) / 17.5, 0.0, 1.0)
-    else:
-        fin_pace_norm = _clamp((overall - 62.0) / 36.0, 0.0, 1.0)
-    pps_norm = _clamp((max(0.0, modern_pps) / 21.0) ** 0.62, 0.0, 1.0) if modern_pps > 0 else fin_pace_norm
-
-    # Prefer true race-by-race teammate H2H when available; otherwise fall back to season H2H
-    r_tm_w = max(0, int(card.get("race_tm_wins") or 0))
-    r_tm_l = max(0, int(card.get("race_tm_losses") or 0))
-    if (r_tm_w + r_tm_l) > 0:
-        tm_w, tm_l = r_tm_w, r_tm_l
-        tm_smooth = (tm_w + 2.2) / (tm_w + tm_l + 4.4)
-    else:
-        tm_w = max(0, int(card.get("team_driver_wins") or 0))
-        tm_l = max(0, int(card.get("teammate_wins") or 0))
-        tm_total = tm_w + tm_l
-        tm_smooth = (tm_w + 1.5) / (tm_total + 3.0) if tm_total > 0 else 0.48
+    fl_rate = (fl / max(1, starts)) * 100.0 if starts > 0 else float(card.get("fl_rate") or 0.0)
+    pod_rate = (podiums / max(1, starts)) * 100.0 if starts > 0 else float(card.get("podium_rate") or 0.0)
+    q_h2h = float(tel.get("quali_h2h_pct") or 50.0)
+    r_h2h = float(tel.get("race_h2h_pct") or 50.0)
 
     # ------------------------------------------------------------------
-    # 5 Balanced 54–99 Battle Attributes (Zero Midfield Floor Pile-Up!)
+    # Fair Draft Salary Cost ($5M – $30M) & Collector/Game Tier
     # ------------------------------------------------------------------
-    # 1. PACE: blends avg finish velocity, modern PPS, fastest-lap burst & dominance
-    pace_raw = (
-        55.0
-        + fin_pace_norm * 16.5
-        + pps_norm * 12.0
-        + min(11.5, math.sqrt(max(0.0, fl_rate)) * 2.5)
-        + min(5.0, dominance * 0.06 + speed_idx * 0.08)
-    )
-    pace = int(round(_clamp(pace_raw, 55.0, 99.0)))
-
-    # 2. RACECRAFT: blends top-10 conversion, avg finish, podium% & win% (no cliff at 0 podiums!)
-    racecraft_raw = (
-        54.0
-        + (smooth_top10 / 100.0) * 14.0
-        + fin_pace_norm * 11.0
-        + min(11.5, math.sqrt(max(0.0, win_rate)) * 1.95)
-        + min(9.5, pod_rate * 0.14)
-    )
-    racecraft = int(round(_clamp(racecraft_raw, 54.0, 99.0)))
-
-    # 3. RELIABILITY: Bayesian-smoothed finish rate + consistent top-10 scoring
-    reliability_raw = (
-        40.0
-        + (smooth_finish_rate * 0.44)
-        + (smooth_top10 * 0.15)
-    )
-    reliability = int(round(_clamp(reliability_raw, 50.0, 98.0)))
-
-    # 4. DUELS: true race-by-race teammate H2H dominance with Bayesian shrinkage
-    duels_raw = 48.0 + (tm_smooth * 46.0) + min(5.0, math.sqrt(tm_w) * 0.9)
-    duels = int(round(_clamp(duels_raw, 52.0, 98.0)))
-
-    # 5. CLUTCH: titles, streaks, late-season wins, podium pressure & peak legacy
-    clutch_raw = (
-        52.0
-        + min(20.0, championships * 4.8 + titles_period * 2.2)
-        + min(10.0, win_streak * 1.8 + clutch_wins * 1.6)
-        + min(12.0, max(0.0, legacy_ovr - 62.0) * 0.34)
-        + fin_pace_norm * 5.0
-    )
-    clutch = int(round(_clamp(clutch_raw, 52.0, 99.0)))
-
-    # ------------------------------------------------------------------
-    # Draft Salary Cost ($5M – $30M) & Collector/Game Tier
-    # ------------------------------------------------------------------
-    power_score = (pace + racecraft + reliability + duels + clutch) / 5.0
-    cost_raw = 5.0 + max(0.0, (overall - 63.0) * 0.52) + min(6.0, championships * 1.1)
+    power_score = (pace + racecraft + reliability + duels + clutch + wet + tyre_care) / 7.0
+    cost_raw = 5.0 + max(0.0, (overall - 63.0) * 0.56) + min(5.5, championships * 1.0)
     cost_m = int(round(_clamp(cost_raw, 5.0, 30.0)))
 
     if championships >= 2 or overall >= 92.0:
         tier = "ICON"
-    elif championships >= 1 or overall >= 82.0:
+    elif championships >= 1 or overall >= 84.0:
         tier = "ELITE"
-    elif overall >= 72.0:
+    elif overall >= 76.0:
         tier = "CONTENDER"
     elif career_seasons <= 2:
         tier = "ROOKIE"
@@ -382,7 +310,17 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             "active_bonus_stat": "any_vs_champ",
             "active_bonus_val": 12,
         }
-    elif any("fastest" in b for b in badges_lower) or fl_rate >= 16.0:
+    elif wet >= 93:
+        ability = {
+            "key": "rain_master",
+            "name": "RAIN MASTER",
+            "badge": "WET",
+            "summary": "+8 WET & +6 RACECRAFT on Wet or Chaos circuits.",
+            "accent": "#0ea5e9",
+            "active_bonus_stat": "wet",
+            "active_bonus_val": 8,
+        }
+    elif any("fastest" in b for b in badges_lower) or pace >= 91 or fl_rate >= 16.0:
         ability = {
             "key": "drs_overtake",
             "name": "DRS OVERTAKE",
@@ -392,7 +330,7 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             "active_bonus_stat": "pace",
             "active_bonus_val": 6,
         }
-    elif any("teammate" in b for b in badges_lower) or (tm_w >= 4 and tm_l <= 1):
+    elif (q_h2h >= 66.0 and r_h2h >= 64.0) or duels >= 85:
         ability = {
             "key": "undercut",
             "name": "UNDERCUT",
@@ -412,17 +350,17 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             "active_bonus_stat": "clutch",
             "active_bonus_val": 5,
         }
-    elif any("veteran" in b for b in badges_lower) or career_seasons >= 12:
+    elif tyre_care >= 87 or any("veteran" in b for b in badges_lower) or career_seasons >= 12:
         ability = {
             "key": "tyre_whisperer",
             "name": "TYRE WHISPERER",
-            "badge": "VETERAN",
-            "summary": "+7 RELIABILITY; halves DNF% on reliability calls.",
-            "accent": "#0369a1",
-            "active_bonus_stat": "reliability",
+            "badge": "TYRE",
+            "summary": "+7 TYRE CARE & CONSISTENCY; halves Fault DNF% on consistency calls.",
+            "accent": "#10b981",
+            "active_bonus_stat": "tyre_care",
             "active_bonus_val": 7,
         }
-    elif pod_rate >= 25.0:
+    elif pod_rate >= 22.0 or float(tel.get("avg_pos_gained") or 0.0) >= 1.2:
         ability = {
             "key": "late_braker",
             "name": "LATE BRAKER",
@@ -437,7 +375,7 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             "key": "slipstream",
             "name": "SLIPSTREAM",
             "badge": "UNDERDOG",
-            "summary": "+10 to any stat when facing an OVR 82+ rival!",
+            "summary": "+10 to any stat when facing an OVR 84+ rival!",
             "accent": "#16a34a",
             "active_bonus_stat": "any_vs_elite",
             "active_bonus_val": 10,
@@ -450,8 +388,15 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
             "reliability": reliability,
             "duels": duels,
             "clutch": clutch,
+            "wet": wet,
+            "tyre_care": tyre_care,
+            "discipline": discipline,
             "dnf_rate": dnf_rate,
         },
+        "fair_overall": overall,
+        "driver_skill": fair["driver_skill"],
+        "car_strength_est": fair["car_strength_est"],
+        "telemetry": tel,
         "power_avg": round(power_score, 1),
         "cost_m": cost_m,
         "tier": tier,

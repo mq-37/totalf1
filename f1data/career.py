@@ -552,7 +552,9 @@ def _driver_market_record(
     age_est = int(_clamp(18 + seasons * 1.18 + rng.uniform(0, 2.2), 18, 44))
     upside = max(0, int((28 - age_est) * 0.95 + rng.uniform(0, 4)))
     potential = int(_clamp(round(ovr + upside), int(ovr), 99))
-    wet_skill = int(_clamp(round((st["racecraft"] * 0.55 + st["clutch"] * 0.45) + rng.uniform(-6, 8)), 45, 99))
+    wet_skill = int(st["wet"]) if st.get("wet") is not None else int(_clamp(round((st["racecraft"] * 0.55 + st["clutch"] * 0.45) + rng.uniform(-6, 8)), 45, 99))
+    tyre_care_skill = int(st.get("tyre_care") if st.get("tyre_care") is not None else round((st["reliability"] * 0.55 + st["racecraft"] * 0.45)))
+    discipline_skill = int(st.get("discipline") if st.get("discipline") is not None else st["reliability"])
     salary_m = round(_clamp(0.8 + ((ovr - 58.0) ** 1.38) * 0.085, 0.8, 32.0), 1)
     buyout_m = round(salary_m * 0.9, 1) if team_id else 0.0
     trait = HIDDEN_TRAITS[zlib.crc32(card["driver"].encode("utf-8")) % len(HIDDEN_TRAITS)]
@@ -587,7 +589,10 @@ def _driver_market_record(
             "clutch": int(st["clutch"]),
             "dnf_rate": float(st["dnf_rate"]),
             "wet": wet_skill,
+            "tyre_care": tyre_care_skill,
+            "discipline": discipline_skill,
         },
+        "telemetry": card["game"].get("telemetry") or {},
         "ability": card["game"]["ability"],
         "trait": trait,
         "team_id": team_id,            # None = Free Agent
@@ -1401,7 +1406,7 @@ def discover_academy_wonderkid(state: dict[str, Any]) -> tuple[bool, str]:
         "wins": 0,
         "podiums": 0,
         "championships": 0,
-        "stats": {"pace": pace, "racecraft": racecraft, "reliability": rel, "duels": racecraft, "clutch": pace, "dnf_rate": 11.0, "wet": wet},
+        "stats": {"pace": pace, "racecraft": racecraft, "reliability": rel, "duels": racecraft, "clutch": pace, "dnf_rate": 11.0, "wet": wet, "tyre_care": rel, "discipline": rel},
         "ability": {"name": "F2 Graduate", "desc": "High-upside junior academy prodigy"},
         "trait": trait,
         "dev_focus": "balanced",
@@ -2548,25 +2553,33 @@ def quick_sim_race(state: dict[str, Any], weather_mode: str = "dynamic") -> dict
         d = state["drivers"][g["driver_id"]]
         fac = g["facilities"]
         rd = g["rd"]
-        dnf_prob = (d["stats"]["dnf_rate"] / 100.0) * 0.42
-        dnf_prob *= max(0.45, 1.0 - (fac.get("powertrain_lab", 1) - 1) * 0.08)
+        # Separate Driver-Fault crash risk from Car/PU Mechanical DNF risk!
+        fault_dnf_prob = (d["stats"]["dnf_rate"] / 100.0) * 0.36
+        disc = float(d["stats"].get("discipline", d["stats"]["reliability"]))
+        fault_dnf_prob *= max(0.55, 1.30 - (disc - 60.0) * 0.015)
         if "Clean Racer" in d["trait"]:
-            dnf_prob *= 0.75
-        is_dnf = rng.random() < dnf_prob
+            fault_dnf_prob *= 0.75
+        mech_dnf_prob = max(0.012, 0.055 - (fac.get("powertrain_lab", 1) - 1) * 0.009)
+        is_dnf = rng.random() < (fault_dnf_prob + mech_dnf_prob)
 
         pit_bonus = (fac.get("pit_sim", 1) - 1) * 0.65
-        wet_delta = (d["stats"]["wet"] - 74) * 0.16 if is_wet else 0.0
+        wet_delta = (d["stats"]["wet"] - 74) * 0.18 if is_wet else 0.0
+        tyre_care_val = float(d["stats"].get("tyre_care", d["stats"]["reliability"]))
+        tyre_delta = (tyre_care_val - 75.0) * 0.08
         rival_aggro = 1.1 if (not g.get("is_player_team") and int(g.get("rivalry_heat") or 0) >= 50) else 0.0
+        consistency_spread = max(2.2, 5.2 - (d["stats"]["reliability"] - 60.0) * 0.07)
         race_score = (
-            g["car_overall"] * 0.48
-            + d["stats"]["racecraft"] * 0.28
+            g["car_overall"] * 0.46
+            + d["stats"]["racecraft"] * 0.26
             + d["stats"]["pace"] * 0.14
-            + d["stats"]["clutch"] * 0.10
+            + d["stats"]["clutch"] * 0.08
+            + tyre_care_val * 0.06
             + (22 - g["pos"]) * 0.35
             + pit_bonus * 0.9
             + wet_delta
+            + tyre_delta
             + rival_aggro
-            + rng.uniform(-4.5, 4.5)
+            + rng.uniform(-consistency_spread, consistency_spread)
         )
         scored.append({"driver_id": g["driver_id"], "score": race_score, "dnf": is_dnf})
 

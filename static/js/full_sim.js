@@ -539,11 +539,17 @@
   function computeCarLapTime(car, circuit, wetness) {
     const st = car.card.game.stats;
     const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
-    const wPace = circuit.aero === "LOW" ? 0.42 : (circuit.aero === "HIGH" ? 0.28 : 0.35);
-    const wRace = circuit.aero === "HIGH" ? 0.34 : 0.28;
-    const skill = st.pace * wPace + st.racecraft * wRace + st.reliability * 0.16 + st.duels * 0.12 + st.clutch * 0.09;
+    const wPace = circuit.aero === "LOW" ? 0.40 : (circuit.aero === "HIGH" ? 0.28 : 0.34);
+    const wRace = circuit.aero === "HIGH" ? 0.30 : 0.25;
+    const tyreCare = Number(st.tyre_care || st.reliability || 78);
+    const wetSkill = Number(st.wet || st.racecraft || 78);
+    const consistency = Number(st.reliability || 78);
+    const driverSkill = st.pace * wPace + st.racecraft * wRace + consistency * 0.14 + st.duels * 0.13 + st.clutch * 0.08 + tyreCare * 0.06;
+    const carEst = Number((car.card.game && car.card.game.car_strength_est) || car.card.overall || 78);
+    /* Realistic F1 balance: 54% pure driver skill + 46% machinery strength (lets elite drivers outperform midfield cars!) */
+    const effectiveRating = driverSkill * 0.54 + carEst * 0.46;
 
-    let lapS = circuit.base_lap_s - ((skill - 75) * 0.052);
+    let lapS = circuit.base_lap_s - ((effectiveRating - 75) * 0.054);
     lapS += ENG.computeLapModifiers({
       compound: car.compound,
       eraRules: era,
@@ -559,8 +565,16 @@
       car,
     });
 
+    /* True F1DB + Driver-DNA Wet Mastery physics (damp & heavy rain equaliser!) */
     if (wetness >= 60) {
-      lapS -= ((st.racecraft + st.clutch) - 140) * 0.012;
+      lapS -= (wetSkill - 75) * 0.032;
+    } else if (wetness >= 22) {
+      lapS -= (wetSkill - 75) * 0.016;
+    }
+
+    /* Tyre Care stint management advantage when tyres wear below 70% */
+    if (car.tyreLife < 70) {
+      lapS -= (tyreCare - 78) * 0.014;
     }
 
     // Era-aware ERS / Override / DRS / Slipstream boost
@@ -609,7 +623,9 @@
       lapS = circuit.base_lap_s * 1.24;
     }
 
-    lapS += (Math.random() - 0.5) * 0.42;
+    /* Realistic lap-to-lap pace variance driven by Driver Consistency (metronomes hold tight ~0.24s band!) */
+    const lapSpread = Math.max(0.22, 0.54 - ((consistency - 60) * 0.008));
+    lapS += (Math.random() - 0.5) * lapSpread;
     return Math.max(circuit.base_lap_s * 0.84, lapS);
   }
 
@@ -2070,7 +2086,9 @@
       }
       const thermalWear = (car.tyreTemp > 114 ? 1.25 : 1.0) * (1 + ((car.tyreBlistering || 0) / 100) * 0.35);
       const f1dbDegMult = Number(fs.circuitF1db?.tyreDegradation?.tyreDegMultiplier || 1.0);
-      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * (0.55 + 0.45 * f1dbDegMult) * comp.wear * thermalWear * beh.tyreWearMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
+      const tyreCareStat = Number(car.card.game?.stats?.tyre_care || 78);
+      const tyreCareMult = Math.max(0.76, Math.min(1.24, 1.0 - (tyreCareStat - 78) * 0.008));
+      const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * (0.55 + 0.45 * f1dbDegMult) * comp.wear * thermalWear * beh.tyreWearMult * tyreCareMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
       car.tyreLife = Math.max(5, car.tyreLife - (wearMult * lapFrac * baseWearPerLap));
 
       // Keep Safety Car bunching responsive every tick (not just on lap crossing!)
@@ -2106,7 +2124,12 @@
           car.dirtyAirLaps = 0;
           ENG.applyPsychologyEvent(car, "clean_lap");
         }
-        const mistakeProb = 0.011 * beh.mistakeMult * (car.compMistakeMult || 1.0) * (fs.wetness >= 30 ? 1.4 : 1.0);
+        const stFair = car.card.game?.stats || {};
+        const discVal = Number(stFair.discipline || stFair.reliability || 78);
+        const discMult = Math.max(0.55, Math.min(1.42, 1.35 - ((discVal - 60) * 0.018)));
+        const wetVal = Number(stFair.wet || 75);
+        const wetMistakeMult = fs.wetness >= 30 ? Math.max(1.04, 1.55 - ((wetVal - 60) * 0.014)) : 1.0;
+        const mistakeProb = 0.011 * beh.mistakeMult * discMult * (car.compMistakeMult || 1.0) * wetMistakeMult;
         if (car.lap >= 2 && fs.safetyCarLaps === 0 && Math.random() < mistakeProb) {
           const lossS = 0.9 + Math.random() * 1.4;
           car.totalProg -= lossS / fs.circuit.base_lap_s;

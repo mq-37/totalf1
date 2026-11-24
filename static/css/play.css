@@ -286,6 +286,22 @@
 .gc-mini-kpis b { display: block; font-size: 0.95rem; color: #0f172a; line-height: 1.1; }
 .gc-mini-kpis span { font-size: 0.62rem; font-weight: 700; color: #64748b; letter-spacing: 0.04em; }
 
+.gc-f1db-ev {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #475569;
+}
+.gc-f1db-ev span { white-space: nowrap; }
+.gc-f1db-ev b { color: #0f172a; font-weight: 800; }
+
 .gc-stats-list {
   display: flex;
   flex-direction: column;
@@ -1315,15 +1331,16 @@ body.duel-arena-active .bh-stat-title {
 .duel-stage-docked .gc-monogram span { font-size: 1.15rem; }
 .duel-stage-docked .gc-car-img { max-height: 50px; }
 .duel-stage-docked .gc-team-cap { font-size: 0.64rem; padding: 1px 6px; }
-.duel-stage-docked .gc-mini-kpis > div { padding: 3px 2px; }
-.duel-stage-docked .gc-mini-kpis b { font-size: 0.78rem; }
-.duel-stage-docked .gc-mini-kpis span { font-size: 0.54rem; }
-.duel-stage-docked .gc-stats-list { gap: 3px; }
+.duel-stage-docked .gc-mini-kpis > div { padding: 2px 2px; }
+.duel-stage-docked .gc-mini-kpis b { font-size: 0.74rem; }
+.duel-stage-docked .gc-mini-kpis span { font-size: 0.52rem; }
+.duel-stage-docked .gc-f1db-ev { padding: 2px 5px; font-size: 0.55rem; gap: 3px; border-radius: 5px; }
+.duel-stage-docked .gc-stats-list { gap: 2px; }
 .duel-stage-docked .gc-stat-row {
   grid-template-columns: 92px minmax(0, 1fr) 38px;
-  gap: 6px;
-  padding: 4px 7px;
-  border-radius: 6px;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 5px;
 }
 .duel-stage-docked .gc-stat-lbl { font-size: 0.68rem; gap: 3px; }
 .duel-stage-docked .gc-stat-bar-wrap { height: 6px; }
@@ -1396,10 +1413,9 @@ body.duel-arena-active .duel-result-overlay {
 .pitwall-dock .ers-meter-track { height: 7px; }
 .pitwall-dock .btn-ers { padding: 5px 7px; font-size: 0.66rem; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pitwall-dock .pw-launch-row { flex-wrap: nowrap; gap: 6px; align-items: center; }
-.pitwall-dock .pw-stat-pills { gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.pitwall-dock .pw-stat-pills::-webkit-scrollbar { display: none; }
-.pitwall-dock .pw-stat-pill { padding: 5px 7px; font-size: 0.64rem; border-radius: 6px; gap: 3px; white-space: nowrap; flex-shrink: 0; }
-.pitwall-dock .pw-stat-pill b { font-size: 0.68rem; }
+.pitwall-dock .pw-stat-pills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; overflow: visible; }
+.pitwall-dock .pw-stat-pill { padding: 3px 5px; font-size: 0.6rem; border-radius: 5px; gap: 2px; justify-content: center; white-space: nowrap; }
+.pitwall-dock .pw-stat-pill b { font-size: 0.64rem; }
 .pitwall-dock .btn-launch-battle {
   padding: 8px 14px;
   font-size: 0.76rem;

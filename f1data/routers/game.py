@@ -120,6 +120,13 @@ def api_paddock_profiles(year: int = Query(2026)):
     return {"ok": True, **get_season_paddock_bundle(year)}
 
 
+@router.get("/api/ratings/driver")
+def api_fair_driver_rating(name: str = Query("Max Verstappen"), year: Optional[int] = Query(None)):
+    """Return full F1DB + FIA-Docs + Driver-DNA fair rating breakdown for any F1 driver."""
+    from ..rating_engine import compute_fair_attributes
+    return {"ok": True, "driver": name, "year": year, **compute_fair_attributes({"driver": name, "clean_name": name}, year=year)}
+
+
 @router.get("/api/weather/live/{circuit_id}")
 def api_weather_live(
     circuit_id: str,
@@ -419,8 +426,8 @@ def api_game_deck(
         ) if cars else {"name": r.get("team", ""), "color": "#475569", "car_slug": _find_car_png_slug(r.get("team", "")) if r.get("team") else None, "base_slug": _find_car_slug(r.get("team", "")) if r.get("team") else None}
 
         champ_years = champ_map.get(name, [])
-        card_ctx = {**r, "champion_years": champ_years, "cars": cars}
-        gprof = compute_game_profile(card_ctx)
+        card_ctx = {**r, "clean_name": clean_name, "champion_years": champ_years, "cars": cars}
+        gprof = compute_game_profile(card_ctx, year=(year if src == "season" else None))
 
         hero_slug = hero.get("car_slug")
         hero_team_name = hero.get("name") or ""
@@ -441,7 +448,8 @@ def api_game_deck(
             "code3": code3,
             "nationality": (r.get("nationality") or "").upper(),
             "rank": r.get("rank"),
-            "overall": round(float(r.get("overall") or 0), 1),
+            "overall": round(float(gprof.get("fair_overall") or r.get("overall") or 0), 1),
+            "raw_overall": round(float(r.get("overall") or 0), 1),
             "legacy_overall": round(float(r.get("legacy_overall") or r.get("overall") or 0), 1),
             "points": round(float(r.get("points") or 0), 1),
             "total_points": round(float(r.get("total_points") or r.get("points") or 0), 1),

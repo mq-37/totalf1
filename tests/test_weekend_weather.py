@@ -95,10 +95,11 @@ class TestWeekendEngineAndWeather(unittest.TestCase):
 
         pt = career.get_player_team(st)
         d0_id = pt["driver_ids"][0]
-        q1 = career.run_qualifying_stage(st, stage="q1", live_times={d0_id: 76.123})
+        target_lap = round(float(cir["base_lap_s"]) - 9.123, 3)
+        q1 = career.run_qualifying_stage(st, stage="q1", live_times={d0_id: target_lap})
         self.assertEqual(q1["stage"], "q1_done")
         self.assertEqual(q1["grid"][0]["driver_id"], d0_id)
-        self.assertAlmostEqual(q1["grid"][0]["q1_s"], 76.123, places=3)
+        self.assertAlmostEqual(q1["grid"][0]["q1_s"], target_lap, places=3)
         self.assertEqual(st["weekend_state"]["current_phase"], "q2")
 
     def test_weather_radar_and_rd_optimal_pit_crossover_calculations(self):
