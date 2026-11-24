@@ -698,6 +698,51 @@ async def driver_save_row(year: int, position: int, request: Request,
         return HTMLResponse("Row not found", status_code=404)
     return srv.templates.TemplateResponse("partials/driver_row_view.html", {"request": request, "r": r})
 
+@router.get("/api/analytics/balance-audit", response_class=JSONResponse)
+async def api_balance_audit():
+    """Diagnostic audit of rating spread, floor pile-up, duel diversity & cross-era balance."""
+    from ..game import compute_game_profile
+    db = srv.get_db()
+    buckets = []
+    for label, rows in [
+        ("2026", db.driver_season_ratings(2026)),
+        ("2025", db.driver_season_ratings(2025)),
+        ("2024", db.driver_season_ratings(2024)),
+        ("2021", db.driver_season_ratings(2021)),
+        ("1988", db.driver_season_ratings(1988)),
+        ("alltime_top25", db.driver_alltime_ratings()[:25]),
+    ]:
+        if not rows:
+            continue
+        ovrs = [r["overall"] for r in rows]
+        profs = [compute_game_profile(r) for r in rows]
+        paces = [p["stats"]["pace"] for p in profs]
+        rcs = [p["stats"]["racecraft"] for p in profs]
+        duels = [p["stats"]["duels"] for p in profs]
+        buckets.append({
+            "deck": label,
+            "count": len(rows),
+            "ovr_min": round(min(ovrs), 2),
+            "ovr_max": round(max(ovrs), 2),
+            "ovr_avg": round(sum(ovrs) / len(ovrs), 2),
+            "p1_p2_gap": round(ovrs[0] - ovrs[1], 2) if len(ovrs) >= 2 else 0.0,
+            "pace_range": [min(paces), max(paces)],
+            "racecraft_range": [min(rcs), max(rcs)],
+            "unique_duel_values": len(set(duels)),
+            "top5": [
+                {
+                    "driver": r["driver"],
+                    "team": r.get("team") or "",
+                    "overall": r["overall"],
+                    "legacy_overall": r["legacy_overall"],
+                    "stats": p["stats"],
+                }
+                for r, p in list(zip(rows, profs))[:5]
+            ],
+        })
+    return {"status": "ok", "decks": buckets}
+
+
 @router.get("/drivers/{year}/row/{position}", response_class=HTMLResponse)
 async def driver_row_view(year: int, position: int, request: Request):
     db = srv.get_db()

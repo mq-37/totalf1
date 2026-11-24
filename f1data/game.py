@@ -264,70 +264,90 @@ def compute_game_profile(card: dict[str, Any]) -> dict[str, Any]:
     )
     titles_period = int(card.get("titles_decade") or 0)
 
-    # Accurate per-start percentages
+    # Accurate per-start percentages with Bayesian sample shrinkage (prevents 1-start anomalies!)
     if starts > 0:
         win_rate = (wins / starts) * 100.0
         fl_rate = (fl / starts) * 100.0
         pod_rate = (podiums / starts) * 100.0
         dnf_rate = round(_clamp((dnfs / starts) * 100.0, 0.0, 100.0), 1)
+        # Bayesian-smoothed finish rate (prior 79% over 4 virtual races)
+        smooth_finish_rate = (((starts - dnfs) + 4.0 * 0.79) / (starts + 4.0)) * 100.0
     else:
         win_rate = float(card.get("win_rate") or 0.0)
         fl_rate = float(card.get("fl_rate") or 0.0)
         pod_rate = float(card.get("podium_rate") or 0.0)
         dnf_rate = 18.0  # neutral fallback when race_results unavailable (1950s)
+        smooth_finish_rate = 80.0
 
     top10_rate = float(card.get("top10_rate") or 0.0)
     if starts == 0 and top10_rate == 0.0:
-        # Estimate for early 1950s seasons without full race_results
-        top10_rate = _clamp((overall - 55.0) * 1.4, 25.0, 85.0)
+        top10_rate = _clamp((overall - 58.0) * 1.9, 25.0, 88.0)
+    smooth_top10 = ((top10_rate / 100.0 * max(1, starts) + 2.0 * 0.45) / (max(1, starts) + 2.0)) * 100.0 if starts > 0 else top10_rate
 
-    # Teammate duel ratio with gentle Bayesian smoothing (prior 0.50 with weight 2)
-    tm_w = max(0, int(card.get("team_driver_wins") or 0))
-    tm_l = max(0, int(card.get("teammate_wins") or 0))
-    tm_total = tm_w + tm_l
-    tm_smooth = (tm_w + 1.2) / (tm_total + 2.4) if tm_total > 0 else 0.48
+    modern_pps = float(card.get("modern_pps") or 0.0)
+    avg_finish = card.get("avg_finish")
+    if avg_finish is not None and float(avg_finish) > 0:
+        fin_pace_norm = _clamp((19.5 - float(avg_finish)) / 17.5, 0.0, 1.0)
+    else:
+        fin_pace_norm = _clamp((overall - 62.0) / 36.0, 0.0, 1.0)
+    pps_norm = _clamp((max(0.0, modern_pps) / 21.0) ** 0.62, 0.0, 1.0) if modern_pps > 0 else fin_pace_norm
+
+    # Prefer true race-by-race teammate H2H when available; otherwise fall back to season H2H
+    r_tm_w = max(0, int(card.get("race_tm_wins") or 0))
+    r_tm_l = max(0, int(card.get("race_tm_losses") or 0))
+    if (r_tm_w + r_tm_l) > 0:
+        tm_w, tm_l = r_tm_w, r_tm_l
+        tm_smooth = (tm_w + 2.2) / (tm_w + tm_l + 4.4)
+    else:
+        tm_w = max(0, int(card.get("team_driver_wins") or 0))
+        tm_l = max(0, int(card.get("teammate_wins") or 0))
+        tm_total = tm_w + tm_l
+        tm_smooth = (tm_w + 1.5) / (tm_total + 3.0) if tm_total > 0 else 0.48
 
     # ------------------------------------------------------------------
-    # 5 Balanced 0–99 Battle Attributes (intentionally non-monotonic!)
+    # 5 Balanced 54–99 Battle Attributes (Zero Midfield Floor Pile-Up!)
     # ------------------------------------------------------------------
-    # 1. PACE: favours raw fastest-lap specialists & speed index
+    # 1. PACE: blends avg finish velocity, modern PPS, fastest-lap burst & dominance
     pace_raw = (
-        44.0
-        + min(38.0, math.sqrt(max(0.0, fl_rate)) * 7.8)
-        + min(12.0, dominance * 0.14)
-        + min(6.0, speed_idx * 0.18)
+        55.0
+        + fin_pace_norm * 16.5
+        + pps_norm * 12.0
+        + min(11.5, math.sqrt(max(0.0, fl_rate)) * 2.5)
+        + min(5.0, dominance * 0.06 + speed_idx * 0.08)
     )
-    pace = int(round(_clamp(pace_raw, 38.0, 99.0)))
+    pace = int(round(_clamp(pace_raw, 55.0, 99.0)))
 
-    # 2. RACECRAFT: favours high win% & podium conversion (classics can beat volume!)
+    # 2. RACECRAFT: blends top-10 conversion, avg finish, podium% & win% (no cliff at 0 podiums!)
     racecraft_raw = (
-        42.0
-        + min(34.0, math.sqrt(max(0.0, win_rate)) * 5.6)
-        + min(23.0, pod_rate * 0.34)
+        54.0
+        + (smooth_top10 / 100.0) * 14.0
+        + fin_pace_norm * 11.0
+        + min(11.5, math.sqrt(max(0.0, win_rate)) * 1.95)
+        + min(9.5, pod_rate * 0.14)
     )
-    racecraft = int(round(_clamp(racecraft_raw, 38.0, 99.0)))
+    racecraft = int(round(_clamp(racecraft_raw, 54.0, 99.0)))
 
-    # 3. RELIABILITY: favours low DNF% & consistent top-10 finishes (modern/steady shine!)
-    finish_rate = 100.0 - dnf_rate
+    # 3. RELIABILITY: Bayesian-smoothed finish rate + consistent top-10 scoring
     reliability_raw = (
-        28.0
-        + (finish_rate * 0.52)
-        + (top10_rate * 0.21)
-    )
-    reliability = int(round(_clamp(reliability_raw, 35.0, 99.0)))
-
-    # 4. DUELS: favours crushing teammates head-to-head
-    duels_raw = 38.0 + (tm_smooth * 54.0) + min(7.0, math.sqrt(tm_w) * 1.6)
-    duels = int(round(_clamp(duels_raw, 36.0, 99.0)))
-
-    # 5. CLUTCH: favours titles, streaks, late-season clutch wins, and peak legacy
-    clutch_raw = (
         40.0
-        + min(28.0, championships * 6.5 + titles_period * 2.5)
-        + min(14.0, win_streak * 2.4 + clutch_wins * 2.2)
-        + min(17.0, max(0.0, legacy_ovr - 62.0) * 0.45)
+        + (smooth_finish_rate * 0.44)
+        + (smooth_top10 * 0.15)
     )
-    clutch = int(round(_clamp(clutch_raw, 38.0, 99.0)))
+    reliability = int(round(_clamp(reliability_raw, 50.0, 98.0)))
+
+    # 4. DUELS: true race-by-race teammate H2H dominance with Bayesian shrinkage
+    duels_raw = 48.0 + (tm_smooth * 46.0) + min(5.0, math.sqrt(tm_w) * 0.9)
+    duels = int(round(_clamp(duels_raw, 52.0, 98.0)))
+
+    # 5. CLUTCH: titles, streaks, late-season wins, podium pressure & peak legacy
+    clutch_raw = (
+        52.0
+        + min(20.0, championships * 4.8 + titles_period * 2.2)
+        + min(10.0, win_streak * 1.8 + clutch_wins * 1.6)
+        + min(12.0, max(0.0, legacy_ovr - 62.0) * 0.34)
+        + fin_pace_norm * 5.0
+    )
+    clutch = int(round(_clamp(clutch_raw, 52.0, 99.0)))
 
     # ------------------------------------------------------------------
     # Draft Salary Cost ($5M – $30M) & Collector/Game Tier

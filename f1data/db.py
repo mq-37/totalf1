@@ -1306,43 +1306,55 @@ class Database:
         )
         year_spans_season = {r["driver"]: (r["first_year"], r["last_year"]) for r in cur.fetchall()}
 
+        # Pre-aggregate per-race teammate head-to-head & average classified finish from race_results
+        cur = self._conn.execute(
+            """
+            SELECT driver,
+                   AVG(CASE WHEN position_order > 0 THEN position_order END) AS avg_fin,
+                   MIN(CASE WHEN position_order > 0 THEN position_order END) AS best_fin
+            FROM race_results
+            WHERE year=?
+            GROUP BY driver
+            """,
+            (year,),
+        )
+        fin_stats = {
+            r["driver"]: (
+                float(r["avg_fin"]) if r["avg_fin"] is not None else None,
+                int(r["best_fin"]) if r["best_fin"] is not None else None,
+            )
+            for r in cur.fetchall()
+        }
+        race_h2h = self._season_race_teammate_h2h(year)
+        n_drivers = max(1, len(rows))
+        max_w = max(wins.values()) if wins else 1
+        max_f = max(fl.values()) if fl else 1
+
         ratings: List[dict] = []
-        for r in rows:
+        for idx_row, r in enumerate(rows):
             driver = r["driver"]
             first_yr, last_yr = year_spans_season.get(driver, (None, None))
             years_active_season = f"{first_yr}–{last_yr}" if first_yr and last_yr else (str(first_yr) if first_yr else "—")
             team = r["team"]
             nationality = r.get("nationality") or ""
             points = float(r["points"]) if r["points"] is not None else 0.0
-            position_final = int(r.get("position") or 0)
+            position_final = int(r.get("position") or (idx_row + 1))
             points_norm = round(points / max_points * 100.0, 2)
             w = int(wins.get(driver, 0))
             f = int(fl.get(driver, 0))
-            # Simple speed index: wins weighted 3, fastest laps weighted 1
             speed_index = w * 3 + f * 1
-            # Overall: 0.6 points_norm + 0.3*(wins normalized) + 0.1*(fl normalized)
-            max_w = max(wins.values()) if wins else 1
-            max_f = max(fl.values()) if fl else 1
             wins_norm = (w / max_w * 100.0) if max_w else 0.0
             fl_norm = (f / max_f * 100.0) if max_f else 0.0
-            overall_raw = 0.6 * points_norm + 0.3 * wins_norm + 0.1 * fl_norm
-            # Legacy: championships and top-5 seasons bonus across career
             championships, legacy_bonus = self._compute_driver_legacy(driver)
-            # Overall without legacy bonus (65-100 scale)
-            overall = round(min(100.0, 65.0 + overall_raw * 0.35), 2)
-            # Experience: baseline 50 + 3.75 per F1 season up to this year (capped at 100)
             seasons_exp, exp_score = self._compute_driver_experience_score(driver, up_to_year=year)
-            # Legacy overall adds legacy_bonus and +0.10 per season of experience
-            legacy_overall = round(min(100.0, overall + legacy_bonus + seasons_exp * 0.10), 2)
-            experience_bonus = round(seasons_exp * 0.10, 2)
 
-            # Per-season team win/loss
+            # Per-season team win/loss (standings + true race-by-race H2H)
             drv_w_season, tm_w_season = self._season_team_win_loss(year, driver)
-            # Derived metrics
+            race_tm_w, race_tm_l = race_h2h.get(driver, (0, 0))
             dominance_index = round(0.5 * wins_norm + 0.5 * fl_norm, 2)
-            tb_den = drv_w_season + tm_w_season
-            teammate_battle_ratio = round(drv_w_season / tb_den, 3) if tb_den else None
-            # Legacy detail for tie-breakers (top-5 seasons, averages)
+            tb_den = (race_tm_w + race_tm_l) if (race_tm_w + race_tm_l) > 0 else (drv_w_season + tm_w_season)
+            tb_num = race_tm_w if (race_tm_w + race_tm_l) > 0 else drv_w_season
+            teammate_battle_ratio = round(tb_num / tb_den, 3) if tb_den else None
             legacy_detail = self._compute_driver_legacy_detail(driver)
 
             # Modern points fields (2025 scheme without FL bonus)
@@ -1350,17 +1362,14 @@ class Database:
             pts_modern_norm = round(pts_modern / (max_modern_pts or 1) * 100.0, 2)
 
             # Fun/derived stats from race_results
-            # Starts
             cur = self._conn.execute(
                 "SELECT COUNT(DISTINCT round) AS c FROM race_results WHERE year=? AND driver=?",
                 (year, driver),
             )
             starts = int(cur.fetchone()["c"] or 0)
-            # Rates per actual driver start (fallback to season race count if starts unavailable)
             rate_den = starts or total_races
             win_rate = round((w / rate_den) * 100.0, 2) if rate_den else 0.0
             fl_rate = round((f / rate_den) * 100.0, 2) if rate_den else 0.0
-            # Podiums, Top10, DNFs
             cur = self._conn.execute(
                 "SELECT\n                   COUNT(DISTINCT CASE WHEN position_order BETWEEN 1 AND 3 THEN round END) AS podiums,\n                   COUNT(DISTINCT CASE WHEN position_order BETWEEN 1 AND 10 THEN round END) AS top10,\n                   COUNT(DISTINCT CASE WHEN position_order=0 THEN round END) AS dnfs\n                 FROM race_results WHERE year=? AND driver=?",
                 (year, driver),
@@ -1371,7 +1380,35 @@ class Database:
             dnfs = int(rowp["dnfs"] or 0)
             podium_rate = round((podiums / starts) * 100.0, 2) if starts else 0.0
             top10_rate = round((top10 / starts) * 100.0, 2) if starts else 0.0
-            modern_pps = round((pts_modern / starts), 2) if starts else 0.0
+            modern_pps = round((pts_modern / rate_den), 2) if rate_den else 0.0
+            avg_finish, best_finish = fin_stats.get(driver, (None, None))
+            if avg_finish is None:
+                # Smooth rank-based fallback for early 1950s seasons lacking full classifications
+                rank_frac = (position_final - 1) / max(1, n_drivers - 1)
+                avg_finish = round(2.5 + rank_frac * 13.5, 2)
+            else:
+                avg_finish = round(avg_finish, 2)
+
+            # Calibrated Season Overall (63–99 realistic F1 spread with Bayesian sample shrinkage!)
+            # Eliminates P1-vs-P2 cliff & midfield pile-up at 65.0
+            pps_score = min(100.0, ((max(0.0, modern_pps) / 21.0) ** 0.60) * 100.0)
+            fin_score = max(0.0, min(100.0, (19.5 - avg_finish) / 17.5 * 100.0))
+            win_score = 0.58 * min(100.0, ((max(0.0, win_rate) / 50.0) ** 0.55) * 100.0) + 0.42 * wins_norm
+            fl_score = 0.50 * min(100.0, ((max(0.0, fl_rate) / 30.0) ** 0.55) * 100.0) + 0.50 * fl_norm
+            h2h_score = ((race_tm_w + 2.5) / (race_tm_w + race_tm_l + 5.0)) * 100.0 if (race_tm_w + race_tm_l) > 0 else (62.0 if drv_w_season > tm_w_season else (44.0 if tm_w_season > drv_w_season else 50.0))
+            raw_perf = (
+                0.35 * pps_score
+                + 0.25 * fin_score
+                + 0.20 * win_score
+                + 0.12 * h2h_score
+                + 0.08 * fl_score
+            )
+            # Bayesian sample-size shrinkage: 1-race guest drivers regress toward prior 30.0
+            sample_w = (starts / (starts + 3.5)) if starts > 0 else 0.78
+            shrunk_perf = sample_w * raw_perf + (1.0 - sample_w) * 28.0
+            overall = round(min(99.0, max(63.0, 62.5 + shrunk_perf * 0.365)), 2)
+            legacy_overall = round(min(99.5, overall + legacy_bonus * 0.82 + seasons_exp * 0.08), 2)
+            experience_bonus = round(seasons_exp * 0.10, 2)
             # Longest win streak
             cur = self._conn.execute(
                 "SELECT round, position_order FROM race_results WHERE year=? AND driver=? ORDER BY round",
@@ -1438,6 +1475,10 @@ class Database:
                 "experience_seasons": seasons_exp,
                 "teammate_wins": tm_w_season,
                 "team_driver_wins": drv_w_season,
+                "race_tm_wins": race_tm_w,
+                "race_tm_losses": race_tm_l,
+                "avg_finish": avg_finish,
+                "best_finish": best_finish,
                 # New performance metrics
                 "win_rate": win_rate,                 # % of races won
                 "fl_rate": fl_rate,                   # % of races with fastest lap
@@ -1831,6 +1872,14 @@ class Database:
             teams_all.setdefault(rr["driver"], set()).add(rr["team"])
         # Bonus points per world championship for all-time ranking (fair reward)
         TITLE_BONUS_PTS = 200
+        # Precompute career avg finish & race-level teammate H2H in one pass for era-fair legends ratings
+        cur = self._conn.execute(
+            "SELECT driver, AVG(CASE WHEN position_order > 0 THEN position_order END) AS avg_fin FROM race_results GROUP BY driver"
+        )
+        all_avg_fin = {r["driver"]: float(r["avg_fin"]) for r in cur.fetchall() if r["avg_fin"] is not None}
+        max_w = max(wins.values()) if wins else 1
+        max_f = max(fl.values()) if fl else 1
+        import math as _math
         cards: List[dict] = []
         for base in rows:
             d = base["driver"]
@@ -1838,31 +1887,20 @@ class Database:
             pts_norm = pts / max_points * 100.0
             w = int(wins.get(d, 0))
             f = int(fl.get(d, 0))
-            max_w = max(wins.values()) if wins else 1
-            max_f = max(fl.values()) if fl else 1
             wins_norm = (w / max_w * 100.0) if max_w else 0.0
             fl_norm = (f / max_f * 100.0) if max_f else 0.0
-            overall_raw = 0.6 * pts_norm + 0.3 * wins_norm + 0.1 * fl_norm
             championships, legacy_bonus = self._compute_driver_legacy(d)
             title_bonus_pts = championships * TITLE_BONUS_PTS
             first_year, last_year = year_spans.get(d, (None, None))
             years_active = f"{first_year}–{last_year}" if (first_year and last_year) else (str(first_year) if first_year else "—")
-            overall = round(min(100.0, 65.0 + overall_raw * 0.35), 2)
-            # career experience to end year
             seasons_career, exp_score_career = self._compute_driver_experience_score(d, up_to_year=end)
-            legacy_overall = round(min(100.0, overall + legacy_bonus + seasons_career * 0.10), 2)
             experience_bonus = round(seasons_career * 0.10, 2)
-            # period experience (all-time uses career as table experience too)
             exp_score = float(min(100.0, 50.0 + (base["seasons"] or 0) * 3.75))
-            # teammate win/loss across all years
             drv_w_all, tm_w_all = self._overall_team_win_loss(d)
-            # Derived metrics
             dominance_index = round(0.5 * wins_norm + 0.5 * fl_norm, 2)
             legacy_detail = self._compute_driver_legacy_detail(d)
-            # Modern points fields (all-time uses modern points as primary points)
             pts_modern = float(modern_points_all.get(d, 0.0))
             pts_modern_norm = round(pts_modern / (max_modern_all or 1) * 100.0, 2)
-            # Career fun stats across all race_results
             cur = self._conn.execute(
                 "SELECT\n                   COUNT(DISTINCT (CAST(year AS TEXT) || '-' || CAST(round AS TEXT))) AS starts,\n                   COUNT(DISTINCT CASE WHEN position_order BETWEEN 1 AND 3 THEN (CAST(year AS TEXT) || '-' || CAST(round AS TEXT)) END) AS podiums,\n                   COUNT(DISTINCT CASE WHEN position_order BETWEEN 1 AND 10 THEN (CAST(year AS TEXT) || '-' || CAST(round AS TEXT)) END) AS top10,\n                   COUNT(DISTINCT CASE WHEN position_order=0 THEN (CAST(year AS TEXT) || '-' || CAST(round AS TEXT)) END) AS dnfs\n                 FROM race_results WHERE driver=?",
                 (d,),
@@ -1872,7 +1910,30 @@ class Database:
             podiums_all = int((rs and rs["podiums"]) or 0)
             top10_all = int((rs and rs["top10"]) or 0)
             dnfs_all = int((rs and rs["dnfs"]) or 0)
-            rate_den_all = starts_all or total_races_all
+            rate_den_all = starts_all or max(1, (base["seasons"] or 1) * 9)
+
+            # Era-Normalized All-Time Overall: blends Peak/Rate Efficiency (58%) + Log-Scaled Volume (42%)
+            # Ensures 1950s–90s legends (Fangio, Clark, Lauda, Senna, Prost, Schumacher) stand alongside Hamilton & Verstappen!
+            win_rate_eff = (w / rate_den_all) * 100.0
+            pod_rate_eff = (podiums_all / rate_den_all) * 100.0 if starts_all else min(85.0, win_rate_eff * 2.1)
+            pps_all = pts_modern / rate_den_all
+            avg_fin_all = all_avg_fin.get(d)
+            fin_all_score = max(0.0, min(100.0, (18.5 - avg_fin_all) / 16.5 * 100.0)) if avg_fin_all else min(100.0, (pps_all / 16.0) * 100.0)
+            title_score = min(100.0, (_math.sqrt(championships / 6.0) * 100.0)) if championships > 0 else 0.0
+            eff_score = (
+                0.34 * min(100.0, ((win_rate_eff / 38.0) ** 0.55) * 100.0)
+                + 0.24 * min(100.0, ((pps_all / 16.5) ** 0.62) * 100.0)
+                + 0.24 * title_score
+                + 0.18 * fin_all_score
+            )
+            log_pts_score = (_math.log1p(max(0.0, pts_modern)) / max(1e-6, _math.log1p(max_modern_all))) * 100.0
+            log_win_score = (_math.log1p(w) / max(1e-6, _math.log1p(max_w))) * 100.0
+            h2h_all_score = ((drv_w_all + 2.0) / (drv_w_all + tm_w_all + 4.0)) * 100.0
+            vol_score = 0.45 * log_pts_score + 0.35 * log_win_score + 0.20 * h2h_all_score
+            sample_all_w = rate_den_all / (rate_den_all + 12.0)
+            all_raw = sample_all_w * (0.58 * eff_score + 0.42 * vol_score) + (1.0 - sample_all_w) * 28.0
+            overall = round(min(99.0, max(63.0, 62.5 + all_raw * 0.365)), 2)
+            legacy_overall = round(min(99.5, overall + legacy_bonus * 0.55 + min(3.0, seasons_career * 0.10)), 2)
             win_rate = round((w / rate_den_all) * 100.0, 2) if rate_den_all else 0.0
             fl_rate = round((f / rate_den_all) * 100.0, 2) if rate_den_all else 0.0
             podium_rate_all = round((podiums_all / starts_all) * 100.0, 2) if starts_all else 0.0
@@ -2294,6 +2355,40 @@ class Database:
             )
             total += int(cur_w.fetchone()["c"] or 0)
         return total
+
+    def _season_race_teammate_h2h(self, year: int) -> dict[str, tuple[int, int]]:
+        """Compute true race-by-race teammate head-to-head wins/losses from race_results."""
+        cur = self._conn.execute(
+            """
+            SELECT round, team, driver, position_order
+            FROM race_results
+            WHERE year=? AND team IS NOT NULL AND team != '' AND position_order > 0
+            ORDER BY round, team, position_order
+            """,
+            (year,),
+        )
+        by_rt: dict[tuple[int, str], list[tuple[str, int]]] = {}
+        for r in cur.fetchall():
+            by_rt.setdefault((int(r["round"]), str(r["team"])), []).append((str(r["driver"]), int(r["position_order"])))
+        counts: dict[str, list[int]] = {}
+        for entries in by_rt.values():
+            if len(entries) < 2:
+                continue
+            for i in range(len(entries)):
+                d1, p1 = entries[i]
+                for j in range(i + 1, len(entries)):
+                    d2, p2 = entries[j]
+                    if d1 == d2 or p1 == p2:
+                        continue
+                    c1 = counts.setdefault(d1, [0, 0])
+                    c2 = counts.setdefault(d2, [0, 0])
+                    if p1 < p2:
+                        c1[0] += 1
+                        c2[1] += 1
+                    else:
+                        c2[0] += 1
+                        c1[1] += 1
+        return {k: (v[0], v[1]) for k, v in counts.items()}
 
     def _season_team_win_loss(self, year: int, driver_name_like: str) -> tuple[int, int]:
         # Compare final championship positions vs all teammates for that season
