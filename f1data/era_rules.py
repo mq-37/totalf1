@@ -340,11 +340,60 @@ def era_key_for_year(year: int | str | None) -> str:
     return "1950s"
 
 
+def get_season_f1db_regulations(year: int | str | None, f1db_path: Any = None) -> dict[str, Any] | None:
+    """Fetch authentic per-season FIA technical/sporting/qualifying regs from synced TracingInsights F1DB."""
+    try:
+        if isinstance(year, int):
+            yr = year
+        elif isinstance(year, str) and year.strip()[:4].isdigit():
+            yr = int(year.strip()[:4])
+        else:
+            return None
+        from .f1db import get_season_dossier
+        dossier = get_season_dossier(yr, f1db_path)
+        if not dossier:
+            return None
+        tech = dossier.get("technical") or {}
+        sport = dossier.get("sporting") or {}
+        quali = dossier.get("qualifying") or {}
+        pts = dossier.get("pointsSystem") or {}
+        era = dossier.get("era") or {}
+        return {
+            "year": yr,
+            "eraName": era.get("eraName") or tech.get("eraName"),
+            "eraOverview": era.get("eraOverview"),
+            "engineFormula": tech.get("engineFormula"),
+            "engineCapacityCc": tech.get("engineCapacityCc"),
+            "cylinders": tech.get("cylinders"),
+            "minWeightKg": tech.get("minWeightKg"),
+            "fuelLimitKg": tech.get("fuelLimitKg"),
+            "fuelType": tech.get("fuelType"),
+            "refuellingAllowed": bool(tech.get("refuellingAllowed")),
+            "groundEffectAllowed": bool(tech.get("groundEffectAllowed")),
+            "activeAeroAllowed": bool(tech.get("activeAeroAllowed")),
+            "tyreSupplier": tech.get("tyreSupplier"),
+            "drsActive": bool(sport.get("drsActive")),
+            "vscActive": bool(sport.get("vscActive")),
+            "sprintRacesCount": sport.get("sprintRacesCount"),
+            "budgetCapAmountUsd": sport.get("budgetCapAmountUsd"),
+            "numberOfRaces": sport.get("numberOfRaces"),
+            "qualifyingFormat": quali.get("format"),
+            "pointsSystemName": pts.get("name"),
+        }
+    except Exception:
+        return None
+
+
 def get_era_rules(era_or_year: int | str | None, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     key = era_key_for_year(era_or_year)
     rules = dict(ERA_RULES[key])
     rules["points"] = list(rules["points"])
     rules["sprint_points"] = list(rules["sprint_points"])
+    # Enrich with exact per-season F1DB FIA technical/sporting regulations when a specific year is requested
+    if isinstance(era_or_year, int) or (isinstance(era_or_year, str) and era_or_year.strip().isdigit() and len(era_or_year.strip()) == 4):
+        f1db_reg = get_season_f1db_regulations(era_or_year)
+        if f1db_reg:
+            rules["f1db_season"] = f1db_reg
     if overrides:
         for k, v in overrides.items():
             if k in rules and v is not None:

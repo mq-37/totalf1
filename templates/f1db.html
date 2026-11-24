@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}TracingInsights F1DB Data Browser — Local F1{% endblock %}
+
+{% block head %}
+<style>
+  .f1db-hero {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 1.25rem 1.5rem; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(225,6,0,0.16), rgba(15,23,42,0.92));
+    border: 1px solid rgba(255,255,255,0.12); margin-bottom: 1.25rem;
+  }
+  .f1db-hero h1 { margin: 0 0 0.25rem; font-size: 1.65rem; display: flex; align-items: center; gap: 0.6rem; }
+  .f1db-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+  .f1db-kpi {
+    background: rgba(15,23,42,0.75); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px;
+    padding: 0.8rem 1rem;
+  }
+  .f1db-kpi .lbl { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+  .f1db-kpi .val { font-size: 1.35rem; font-weight: 700; margin-top: 0.15rem; }
+  .f1db-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .f1db-tab {
+    padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(15,23,42,0.7); color: inherit; cursor: pointer; font-weight: 600; font-size: 0.9rem;
+  }
+  .f1db-tab.active { background: #e10600; border-color: #e10600; color: #fff; }
+  .f1db-panel { display: none; }
+  .f1db-panel.active { display: block; }
+  .f1db-controls {
+    display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; margin-bottom: 0.9rem;
+    padding: 0.85rem; border-radius: 10px; background: rgba(15,23,42,0.65); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .f1db-controls select, .f1db-controls input {
+    background: rgba(2,6,23,0.85); color: #f8fafc; border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 7px; padding: 0.45rem 0.7rem; font-size: 0.9rem;
+  }
+  .f1db-btn {
+    padding: 0.48rem 0.95rem; border-radius: 7px; border: 1px solid rgba(255,255,255,0.18);
+    background: #1e293b; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.86rem;
+  }
+  .f1db-btn.primary { background: #e10600; border-color: #e10600; }
+  .f1db-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .f1db-table-wrap {
+    overflow-x: auto; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(2,6,23,0.65); max-height: 62vh;
+  }
+  .f1db-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  .f1db-table th, .f1db-table td {
+    padding: 0.48rem 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.07); text-align: left; white-space: nowrap;
+  }
+  .f1db-table th {
+    position: sticky; top: 0; background: #0f172a; font-weight: 700; cursor: pointer; user-select: none;
+  }
+  .f1db-table tr:hover td { background: rgba(255,255,255,0.04); }
+  .f1db-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+  .f1db-card {
+    background: rgba(15,23,42,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1rem 1.15rem;
+  }
+  .f1db-card h3 { margin: 0 0 0.65rem; font-size: 1.02rem; color: #f8fafc; }
+  .f1db-kv { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; font-size: 0.86rem; }
+  .f1db-kv .k { opacity: 0.72; }
+  .f1db-kv .v { font-weight: 600; text-align: right; }
+  .f1db-badge {
+    display: inline-block; padding: 0.16rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
+    background: rgba(225,6,0,0.2); border: 1px solid rgba(225,6,0,0.45); color: #fca5a5;
+  }
+  .f1db-badge.ok { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.45); color: #6ee7b7; }
+  .f1db-badge.warn { background: rgba(245,158,11,0.2); border-color: rgba(245,158,11,0.45); color: #fcd34d; }
+  .f1db-pager { display: flex; justify-content: space-between; align-items: center; margin-top: 0.7rem; font-size: 0.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="f1db-hero">
+  <div>
+    <h1><i class="fas fa-database"></i> TracingInsights F1DB Intelligence Hub</h1>
+    <div class="muted">
+      Synced from <a href="https://tracinginsights.com/f1db" target="_blank" rel="noopener">tracinginsights.com/f1db</a> (CC BY 4.0) ·
+      Powers Driver DNA (921 drivers), Circuit Safety Car/Pit Calibration &amp; 1950–2026 FIA Regulations
+    </div>
+  </div>
+  <div style="display:flex; gap:0.6rem; align-items:center;">
+    <button type="button" id="f1db-sync-btn" class="f1db-btn primary">
+      <i class="fas fa-sync-alt"></i> Sync Latest from TracingInsights
+    </button>
+    <span id="f1db-sync-msg" class="muted" style="font-size:0.82rem;"></span>
+  </div>
+</section>
+
+<div class="f1db-kpis">
+  <div class="f1db-kpi">
+    <div class="lbl">Catalog Tables</div>
+    <div class="val">{{ status.tableCount or 0 }}</div>
+  </div>
+  <div class="f1db-kpi">
+    <div class="lbl">Total Rows</div>
+    <div class="val">{{ "{:,}".format(status.totalRows or 0) }}</div>
+  </div>
+  <div class="f1db-kpi">
+    <div class="lbl">Latest Race Data</div>
+    <div class="val">
+      {% if status.latestRaceResults and status.latestRaceResults.year %}
+        {{ status.latestRaceResults.year }} R{{ status.latestRaceResults.round }}
+      {% else %}
+        Not Synced
+      {% endif %}
+    </div>
+  </div>
+  <div class="f1db-kpi">
+    <div class="lbl">Last Updated</div>
+    <div class="val" style="font-size:1rem;">{{ (status.lastUpdated or 'Never')[:10] }}</div>
+  </div>
+</div>
+
+<div class="f1db-tabs" role="tablist">
+  <button type="button" class="f1db-tab active" data-tab="tables"><i class="fas fa-table"></i> 58-Table Browser</button>
+  <button type="button" class="f1db-tab" data-tab="race"><i class="fas fa-flag-checkered"></i> Race Weekend Dossier</button>
+  <button type="button" class="f1db-tab" data-tab="season"><i class="fas fa-gavel"></i> Season FIA Regs &amp; Hardware</button>
+  <button type="button" class="f1db-tab" data-tab="circuit"><i class="fas fa-road"></i> Circuit SC / Pit Calibration</button>
+</div>
+
+<!-- TAB 1: 58-TABLE BROWSER -->
+<div id="tab-tables" class="f1db-panel active">
+  <div class="f1db-controls">
+    <label for="f1db-table-select" class="muted">Table:</label>
+    <select id="f1db-table-select">
+      {% for t in tables %}
+        <option value="{{ t.name }}" {% if t.name == 'races_safety_cars' %}selected{% endif %}>
+          {{ t.name }} ({{ "{:,}".format(t.rowCount) }} rows)
+        </option>
+      {% endfor %}
+    </select>
+    <input id="f1db-year-filter" type="number" placeholder="Year (e.g. 2026)" min="1950" max="2030" style="width:140px;">
+    <input id="f1db-search-input" type="search" placeholder="Search rows..." style="min-width:210px;">
+    <button type="button" id="f1db-run-query" class="f1db-btn primary"><i class="fas fa-search"></i> Load</button>
+  </div>
+  <div class="f1db-table-wrap">
+    <table class="f1db-table" id="f1db-data-table">
+      <thead></thead>
+      <tbody><tr><td class="muted">Loading table...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="f1db-pager">
+    <span id="f1db-pager-info" class="muted"></span>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="button" id="f1db-prev-btn" class="f1db-btn">Prev</button>
+      <button type="button" id="f1db-next-btn" class="f1db-btn">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: RACE WEEKEND DOSSIER -->
+<div id="tab-race" class="f1db-panel">
+  <div class="f1db-controls">
+    <label class="muted">Season:</label>
+    <input id="race-year-in" type="number" value="{{ current_season }}" min="1950" max="2026" style="width:100px;">
+    <label class="muted">Round:</label>
+    <input id="race-round-in" type="number" value="{{ (status.latestRaceResults.round if status.latestRaceResults and status.latestRaceResults.round else 1) }}" min="1" max="25" style="width:85px;">
+    <button type="button" id="race-load-btn" class="f1db-btn primary"><i class="fas fa-bolt"></i> Load Weekend</button>
+  </div>
+  <div id="race-dossier-out" class="muted">Click Load Weekend to inspect Qualifying Q1/Q2/Q3, Race Results, Pit Stops, Safety Cars, VSCs, Red Flags &amp; DOTD.</div>
+</div>
+
+<!-- TAB 3: SEASON FIA REGULATIONS & HARDWARE -->
+<div id="tab-season" class="f1db-panel">
+  <div class="f1db-controls">
+    <label class="muted">Season (1950–2026):</label>
+    <input id="season-year-in" type="number" value="{{ current_season }}" min="1950" max="2026" style="width:110px;">
+    <button type="button" id="season-load-btn" class="f1db-btn primary"><i class="fas fa-book"></i> Load FIA Regulations</button>
+  </div>
+  <div id="season-dossier-out" class="muted">Select a season to view authentic FIA technical &amp; sporting regulations, points systems, and chassis/engine/tyre pairings.</div>
+</div>
+
+<!-- TAB 4: CIRCUIT CALIBRATION -->
+<div id="tab-circuit" class="f1db-panel">
+  <div class="f1db-controls">
+    <label class="muted">Circuit ID (e.g. monaco, silverstone, spa, vegas, singapore, baku, monza):</label>
+    <input id="circuit-id-in" type="text" value="monaco" style="width:180px;">
+    <button type="button" id="circuit-load-btn" class="f1db-btn primary"><i class="fas fa-tachometer-alt"></i> Inspect Circuit</button>
+  </div>
+  <div id="circuit-dossier-out" class="muted">Inspect historical Safety Car, VSC, and Red Flag probabilities, pit-lane duration benchmarks, layouts &amp; lap records.</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let state = { table: document.getElementById('f1db-table-select')?.value || 'races_safety_cars', offset: 0, limit: 50, sort_col: '', sort_dir: 'desc', total: 0 };
+
+  document.querySelectorAll('.f1db-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.f1db-tab').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.f1db-panel').forEach((p) => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
+      if (btn.dataset.tab === 'race' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadRace(); }
+      if (btn.dataset.tab === 'season' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadSeason(); }
+      if (btn.dataset.tab === 'circuit' && !btn.dataset.loaded) { btn.dataset.loaded = '1'; loadCircuit(); }
+    });
+  });
+
+  async function loadTable() {
+    const sel = document.getElementById('f1db-table-select');
+    if (!sel || !sel.value) return;
+    state.table = sel.value;
+    const yr = document.getElementById('f1db-year-filter').value.trim();
+    const q = document.getElementById('f1db-search-input').value.trim();
+    const params = new URLSearchParams({ limit: String(state.limit), offset: String(state.offset) });
+    if (yr) params.set('year', yr);
+    if (q) params.set('search', q);
+    if (state.sort_col) { params.set('sort_col', state.sort_col); params.set('sort_dir', state.sort_dir); }
+    const res = await fetch(`/api/f1db/table/${encodeURIComponent(state.table)}?${params}`);
+    const data = await res.json();
+    if (!res.ok) {
+      document.querySelector('#f1db-data-table tbody').innerHTML = `<tr><td>${esc(data.detail || 'Error')}</td></tr>`;
+      return;
+    }
+    state.total = data.filteredRows || 0;
+    const cols = data.columns || [];
+    const thead = document.querySelector('#f1db-data-table thead');
+    const tbody = document.querySelector('#f1db-data-table tbody');
+    thead.innerHTML = '<tr>' + cols.map((c) => {
+      const arrow = state.sort_col === c.name ? (state.sort_dir === 'asc' ? ' ▲' : ' ▼') : '';
+      return `<th data-col="${esc(c.name)}" title="${esc(c.description || c.type)}">${esc(c.name)}${arrow}</th>`;
+    }).join('') + '</tr>';
+    thead.querySelectorAll('th').forEach((th) => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        state.sort_dir = (state.sort_col === col && state.sort_dir === 'asc') ? 'desc' : 'asc';
+        state.sort_col = col;
+        state.offset = 0;
+        loadTable();
+      });
+    });
+    tbody.innerHTML = (data.rows || []).length
+      ? data.rows.map((r) => '<tr>' + cols.map((c) => `<td>${esc(r[c.name])}</td>`).join('') + '</tr>').join('')
+      : '<tr><td colspan="99" class="muted">No matching rows</td></tr>';
+    const start = state.total ? state.offset + 1 : 0;
+    const end = Math.min(state.total, state.offset + (data.rows || []).length);
+    document.getElementById('f1db-pager-info').textContent = `Showing ${start}–${end} of ${state.total.toLocaleString()} matching rows (${data.totalRows.toLocaleString()} total)`;
+    document.getElementById('f1db-prev-btn').disabled = state.offset <= 0;
+    document.getElementById('f1db-next-btn').disabled = end >= state.total;
+  }
+
+  document.getElementById('f1db-table-select')?.addEventListener('change', () => { state.offset = 0; state.sort_col = ''; loadTable(); });
+  document.getElementById('f1db-run-query')?.addEventListener('click', () => { state.offset = 0; loadTable(); });
+  document.getElementById('f1db-prev-btn')?.addEventListener('click', () => { state.offset = Math.max(0, state.offset - state.limit); loadTable(); });
+  document.getElementById('f1db-next-btn')?.addEventListener('click', () => { state.offset += state.limit; loadTable(); });
+
+  async function loadRace() {
+    const yr = document.getElementById('race-year-in').value;
+    const rnd = document.getElementById('race-round-in').value;
+    const out = document.getElementById('race-dossier-out');
+    out.innerHTML = '<span class="muted">Loading race weekend telemetry...</span>';
+    const res = await fetch(`/api/f1db/race/${yr}/${rnd}`);
+    const d = await res.json();
+    if (!res.ok) { out.innerHTML = `<span class="f1db-badge">${esc(d.detail || 'Not found')}</span>`; return; }
+    const r = d.race || {};
+    const incidentsHtml = `
+      <div class="f1db-card">
+        <h3><i class="fas fa-exclamation-triangle"></i> Race Control Incidents</h3>
+        <div class="f1db-kv">
+          <div class="k">Safety Cars</div><div class="v">${(d.safetyCars||[]).length}</div>
+          <div class="k">Virtual Safety Cars</div><div class="v">${(d.virtualSafetyCars||[]).length}</div>
+          <div class="k">Red Flags</div><div class="v">${(d.redFlags||[]).length}</div>
+          <div class="k">Total Pit Stops</div><div class="v">${(d.pitStops||[]).length}</div>
+        </div>
+        ${(d.safetyCars||[]).map((s) => `<div style="margin-top:0.45rem;font-size:0.82rem;"><span class="f1db-badge warn">SC</span> Lap ${esc(s.deployed)}–${esc(s.retreated)} · ${esc(s.cause || 'Incident')}</div>`).join('')}
+        ${(d.redFlags||[]).map((f) => `<div style="margin-top:0.45rem;font-size:0.82rem;"><span class="f1db-badge">RED FLAG</span> Lap ${esc(f.lap)} · ${esc(f.incident || 'Red Flag')}</div>`).join('')}
+      </div>`;
+    const metaHtml = `
+      <div class="f1db-card">
+        <h3><i class="fas fa-flag-checkered"></i> ${esc(r.officialName || r.grandPrixName)}</h3>
+        <div class="f1db-kv">
+          <div class="k">Date</div><div class="v">${esc(r.date)}</div>
+          <div class="k">Circuit</div><div class="v">${esc(r.circuitName)} (${esc(r.courseLength)} km · ${esc(r.turns)} turns)</div>
+          <div class="k">Distance</div><div class="v">${esc(r.laps)} laps (${esc(r.distance)} km)</div>
+          <div class="k">Driver of the Day</div><div class="v">${d.driverOfTheDay?.[0] ? `${esc(d.driverOfTheDay[0].driverName)} (${esc(d.driverOfTheDay[0].percentage)}%)` : '—'}</div>
+        </div>
+      </div>`;
+    const resRows = (d.results||[]).map((x) => `<tr>
+      <td>${esc(x.positionText)}</td><td>${esc(x.driverName)}</td><td>${esc(x.constructorName)}</td>
+      <td>${esc(x.gridPositionText)}</td><td>${x.positionsGained != null ? (x.positionsGained > 0 ? '+' + x.positionsGained : x.positionsGained) : '—'}</td>
+      <td>${esc(x.time || x.gap || x.reasonRetired || '')}</td><td>${esc(x.pitStops ?? '—')}</td><td>${esc(x.points ?? 0)}</td>
+    </tr>`).join('');
+    out.innerHTML = `<div class="f1db-grid-2">${metaHtml}${incidentsHtml}</div>
+      <div class="f1db-card"><h3>Classification &amp; Retirements</h3>
+      <div class="f1db-table-wrap"><table class="f1db-table"><thead><tr><th>Pos</th><th>Driver</th><th>Constructor</th><th>Grid</th><th>+/-</th><th>Time / Retirement</th><th>Stops</th><th>Pts</th></tr></thead><tbody>${resRows}</tbody></table></div></div>`;
+  }
+  document.getElementById('race-load-btn')?.addEventListener('click', loadRace);
+
+  async function loadSeason() {
+    const yr = document.getElementById('season-year-in').value;
+    const out = document.getElementById('season-dossier-out');
+    out.innerHTML = '<span class="muted">Loading FIA regulations...</span>';
+    const res = await fetch(`/api/f1db/season/${yr}`);
+    const d = await res.json();
+    if (!res.ok) { out.innerHTML = `<span class="f1db-badge">${esc(d.detail || 'Not found')}</span>`; return; }
+    const t = d.technical || {}, s = d.sporting || {}, q = d.qualifying || {}, e = d.era || {};
+    const hwRows = (d.hardware||[]).map((h) => `<tr><td>${esc(h.constructorName)}</td><td>${esc(h.chassis || '—')}</td><td>${esc(h.engines || h.engineManufacturer || '—')}</td><td>${esc(h.tyres || '—')}</td></tr>`).join('');
+    out.innerHTML = `
+      <div class="f1db-card" style="margin-bottom:1rem;">
+        <h3>${esc(yr)} — ${esc(e.eraName || t.eraName || 'F1 World Championship')}</h3>
+        <p style="margin:0;font-size:0.9rem;opacity:0.86;">${esc(e.eraOverview || '')}</p>
+      </div>
+      <div class="f1db-grid-2">
+        <div class="f1db-card"><h3>Technical Regulations</h3><div class="f1db-kv">
+          <div class="k">Engine Formula</div><div class="v">${esc(t.engineFormula)}</div>
+          <div class="k">Capacity / Cylinders</div><div class="v">${esc(t.engineCapacityCc)} cc · ${esc(t.cylinders)}</div>
+          <div class="k">Min Weight</div><div class="v">${esc(t.minWeightKg)} kg</div>
+          <div class="k">Fuel / Refuelling</div><div class="v">${esc(t.fuelType || '—')} · ${t.refuellingAllowed ? 'Allowed' : 'Banned'}</div>
+          <div class="k">Active Aero / Ground Effect</div><div class="v">${t.activeAeroAllowed ? 'Active Aero ON' : 'Fixed'} · ${t.groundEffectAllowed ? 'Ground Effect' : 'Flat Floor'}</div>
+          <div class="k">Tyre Supplier</div><div class="v">${esc(t.tyreSupplier)}</div>
+        </div></div>
+        <div class="f1db-card"><h3>Sporting &amp; Qualifying</h3><div class="f1db-kv">
+          <div class="k">Qualifying Format</div><div class="v">${esc(q.format)}</div>
+          <div class="k">DRS / VSC</div><div class="v">DRS ${s.drsActive ? 'ON' : 'OFF'} · VSC ${s.vscActive ? 'ON' : 'OFF'}</div>
+          <div class="k">Sprint Races</div><div class="v">${esc(s.sprintRacesCount ?? 0)} (${esc(s.sprintQualifyingFormat || 'None')})</div>
+          <div class="k">Budget Cap</div><div class="v">${s.budgetCapAmountUsd ? '$' + (s.budgetCapAmountUsd / 1e6).toFixed(1) + 'M' : 'None'}</div>
+          <div class="k">Points System</div><div class="v">${esc(d.pointsSystem?.name || '—')}</div>
+        </div></div>
+      </div>
+      <div class="f1db-card"><h3>Season Chassis, Engine &amp; Tyre Grid</h3>
+      <div class="f1db-table-wrap"><table class="f1db-table"><thead><tr><th>Constructor</th><th>Chassis</th><th>Engine</th><th>Tyres</th></tr></thead><tbody>${hwRows}</tbody></table></div></div>`;
+  }
+  document.getElementById('season-load-btn')?.addEventListener('click', loadSeason);
+
+  async function loadCircuit() {
+    const cid = document.getElementById('circuit-id-in').value.trim();
+    const out = document.getElementById('circuit-dossier-out');
+    out.innerHTML = '<span class="muted">Loading circuit telemetry...</span>';
+    const res = await fetch(`/api/f1db/circuit/${encodeURIComponent(cid)}`);
+    const d = await res.json();
+    if (!res.ok) { out.innerHTML = `<span class="f1db-badge">${esc(d.detail || 'Not found')}</span>`; return; }
+    const c = d.circuit || {}, inc = d.incidents || {}, pit = d.pitStops || {}, lr = d.lapRecord || {};
+    out.innerHTML = `<div class="f1db-grid-2">
+      <div class="f1db-card"><h3>${esc(c.fullName || c.name)}</h3><div class="f1db-kv">
+        <div class="k">Type / Direction</div><div class="v">${esc(c.type)} · ${esc(c.direction)}</div>
+        <div class="k">Location</div><div class="v">${esc(c.placeName)}, ${esc(c.countryId)}</div>
+        <div class="k">Length / Turns</div><div class="v">${esc(c.length)} km · ${esc(c.turns)} turns</div>
+        <div class="k">Races Held</div><div class="v">${esc(d.racesHeld)}</div>
+        <div class="k">Race Lap Record</div><div class="v">${lr.time ? `${esc(lr.time)} (${esc(lr.driverName)}, ${esc(lr.year)})` : '—'}</div>
+      </div></div>
+      <div class="f1db-card"><h3>Sim Incident &amp; Pit Calibration</h3><div class="f1db-kv">
+        <div class="k">Safety Car Probability</div><div class="v">${(inc.safetyCarProbability * 100).toFixed(1)}% (${inc.safetyCarDeployments} total)</div>
+        <div class="k">SC Sim Multiplier</div><div class="v">${esc(inc.safetyCarMultiplier)}x</div>
+        <div class="k">VSC Probability (2015+)</div><div class="v">${(inc.vscProbability * 100).toFixed(1)}% (${inc.vscDeployments} total)</div>
+        <div class="k">Red Flag Probability</div><div class="v">${(inc.redFlagProbability * 100).toFixed(1)}% (${inc.redFlagDeployments} total)</div>
+        <div class="k">Pit-Lane Median / P10</div><div class="v">${pit.medianPitLaneSec ? `${pit.medianPitLaneSec}s / ${pit.fastPitLaneSec}s (${pit.sampleCount} stops)` : '—'}</div>
+      </div></div>
+    </div>`;
+  }
+  document.getElementById('circuit-load-btn')?.addEventListener('click', loadCircuit);
+
+  document.getElementById('f1db-sync-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('f1db-sync-btn');
+    const msg = document.getElementById('f1db-sync-msg');
+    btn.disabled = true;
+    msg.textContent = 'Syncing from tracinginsights.com/f1db...';
+    try {
+      const res = await fetch('/api/f1db/sync', { method: 'POST' });
+      const d = await res.json();
+      msg.textContent = res.ok
+        ? `Synced ${d.tableCount} tables (${(d.totalRows||0).toLocaleString()} rows, ${d.downloaded} updated, ${d.cached} cached)`
+        : (d.detail || 'Sync failed');
+      if (res.ok && d.rebuilt) location.reload();
+    } catch (e) {
+      msg.textContent = 'Sync error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  loadTable();
+})();
+</script>
+{% endblock %}

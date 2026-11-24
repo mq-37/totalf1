@@ -47,8 +47,8 @@
 
         <a href="/career" class="nav-link{% if path == '/career' %} active{% endif %}"><i class="fas fa-briefcase"></i> Career</a>
 
-        <div class="nav-group{% if path == '/race' or path.startswith('/driver') or path.startswith('/analytics') or path.startswith('/races') or path.startswith('/teams/') %} active{% endif %}">
-          <button type="button" class="nav-link nav-trigger{% if path == '/race' or path.startswith('/driver') or path.startswith('/analytics') %} active{% endif %}" aria-expanded="false">
+        <div class="nav-group{% if path == '/race' or path == '/f1db' or path.startswith('/driver') or path.startswith('/analytics') or path.startswith('/races') or path.startswith('/teams/') %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path == '/race' or path == '/f1db' or path.startswith('/driver') or path.startswith('/analytics') %} active{% endif %}" aria-expanded="false">
             <i class="fas fa-chart-line"></i> Archive <i class="fas fa-chevron-down nav-caret"></i>
           </button>
           <div class="nav-menu">
@@ -57,6 +57,7 @@
             <a href="/analytics/overall" class="nav-sublink{% if path == '/analytics/overall' or path == '/analytics' %} active{% endif %}"><i class="fas fa-chart-line"></i> Overall Analytics</a>
             <a href="/analytics/season" class="nav-sublink{% if path == '/analytics/season' %} active{% endif %}"><i class="fas fa-calendar-alt"></i> Season Analytics</a>
             <a href="/analytics/tracks" class="nav-sublink{% if path == '/analytics/tracks' %} active{% endif %}"><i class="fas fa-road"></i> Circuit Analytics</a>
+            <a href="/f1db" class="nav-sublink{% if path == '/f1db' %} active{% endif %}"><i class="fas fa-database"></i> F1DB Data Browser</a>
           </div>
         </div>
 
@@ -87,7 +88,7 @@
   <footer class="site-footer no-print">
     <div class="footer-inner">
       <span>Local F1</span>
-      <span class="muted">Data from formula1.com</span>
+      <span class="muted">Data from formula1.com &amp; TracingInsights F1DB (CC BY 4.0)</span>
     </div>
   </footer>
 

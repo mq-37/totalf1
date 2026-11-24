@@ -410,9 +410,10 @@ def _career_base_dir() -> Path:
 
 
 # Mount modular APIRouters (keeping f1data.server:app as single ASGI entrypoint)
-from .routers import archive as _r_archive, cards as _r_cards, career as _r_career, dev as _r_dev, game as _r_game
+from .routers import archive as _r_archive, cards as _r_cards, career as _r_career, dev as _r_dev, f1db as _r_f1db, game as _r_game
 app.include_router(_r_archive.router)
 app.include_router(_r_cards.router)
 app.include_router(_r_game.router)
 app.include_router(_r_career.router)
 app.include_router(_r_dev.router)
+app.include_router(_r_f1db.router)

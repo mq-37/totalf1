@@ -426,7 +426,91 @@ def _build_dna_cache(db_path: Path) -> dict[str, dict[str, Any]]:
         }
         out[dk] = dna
 
-    # Overlay curated iconic F1 legends & modern stars
+    # Enrich & expand with TracingInsights F1DB (all 921 historical drivers, real qualifying,
+    # grid-to-flag positions gained, and mechanical vs crash retirement breakdowns)
+    try:
+        from .f1db import get_all_driver_f1db_metrics
+        f1db_metrics = get_all_driver_f1db_metrics(db_path)
+    except Exception:
+        f1db_metrics = {}
+
+    for dk, m in f1db_metrics.items():
+        avg_p = float(m.get("avgPerf") or 0.35)
+        mech_dnf = float(m.get("mechDnfRate") or 0.10)
+        crash_dnf = float(m.get("crashDnfRate") or 0.08)
+        pos_gain = float(m.get("avgPositionsGained") or 0.0)
+        front_row = float(m.get("frontRowRate") or 0.0)
+        wet_n = int(m.get("wetStarts") or 0)
+        wet_delta = (float(m.get("wetAvg") or avg_p) - avg_p) * (wet_n / (wet_n + 6.0))
+        str_n = int(m.get("streetStarts") or 0)
+        str_delta = (float(m.get("streetAvg") or avg_p) - avg_p) * (str_n / (str_n + 5.0))
+        h = _hash_driver(dk)
+
+        f1db_meta = {
+            "f1db_id": m.get("f1dbId"),
+            "nationality": m.get("nationality"),
+            "permanent_number": m.get("permanentNumber"),
+            "abbreviation": m.get("abbreviation"),
+            "poles": m.get("poles", 0),
+            "wins": m.get("wins", 0),
+            "podiums": m.get("podiums", 0),
+            "grand_slams": m.get("grandSlams", 0),
+            "driver_of_the_day": m.get("driverOfTheDay", 0),
+            "avg_positions_gained": round(pos_gain, 2),
+            "mech_dnf_pct": round(mech_dnf * 100.0, 1),
+            "crash_dnf_pct": round(crash_dnf * 100.0, 1),
+            "avg_quali_pos": m.get("avgQualiPos"),
+        }
+
+        if dk in out:
+            # Refine deduced non-curated scores using true mechanical vs crash DNF & racecraft
+            cur_dna = out[dk]
+            cur_dna["mech_sympathy"] = round(_clamp(86 - mech_dnf * 45 + avg_p * 10, 48, 97))
+            cur_dna["late_braking"] = round(_clamp(cur_dna["late_braking"] + pos_gain * 1.4 - crash_dnf * 12, 48, 96))
+            cur_dna["launch_reaction_s"] = round(
+                _clamp(cur_dna["launch_reaction_s"] - max(-0.02, min(0.03, pos_gain * 0.004 + front_row * 0.03)), 0.16, 0.31),
+                2,
+            )
+            cur_dna["f1db"] = f1db_meta
+        else:
+            # Add the ~580 additional F1DB drivers not in formula1.com standings!
+            wet_m = round(_clamp(58 + avg_p * 28 + wet_delta * 55, 45, 96))
+            street_p = round(_clamp(57 + avg_p * 27 + str_delta * 55, 45, 96))
+            mech_sym = round(_clamp(86 - mech_dnf * 45 + avg_p * 10, 48, 96))
+            tyre_pres = round(_clamp(62 + avg_p * 22 + (0.20 - crash_dnf) * 18, 48, 95))
+            corner_v = round(_clamp(30 + (h % 55) + crash_dnf * 30 - avg_p * 6, 18, 88))
+            late_brk = round(_clamp(56 + avg_p * 25 + (corner_v - 50) * 0.20 + pos_gain * 1.5, 48, 95))
+            defense = round(_clamp(58 + avg_p * 22 + ((h >> 4) % 16) - 6, 48, 94))
+            launch_s = round(_clamp(0.28 - avg_p * 0.08 - front_row * 0.03 - ((h >> 8) % 7) * 0.004, 0.16, 0.32), 2)
+            r_arch = radio_cycle[h % len(radio_cycle)]
+            if corner_v >= 62:
+                arch = "Aggressive Attacker" if late_brk >= 76 else "V-Line Late Braker"
+                t1 = "V-Line Point & Squirt"
+            elif corner_v <= 38:
+                arch = "Smooth Momentum Racer" if tyre_pres >= 76 else "U-Line Technician"
+                t1 = "U-Line Momentum Arc"
+            else:
+                arch = "All-Round Grand Prix Racer"
+                t1 = "Adaptive Racing Line"
+            t2 = "Wet-Track Specialist" if wet_m >= 82 else ("Street Specialist" if street_p >= 82 else "Consistent Stints")
+            out[dk] = {
+                "corner_style_v": corner_v,
+                "wet_mastery": wet_m,
+                "street_precision": street_p,
+                "launch_reaction_s": launch_s,
+                "late_braking": late_brk,
+                "defense_ruthless": defense,
+                "tyre_preservation": tyre_pres,
+                "mech_sympathy": mech_sym,
+                "archetype": arch,
+                "radio_archetype": r_arch,
+                "radio_style": RADIO_STYLE_LABELS[r_arch],
+                "traits": [t1, t2],
+                "curated": False,
+                "f1db": f1db_meta,
+            }
+
+    # Overlay curated iconic F1 legends & modern stars (preserving attached f1db metadata)
     for dk, curated in CURATED_DRIVER_DNA.items():
         merged = dict(out.get(dk, {}))
         merged.update(curated)

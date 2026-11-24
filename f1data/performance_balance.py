@@ -435,8 +435,10 @@ def get_track_balance_bundle(
         drv_psych_map = cache["driver_psych"]
 
     from .driver_dna import get_driver_dna_map
+    from .f1db import get_circuit_profile
     req_names = [d.get("driver") or d.get("name") or "" for d in (drivers or [])] if drivers else None
     dna_map = get_driver_dna_map(db_path, req_names)
+    circuit_f1db = get_circuit_profile(cid, db_path)
 
     return {
         "circuit_id": cid,
@@ -448,4 +450,5 @@ def get_track_balance_bundle(
         "team_affinity": flat_team_aff,
         "driver_psychology": drv_psych_map,
         "driver_dna": dna_map,
+        "circuit_f1db": circuit_f1db,
     }
