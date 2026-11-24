@@ -123,6 +123,7 @@ class TestCareerMasterUpgrade(unittest.TestCase):
         self.assertEqual(st["pu_contract"]["supplier_id"], "ferrari_pu")
 
         # F1 Commission vote
+        st["f1_commission"]["voted_ids"] = {}
         prop_id = st["f1_commission"]["proposals"][0]["id"]
         ok_v, msg_v = cx.cast_commission_vote(st, prop_id, True, c_mod._add_inbox)
         self.assertTrue(ok_v, msg_v)

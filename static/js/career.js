@@ -264,12 +264,124 @@
     }
   }
 
+  let regGrapherInst = null;
+  let lastAnalyticsPayload = null;
+
+  function renderPaddockPolitics(an) {
+    const host = getEl("car-politics-host");
+    if (!host || !an) return;
+    const tps = an.tpProfiles || [];
+    const clout = Number(an.politicalCapital || 0);
+    const lobbied = new Set(an.lobbiedTps || []);
+    const bills = an.commissionBillHistory || [];
+    const transitions = an.paddockTransitionLog || [];
+
+    const headHtml = `
+      <div class="tp-pol-head">
+        <div><strong><i class="fas fa-handshake"></i> Political Capital: <span style="color:#4ade80">${clout}/100</span></strong> · Lobbying a rival TP costs 25 Clout (+34% F1 Commission support)</div>
+        <div class="muted">Active Formula: <strong style="color:#7dd3fc">${esc((an.regulationFormula && an.regulationFormula.name) || "2026 FIA Formula")}</strong></div>
+      </div>
+    `;
+
+    const cardsHtml = tps.map((tp) => {
+      const isLob = lobbied.has(tp.id);
+      const stress = Number(tp.job_stress || 35);
+      const conf = Number(tp.board_confidence || 78);
+      const sCol = stress >= 70 ? "#ef4444" : (stress >= 48 ? "#f59e0b" : "#22c55e");
+      const cCol = conf <= 35 ? "#ef4444" : (conf <= 60 ? "#f59e0b" : "#38bdf8");
+      const stLbl = String(tp.leadership_style || "consensus_engineer").replace(/_/g, " ");
+      return `
+        <div class="tp-card${isLob ? " lobbied" : ""}">
+          <div class="tp-card-top">
+            <div><div class="tp-card-name">${esc(tp.name)}</div><div class="tp-card-team">${esc(tp.team)} · Target WCC P${tp.target_wcc || 5}</div></div>
+            <span class="tp-style-pill">${esc(stLbl)}</span>
+          </div>
+          <div class="tp-meters">
+            <div>Job Stress: <b style="color:${sCol}">${stress}%</b><div class="tp-bar"><i style="width:${stress}%;background:${sCol}"></i></div></div>
+            <div>Board Security: <b style="color:${cCol}">${conf}%</b><div class="tp-bar"><i style="width:${conf}%;background:${cCol}"></i></div></div>
+          </div>
+          <div class="tp-card-foot">
+            <span title="${esc(tp.voice_signature || "")}">Aero ${(tp.strengths && tp.strengths.aero) || 80} · PU ${(tp.strengths && tp.strengths.power) || 80} · Budget ${(tp.strengths && tp.strengths.budget) || 80}</span>
+            ${isLob
+              ? `<span class="car-pill-ok">✓ LOBBIED</span>`
+              : `<button type="button" class="car-btn-xs car-btn-gold" data-lobby-tp="${esc(tp.id)}" ${clout < 25 ? "disabled" : ""}>Lobby (25)</button>`}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    let feedHtml = "";
+    if (bills.length) {
+      const latest = bills[0];
+      const roll = (latest.votes || []).slice(0, 6).map((v) =>
+        `<div class="tp-vote-row"><span><b>${esc(v.name)}</b> (${esc(v.team)}) — <i>"${esc(v.quote)}"</i></span><b style="color:${v.vote === "YES" ? "#4ade80" : "#f87171"}">${v.vote}</b></div>`
+      ).join("");
+      feedHtml += `
+        <div class="tp-vote-feed">
+          <div><strong style="color:${latest.passed ? "#4ade80" : "#f87171"}">${esc(latest.summary)}</strong></div>
+          ${roll}
+        </div>
+      `;
+    }
+    if (transitions.length) {
+      feedHtml += `<div class="tp-vote-feed"><strong>Executive Leadership Transitions</strong>` +
+        transitions.slice(0, 3).map((ev) => `<div>• <b>${esc(ev.headline)}</b> <span class="muted">${esc(ev.detail || "")}</span></div>`).join("") +
+        `</div>`;
+    }
+
+    host.innerHTML = headHtml + `<div class="tp-politics-grid">${cardsHtml}</div>` + feedHtml;
+    host.querySelectorAll("[data-lobby-tp]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const res = await postJson("/api/career/politics/lobby", { tp_id: btn.getAttribute("data-lobby-tp") });
+        DATA = res;
+        renderAll();
+        showHqToast(res.message, res.ok);
+        refreshCareerAnalytics();
+      });
+    });
+  }
+
+  async function ensureRegArchitectMounted(an) {
+    const host = getEl("car-reg-architect-host");
+    if (!host || !window.F1RegGrapher) return;
+    if (regGrapherInst) {
+      regGrapherInst.redraw();
+      return;
+    }
+    try {
+      const r = await fetch("/api/regulations/architect");
+      const meta = r.ok ? await r.json() : {};
+      const pt = DATA && DATA.player_team;
+      regGrapherInst = window.F1RegGrapher.create(host, {
+        initialFormula: (an && an.regulationFormula) || meta.default_formula,
+        toolsCatalog: meta.tools_catalog || [],
+        presets: meta.presets || {},
+        palette: (pt && pt.palette) || null,
+        liveryStyle: (pt && pt.livery_style) || "modern",
+        onSubmitBill: async (formula, setMsg) => {
+          try {
+            const res = await postJson("/api/career/commission/bill", { formula });
+            DATA = res;
+            renderAll();
+            showHqToast(res.message, res.ok);
+            if (setMsg) setMsg(res.message);
+            refreshCareerAnalytics();
+          } catch (err) {
+            if (setMsg) setMsg("Bill submission error: " + err);
+          }
+        },
+      });
+    } catch (_) {}
+  }
+
   async function refreshCareerAnalytics() {
     if (!window.CareerAnalytics || !DATA.has_career) return;
     try {
       const r = await fetch("/api/career/analytics");
       if (!r.ok) return;
       const an = await r.json();
+      lastAnalyticsPayload = an;
+      renderPaddockPolitics(an);
       window.CareerAnalytics.renderAnalyticsWarRoom(an, {
         onStewardAction: async (action) => {
           const res = await postJson("/api/career/stewards/respond", { action });
@@ -287,6 +399,9 @@
           refreshCareerAnalytics();
         },
       });
+      if (getEl("car-stew-sub-architect")?.classList.contains("active")) {
+        ensureRegArchitectMounted(an);
+      }
     } catch (_) {}
   }
 
@@ -3544,6 +3659,12 @@
         if (bar) bar.querySelectorAll(`[${attr}]`).forEach((b) => { b.classList.toggle("active", b === btn); b.classList.toggle("car-btn-red", b === btn); });
         const panel = btn.closest(".car-panel");
         if (panel) panel.querySelectorAll(".car-subpane").forEach((sp) => sp.classList.toggle("active", sp.id === `${prefix}${key}`));
+        if (attr === "data-stew-sub" && key === "architect") {
+          ensureRegArchitectMounted(lastAnalyticsPayload);
+        }
+        if (attr === "data-stew-sub" && key === "politics" && lastAnalyticsPayload) {
+          renderPaddockPolitics(lastAnalyticsPayload);
+        }
       });
     });
   });

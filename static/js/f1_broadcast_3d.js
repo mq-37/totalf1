@@ -2063,7 +2063,14 @@
       if (wantHero && global.F1Car3D && global.F1Car3D.createCar) {
         const pal = car.palette || { main: car.color || "#e10600", secondary: "#111622", accent: "#facc15", pop: "#ffffff", detail: "#262c36" };
         grp = global.F1Car3D.createCar(pal, car.liveryStyle || "two-tone", car.era || "2020s");
-        grp.scale.setScalar(1.06);
+        if (grp.userData && grp.userData.setPalette) {
+          grp.userData.setPalette(pal, car.liveryStyle || "two-tone", car.liveryFinish || null);
+        }
+        if (car.regFormula && global.F1Car3D.applyRegulationDimensions) {
+          global.F1Car3D.applyRegulationDimensions(grp, car.regFormula);
+        } else {
+          grp.scale.setScalar(1.06);
+        }
       } else {
         grp = makeSculptedGridCar(car.color);
       }

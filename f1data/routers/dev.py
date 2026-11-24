@@ -121,38 +121,46 @@ def _voxel_payload(slug: str) -> dict | None:
             "pal": index, "pts": pts}
 
 
+@router.get("/api/cars/livery")
+def car_livery_year_api(team: str = Query("Ferrari"), year: int = Query(2026)):
+    """Return year-accurate 5-colour palette, signature 3D livery style, paint finish, motif & era."""
+    from ..f1_car_palettes import era_for_year, find_slug
+    from ..livery_registry import resolve_team_livery
+    spec = resolve_team_livery(team, year)
+    return JSONResponse({
+        "ok": True,
+        "team": team,
+        "year": spec["year"],
+        "era": era_for_year(spec["year"]),
+        "slug": find_slug(team) or srv._slugify_name(team),
+        "palette": spec["palette"],
+        "style": spec["style"],
+        "finish": spec["finish"],
+        "motif": spec.get("motif", "standard"),
+        "label": spec.get("label", f"{spec['year']} {team}"),
+    })
+
+
 @router.get("/api/car/{team}/palette")
 def car_palette_api(team: str, year: Optional[int] = Query(None)):
-    """Return the 5-colour livery palette + livery pattern style + decade era for a team."""
+    """Return the year-aware 5-colour livery palette + livery pattern style + paint finish + decade era."""
     from ..f1_car_palettes import find_slug, load_palettes, slugify, infer_livery_style, infer_team_era
+    from ..livery_registry import resolve_team_livery
     db = srv.get_db()
     resolved = db.resolve_team_name(team)
-    palettes = load_palettes()
-    slug = find_slug(resolved) or find_slug(team.replace("-", " "))
-    pal = None
-    matched_name = resolved
-    if slug:
-        for name, p in palettes.items():
-            if slugify(name) == slug:
-                pal = p
-                matched_name = name
-                break
-    if pal is None:
-        tc = srv.get_team_colors(resolved)
-        pal = {
-            "main": tc.get("primary", "#5a6472"),
-            "secondary": tc.get("secondary", "#161920"),
-            "accent": tc.get("accent", "#ffffff"),
-            "pop": "#ffffff",
-            "detail": "#2b303a",
-        }
     year_map = srv._team_peak_years_map(db)
-    era = infer_team_era(matched_name, year=year, team_years_map=year_map)
+    era = infer_team_era(resolved, year=year, team_years_map=year_map)
+    target_year = year if year is not None else (year_map.get(resolved) or 2026)
+    spec = resolve_team_livery(resolved, target_year)
+    slug = find_slug(resolved) or find_slug(team.replace("-", " "))
     return JSONResponse({
-        "team": matched_name,
+        "team": resolved,
         "slug": slug or srv._slugify_name(resolved),
-        "palette": pal,
-        "style": infer_livery_style(matched_name),
+        "palette": spec["palette"],
+        "style": spec["style"],
+        "finish": spec["finish"],
+        "motif": spec.get("motif", "standard"),
+        "label": spec.get("label", resolved),
         "era": era,
     })
 

@@ -62,8 +62,62 @@ def api_game_circuit_detail(circuit_id: str):
 
 @router.get("/api/sim/eras")
 def api_sim_eras():
-    from ..era_rules import list_era_rules
-    return {"eras": list_era_rules()}
+    from ..regulation_architect import get_grouped_formulas
+    grp = get_grouped_formulas()
+    return {
+        "eras": grp["official_eras"],
+        "official_eras": grp["official_eras"],
+        "custom_voted_formulas": grp["custom_voted_formulas"],
+    }
+
+
+@router.get("/api/regulations/architect")
+def api_regulations_architect():
+    from ..regulation_architect import get_grouped_formulas, DEFAULT_2026_FORMULA
+    grp = get_grouped_formulas()
+    return {"ok": True, "default_formula": DEFAULT_2026_FORMULA, **grp}
+
+
+@router.post("/api/regulations/preview")
+async def api_regulations_preview(request: Request):
+    from ..regulation_architect import evaluate_formula_physics
+    body = await request.json()
+    formula = body.get("formula") if isinstance(body, dict) and "formula" in body else body
+    return {"ok": True, **evaluate_formula_physics(formula)}
+
+
+@router.post("/api/regulations/tool/create")
+async def api_regulations_tool_create(request: Request):
+    from ..regulation_architect import create_custom_tool
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    tool = create_custom_tool(
+        name=str(body.get("name") or "Custom Aero Boost"),
+        short_code=str(body.get("short_code") or ""),
+        trigger=str(body.get("trigger") or "within_1s"),
+        aero_mode=str(body.get("aero_mode") or "drag_cut"),
+        power_mode=str(body.get("power_mode") or "none"),
+        intensity=float(body.get("intensity") or 1.0),
+        side_effect=str(body.get("side_effect") or "tyre_wear"),
+    )
+    return {"ok": True, "tool": tool}
+
+
+@router.post("/api/regulations/save")
+async def api_regulations_save(request: Request):
+    from ..regulation_architect import save_custom_formula
+    body = await request.json()
+    formula = body.get("formula") if isinstance(body, dict) and "formula" in body else body
+    saved = save_custom_formula(formula)
+    return {"ok": True, **saved}
+
+
+@router.get("/api/paddock/profiles")
+def api_paddock_profiles(year: int = Query(2026)):
+    """Return data-deduced Team Principals, Race Engineers & Driver Political/Stress Profiles for any season."""
+    from ..paddock_profiles import get_season_paddock_bundle
+    return {"ok": True, **get_season_paddock_bundle(year)}
 
 
 @router.get("/api/sim/balance")
@@ -220,7 +274,8 @@ async def full_sim_page(request: Request):
     seasons = [r["year"] for r in db._conn.execute("SELECT year FROM seasons ORDER BY year DESC").fetchall()]
     decades = sorted({(y // 10) * 10 for y in seasons}, reverse=True)
     from ..circuits import CIRCUITS
-    from ..era_rules import list_era_rules
+    from ..regulation_architect import get_grouped_formulas
+    grp = get_grouped_formulas()
     return srv.templates.TemplateResponse(
         "full_sim.html",
         {
@@ -230,7 +285,8 @@ async def full_sim_page(request: Request):
             "latest_year": seasons[0] if seasons else srv.CURRENT_SEASON,
             "circuits": CIRCUITS,
             "default_circuit": CIRCUITS[0] if CIRCUITS else None,
-            "era_rules": list_era_rules(),
+            "era_rules": grp["official_eras"],
+            "custom_formulas": grp["custom_voted_formulas"],
         },
     )
 
@@ -346,8 +402,14 @@ def api_game_deck(
         gprof = compute_game_profile(card_ctx)
 
         hero_slug = hero.get("car_slug")
-        hero_base_slug = hero.get("base_slug") or _find_car_slug(hero.get("name") or "")
-        hero_pal = _car_palettes_by_slug.get(hero_base_slug) if hero_base_slug else None
+        hero_team_name = hero.get("name") or ""
+        hero_year = hero.get("year") or (year if src == "season" else None) or 2026
+        from ..livery_registry import resolve_team_livery as _resolve_team_livery
+        livery_spec = _resolve_team_livery(hero_team_name, hero_year) if hero_team_name else None
+        hero_pal = livery_spec["palette"] if livery_spec else None
+        if not hero_pal:
+            hero_base_slug = hero.get("base_slug") or _find_car_slug(hero_team_name)
+            hero_pal = _car_palettes_by_slug.get(hero_base_slug) if hero_base_slug else None
         if not hero_pal:
             hcol = hero.get("color") or "#475569"
             hero_pal = {"main": hcol, "secondary": "#1e293b", "accent": "#e10600", "pop": "#ffffff", "detail": "#0f172a"}
@@ -377,12 +439,14 @@ def api_game_deck(
             "champion_years": champ_years,
             "badges": r.get("badges") or [],
             "driver_image": img_map.get(name),
-            "hero_team": hero.get("name") or "",
+            "hero_team": hero_team_name,
             "hero_car_slug": hero_slug,
             "hero_palette": hero_pal,
-            "hero_livery_style": _infer_livery_style(hero.get("name") or ""),
-            "hero_era": _infer_team_era(hero.get("name") or "", year=hero.get("year"), team_years_map=_team_years_map),
-            "hero_color": hero.get("color") or "#475569",
+            "hero_livery_style": (livery_spec["style"] if livery_spec else _infer_livery_style(hero_team_name)),
+            "hero_livery_finish": (livery_spec["finish"] if livery_spec else "gloss"),
+            "hero_livery_motif": (livery_spec.get("motif", "standard") if livery_spec else "standard"),
+            "hero_era": _infer_team_era(hero_team_name, year=hero.get("year"), team_years_map=_team_years_map),
+            "hero_color": hero_pal.get("main") or hero.get("color") or "#475569",
             "spine_colors": spine_colors or ["#475569"],
             "unique_teams": unique_teams,
             "cars": cars,

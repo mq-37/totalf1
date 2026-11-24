@@ -183,6 +183,14 @@ class CommissionVoteReq(CareerMutationReq):
     support: bool = True
 
 
+class LobbyTpReq(CareerMutationReq):
+    tp_id: str = Field(min_length=1, max_length=40)
+
+
+class CommissionBillReq(CareerMutationReq):
+    formula: dict
+
+
 def _career_base_dir() -> Path:
     return srv.BASE_DIR
 
@@ -1000,5 +1008,36 @@ def api_career_commission_vote(req: CommissionVoteReq):
         if ok:
             _save_career_checked(base, state, expected_version=req.expected_version)
         return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/politics/lobby")
+def api_career_politics_lobby(req: LobbyTpReq):
+    from .. import career as _career, career_db as _cdb, career_extras as _cx
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _cx.lobby_team_principal(state, req.tp_id, _career._add_inbox)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/commission/bill")
+def api_career_commission_bill(req: CommissionBillReq):
+    from .. import career as _career, career_db as _cdb, career_extras as _cx
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg, detail = _cx.submit_regulation_bill(
+            state, req.formula, _career.get_player_team, _career._add_inbox
+        )
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, "bill_result": detail, **_career_payload(state)}
+
 
 

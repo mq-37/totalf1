@@ -205,6 +205,98 @@ def ensure_career_extras(state: dict[str, Any]) -> None:
             "proposals": [dict(p) for p in F1_COMMISSION_PROPOSALS[:3]],
         }
 
+    # Regulation Architect Formula, TP Profiles & Paddock Politics (Plan v2)
+    if not isinstance(state.get("regulation_formula"), dict):
+        from .regulation_architect import DEFAULT_2026_FORMULA
+        import copy as _copy
+        state["regulation_formula"] = _copy.deepcopy(DEFAULT_2026_FORMULA)
+    if not isinstance(state.get("tp_profiles"), list) or not state["tp_profiles"]:
+        from .paddock_profiles import initial_tp_roster
+        state["tp_profiles"] = initial_tp_roster()
+    state.setdefault("political_capital", 100)
+    if not isinstance(state.get("lobbied_tps"), list):
+        state["lobbied_tps"] = []
+    if not isinstance(state.get("commission_bill_history"), list):
+        state["commission_bill_history"] = []
+    if not isinstance(state.get("paddock_transition_log"), list):
+        state["paddock_transition_log"] = []
+
+
+def lobby_team_principal(state: dict[str, Any], tp_id: str, add_inbox_fn) -> tuple[bool, str]:
+    """Spend 25 Political Capital to lobby a rival Team Principal ahead of an F1 Commission vote."""
+    ensure_career_extras(state)
+    tp = next((t for t in state["tp_profiles"] if t.get("id") == tp_id), None)
+    if not tp:
+        return False, "Team Principal not found."
+    if tp_id in state["lobbied_tps"]:
+        return False, f"Already lobbied {tp['name']} ({tp['team']}) for the upcoming F1 Commission vote."
+    cap = int(state.get("political_capital") or 0)
+    if cap < 25:
+        return False, f"Not enough Political Capital ({cap}/25 required). Score clean race finishes to replenish clout."
+    state["political_capital"] = cap - 25
+    state["lobbied_tps"].append(tp_id)
+    add_inbox_fn(
+        state,
+        "politics",
+        f"Paddock Lobbying: {tp['name']} ({tp['team']})",
+        f"Private hospitality briefing held with {tp['name']}. They are now significantly more receptive to your next Regulation Bill.",
+    )
+    return True, f"Lobbied {tp['name']} ({tp['team']}) — +34% vote support locked for your next bill!"
+
+
+def submit_regulation_bill(state: dict[str, Any], formula_raw: dict[str, Any], get_player_team_fn, add_inbox_fn) -> tuple[bool, str, dict[str, Any]]:
+    """Submit a custom Car Dimensions / Car Tools / Cost Cap bill to the F1 Commission."""
+    from .regulation_architect import evaluate_formula_physics, save_custom_formula
+    from .paddock_profiles import evaluate_commission_bill
+
+    ensure_career_extras(state)
+    pt = get_player_team_fn(state)
+    ev = evaluate_formula_physics(formula_raw)
+    vote_res = evaluate_commission_bill(
+        state["tp_profiles"],
+        ev,
+        lobbied_tp_ids=state.get("lobbied_tps") or [],
+        player_team_name=pt.get("name", "Player Team"),
+    )
+    # Reset lobbied list after vote and replenish small political capital
+    state["lobbied_tps"] = []
+    state["political_capital"] = min(100, int(state.get("political_capital") or 0) + (20 if vote_res["passed"] else 10))
+
+    record = {
+        "season": int(state.get("season_num") or 1),
+        "round": int(state.get("current_round") or 1),
+        "formula_name": ev["formula"]["name"],
+        "passed": vote_res["passed"],
+        "yes_count": vote_res["yes_count"],
+        "no_count": vote_res["no_count"],
+        "needed": vote_res["needed"],
+        "active_tool_badges": ev["active_tool_badges"],
+        "summary": vote_res["summary"],
+        "votes": vote_res["votes"],
+    }
+    state["commission_bill_history"].insert(0, record)
+    state["commission_bill_history"] = state["commission_bill_history"][:12]
+
+    if vote_res["passed"]:
+        saved = save_custom_formula(ev["formula"])
+        state["regulation_formula"] = saved["formula"]
+        state["cost_cap_limit_m"] = float(saved["formula"]["governance"]["cost_cap_m"])
+        add_inbox_fn(
+            state,
+            "commission",
+            f"F1 Commission PASSED: {saved['formula']['name']}",
+            f"{vote_res['summary']} Active Car Tools: {', '.join(saved['active_tool_badges']) or 'Pure Mechanical'}. Saved to Sim & Career Formula Library!",
+        )
+    else:
+        add_inbox_fn(
+            state,
+            "commission",
+            f"F1 Commission Rejected: {ev['formula']['name']}",
+            vote_res["summary"],
+        )
+
+    return True, vote_res["summary"], {"vote": vote_res, "evaluation": ev}
+
 
 def record_analytics_snapshot(
     state: dict[str, Any],
@@ -258,6 +350,23 @@ def record_analytics_snapshot(
         "top_teams": top_teams,
     })
     state["analytics_rounds"] = state["analytics_rounds"][-48:]
+
+    # Step realistic AI Team Principal job stress & executive transitions
+    try:
+        from .paddock_profiles import step_paddock_stress
+        cal_all = state.get("calendar") or []
+        is_finale = int(cal_item.get("round") or 0) >= len(cal_all) and len(cal_all) > 0
+        res_stress = step_paddock_stress(
+            state["tp_profiles"],
+            [t["name"] for t in wcc_sorted],
+            season_end=is_finale,
+        )
+        for ev in res_stress.get("events") or []:
+            state["paddock_transition_log"].insert(0, ev)
+        state["paddock_transition_log"] = state["paddock_transition_log"][:15]
+        state["political_capital"] = min(100, int(state.get("political_capital") or 50) + 12)
+    except Exception:
+        pass
 
 
 def maybe_spawn_stewards_hearing(
@@ -710,4 +819,10 @@ def compute_career_analytics(state: dict[str, Any], f1db_path: Path | None = Non
         "f1Commission": state.get("f1_commission"),
         "pendingStewards": state.get("pending_stewards"),
         "stewardsHistory": (state.get("stewards_history") or [])[:12],
+        "regulationFormula": state.get("regulation_formula"),
+        "tpProfiles": state.get("tp_profiles") or [],
+        "politicalCapital": int(state.get("political_capital") or 0),
+        "lobbiedTps": state.get("lobbied_tps") or [],
+        "commissionBillHistory": (state.get("commission_bill_history") or [])[:8],
+        "paddockTransitionLog": (state.get("paddock_transition_log") or [])[:8],
     }

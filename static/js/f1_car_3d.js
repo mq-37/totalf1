@@ -188,7 +188,49 @@
     return mesh;
   }
 
-  /* Build a procedural carbon-fiber subtle weave CanvasTexture. */
+  /* Procedural Red Bull yellow sun-disc + charging bull nosecone motif texture */
+  function makeBullNoseTexture() {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    var g = c.getContext('2d');
+    g.clearRect(0, 0, 256, 256);
+    /* Yellow solar disc */
+    g.fillStyle = '#FFCC00';
+    g.beginPath();
+    g.arc(128, 134, 84, 0, Math.PI * 2);
+    g.fill();
+    /* Two stylized crimson charging bulls facing center */
+    g.fillStyle = '#DB0A40';
+    [-1, 1].forEach(function (dir) {
+      g.save();
+      g.translate(128, 136);
+      g.scale(dir, 1);
+      g.beginPath();
+      g.moveTo(6, 4);
+      g.quadraticCurveTo(22, -26, 54, -22);
+      g.quadraticCurveTo(72, -16, 76, 8);
+      g.lineTo(66, 24);
+      g.lineTo(54, 14);
+      g.lineTo(40, 26);
+      g.lineTo(28, 12);
+      g.lineTo(10, 18);
+      g.closePath();
+      g.fill();
+      /* Horns */
+      g.beginPath();
+      g.moveTo(14, -8);
+      g.lineTo(2, -28);
+      g.lineTo(22, -16);
+      g.closePath();
+      g.fill();
+      g.restore();
+    });
+    var tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  /* Procedural carbon-fiber subtle weave CanvasTexture. */
   function makeCarbonTexture() {
     var c = document.createElement('canvas');
     c.width = c.height = 32;
@@ -552,6 +594,9 @@
     mats.detail = mats.floorEdge;
 
     var noseCapMesh = { visible: false };
+    var bullDecalMesh = { visible: false };
+    var ferrariBandMesh = { visible: false };
+    var duracellCapMesh = { visible: false };
 
     function addMesh(geo, mat, pos, rot, shadow) {
       var m = new THREE.Mesh(geo, mat);
@@ -1122,6 +1167,50 @@
       return superRing(s[0], 0, s[1], s[2], s[3], s[4], s[5], 20);
     }), true, true), mats.noseTip);
 
+    /* Signature Red Bull charging-bull solar disc nosecone emblem (shown for 'redbull' style) */
+    var bullTex = makeBullNoseTexture();
+    var bullMat = new THREE.MeshBasicMaterial({ map: bullTex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    bullDecalMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.24), bullMat);
+    bullDecalMesh.position.set(0, 0.382, 2.02);
+    bullDecalMesh.rotation.x = -Math.PI / 2 + 0.22;
+    bullDecalMesh.visible = false;
+    root.add(bullDecalMesh);
+
+    /* Signature Ferrari 2025/2026 HP white engine-cover diagonal band + blue trim collar */
+    var fBandGroup = new THREE.Group();
+    var fWhitePanel = new THREE.Mesh(
+      buildLoft([
+        superRing(-0.22, 0, 0.162, 0.62, 0.995, 2.0, 2.2, 18),
+        superRing(-0.74, 0, 0.148, 0.56, 0.925, 2.0, 2.2, 18),
+        superRing(-1.02, 0, 0.125, 0.52, 0.855, 1.9, 2.0, 18)
+      ], true, true),
+      mats.sidepodLower
+    );
+    var fBlueTrim = new THREE.Mesh(
+      buildLoft([
+        superRing(-0.98, 0, 0.128, 0.53, 0.865, 1.9, 2.0, 18),
+        superRing(-1.12, 0, 0.114, 0.50, 0.822, 1.9, 2.0, 18)
+      ], true, true),
+      mats.sidepodSwoosh
+    );
+    fBandGroup.add(fWhitePanel);
+    fBandGroup.add(fBlueTrim);
+    fBandGroup.visible = false;
+    ferrariBandMesh = fBandGroup;
+    root.add(fBandGroup);
+
+    /* Signature Williams Duracell copper-top airbox ring (shown for 'williams_duracell' style) */
+    var durCap = new THREE.Mesh(
+      buildLoft([
+        superRing(-0.17, 0, 0.136, 0.80, 0.996, 2.0, 2.0, 18),
+        superRing(-0.46, 0, 0.158, 0.78, 0.978, 2.0, 2.0, 18)
+      ], true, true),
+      mats.airboxRim
+    );
+    durCap.visible = false;
+    duracellCapMesh = durCap;
+    root.add(durCap);
+
     /* Nose pitot sensor */
     addMesh(new THREE.CylinderGeometry(0.005, 0.006, 0.14, 6), mats.chrome, [0, 0.56, 1.32]);
 
@@ -1432,18 +1521,42 @@
     });
     } /* end era === '2020s' branch */
 
-    /* Apply a 5-colour team palette + one of 5 livery pattern styles:
-       modern | two-tone | racing-stripe | chevron | classic */
-    function setPalette(pal, style) {
+    /* Apply a 5-colour team palette + signature livery pattern style + paint finish:
+       styles: modern | two-tone | racing-stripe | chevron | classic |
+               redbull | ferrari_hp | merc_arrow | williams_duracell | audi_slash | cadillac_split
+       finish: gloss | matte | metallic | carbon */
+    function setPalette(pal, style, finish) {
       pal = pal || {};
       var st = (style || root.userData.style || 'modern').toLowerCase();
+      var fin = (finish || pal.finish || root.userData.finish || (st === 'redbull' ? 'matte' : (st === 'merc_arrow' || st === 'audi_slash' ? 'metallic' : 'gloss'))).toLowerCase();
       root.userData.style = st;
+      root.userData.finish = fin;
 
       var cMain = parseColor(pal.main || pal.primary, '#ff8000');
       var cSec  = parseColor(pal.secondary, '#161920');
       var cAcc  = parseColor(pal.accent, '#ffffff');
       var cPop  = parseColor(pal.pop, '#ffffff');
       var cDet  = parseColor(pal.detail, '#2b303a');
+
+      /* Apply authentic paint finish across bodywork materials */
+      var paintKeys = ['bodyMain', 'sidepodBody', 'sidepodLower', 'airboxBody', 'sharkFin', 'noseTip', 'rearEndplate', 'frontEndplate'];
+      var roughVal = fin === 'matte' ? 0.62 : (fin === 'metallic' ? 0.22 : (fin === 'carbon' ? 0.44 : 0.24));
+      var metalVal = fin === 'matte' ? 0.14 : (fin === 'metallic' ? 0.68 : (fin === 'carbon' ? 0.28 : 0.34));
+      var coatVal  = fin === 'matte' ? 0.08 : (fin === 'carbon' ? 0.48 : 1.0);
+      paintKeys.forEach(function (k) {
+        if (mats[k]) {
+          mats[k].roughness = roughVal;
+          mats[k].metalness = metalVal;
+          mats[k].clearcoat = coatVal;
+          mats[k].needsUpdate = true;
+        }
+      });
+
+      /* Reset signature 3D motifs */
+      noseCapMesh.visible = false;
+      bullDecalMesh.visible = false;
+      ferrariBandMesh.visible = false;
+      duracellCapMesh.visible = false;
 
       /* Baseline modern mapping */
       mats.bodyMain.color.copy(cMain);
@@ -1452,7 +1565,6 @@
       mats.sidepodSwoosh.color.copy(cAcc);
       mats.noseStripe.color.copy(cAcc);
       mats.noseTip.color.copy(cMain);
-      noseCapMesh.visible = false;
       mats.airboxBody.color.copy(cSec);
       mats.airboxRim.color.copy(cAcc);
       mats.sharkFin.color.copy(cMain);
@@ -1475,7 +1587,147 @@
       mats.floorEdge.color.copy(cDet);
       mats.rimAccent.color.copy(cMain);
 
-      if (st === 'two-tone') {
+      if (st === 'redbull') {
+        /* Signature Red Bull Racing: Matte midnight navy chassis, bright yellow nose tip + charging bull sun decal, crimson airbox/roll-hoop & red-trimmed wings */
+        noseCapMesh.visible = true;
+        bullDecalMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.noseTip.color.copy(cAcc);
+        mats.noseStripe.color.copy(cSec);
+        mats.airboxBody.color.copy(cAcc);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'ferrari_hp') {
+        /* Signature 2025/2026 Scuderia Ferrari HP: Gloss Rosso Corsa + crisp HP White engine cover/wings + HP Blue accents */
+        ferrariBandMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.noseStripe.color.copy(cSec);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'merc_arrow') {
+        /* Signature Mercedes-AMG Petronas: Obsidian Carbon / Silver Arrow split + Razor Petronas Teal pinstripe + INEOS Crimson roll hoop */
+        noseCapMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cPop);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'williams_duracell') {
+        /* Signature Williams Racing: Royal Navy + Electric Blue wings/swoosh + Duracell Copper airbox top */
+        duracellCapMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.airboxBody.color.copy(cDet);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cMain);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'audi_slash') {
+        /* Signature 2026 Audi Works R26: Titanium Silver front, Exposed Carbon rear/sidepods & Audi Lava Red accents */
+        noseCapMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cMain);
+        mats.noseStripe.color.copy(cAcc);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'cadillac_split') {
+        /* Signature 2026 Cadillac F1: Monochrome Black/White split with Brushed Gold crest trim */
+        noseCapMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cAcc);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodLower.color.copy(cMain);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'two-tone') {
         /* Bold contrasting sidepod & rear colour-block (McLaren / Alpine / Sauber / Red Bull) */
         noseCapMesh.visible = true;
         mats.noseTip.color.copy(cSec);
@@ -1721,8 +1973,118 @@
     });
   }
 
+  /* Parametrically scale a 3D car & toggle custom Car Tools from an FIA Regulation Formula spec. */
+  function applyRegulationDimensions(root, regSpec) {
+    if (!root || !regSpec) return;
+    var dims = regSpec.dimensions || regSpec;
+    var wb = Number(dims.wheelbase_mm || 3400);
+    var wd = Number(dims.width_mm || 1900);
+    var rh = Number(dims.ride_height_mm || 32);
+    var scaleZ = Math.max(0.76, Math.min(1.16, wb / 3400));
+    var scaleX = Math.max(0.82, Math.min(1.18, wd / 1900));
+    var yLift  = Math.max(-0.02, Math.min(0.08, (rh - 32) * 0.0012));
+
+    root.scale.set(scaleX, 1.0, scaleZ);
+    root.position.y = Math.max(0, yLift);
+
+    /* Manage 3D Car Tool attachments (Fan Car turbine, 6-Wheeler twin front axle, Venturi Skirts, Active Aero pods, Custom Tool emitter) */
+    var tools = Array.isArray(regSpec.active_tools) ? regSpec.active_tools : [];
+    var hasCustom = Array.isArray(regSpec.custom_tools) && regSpec.custom_tools.some(function (t) {
+      return tools.indexOf(t.id) !== -1;
+    });
+
+    if (!root.userData.regToolsGroup) {
+      var tg = new THREE.Group();
+      tg.name = 'RegCarTools';
+
+      /* 1. Fan Car Suction Turbine (Brabham BT46B style at rear diffuser) */
+      var fanGrp = new THREE.Group();
+      var fanMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.72, roughness: 0.28 });
+      var bladeMat = new THREE.MeshStandardMaterial({ color: 0xe10600, metalness: 0.45, roughness: 0.35 });
+      var shroud = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.036, 10, 28), fanMat);
+      shroud.position.set(0, 0.34, -2.52);
+      fanGrp.add(shroud);
+      var rotor = new THREE.Group();
+      rotor.position.set(0, 0.34, -2.52);
+      for (var b = 0; b < 8; b++) {
+        var bl = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.24, 0.018), bladeMat);
+        bl.rotation.z = (b / 8) * Math.PI * 2;
+        bl.position.set(Math.sin((b / 8) * Math.PI * 2) * 0.12, Math.cos((b / 8) * Math.PI * 2) * 0.12, 0);
+        rotor.add(bl);
+      }
+      fanGrp.add(rotor);
+      fanGrp.userData.rotor = rotor;
+      fanGrp.visible = false;
+      tg.add(fanGrp);
+      tg.userData.fanCar = fanGrp;
+
+      /* 2. 6-Wheeler Twin Front Axle (Tyrrell P34 style smaller tandem front tyres) */
+      var sixGrp = new THREE.Group();
+      var mats = root.userData.materials;
+      if (mats) {
+        [-1, 1].forEach(function (side) {
+          var miniW = buildWheel(false, mats);
+          miniW.scale.set(0.86, 0.72, 0.72);
+          miniW.position.set(side * 0.80, 0.26, 1.02);
+          sixGrp.add(miniW);
+        });
+      }
+      sixGrp.visible = false;
+      tg.add(sixGrp);
+      tg.userData.sixWheeler = sixGrp;
+
+      /* 3. Ground Effect Venturi Sliding Side Skirts */
+      var skirtGrp = new THREE.Group();
+      var skirtMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x0ea5e9, emissiveIntensity: 0.22, roughness: 0.4 });
+      [-1, 1].forEach(function (side) {
+        var sk = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.10, 2.35), skirtMat);
+        sk.position.set(side * 0.78, 0.06, -0.22);
+        skirtGrp.add(sk);
+      });
+      skirtGrp.visible = false;
+      tg.add(skirtGrp);
+      tg.userData.groundEffect = skirtGrp;
+
+      /* 4. Active Aero / DRS Actuator Pods */
+      var aeroGrp = new THREE.Group();
+      var aeroMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0ea5e9, emissiveIntensity: 0.85, roughness: 0.2 });
+      [-1, 1].forEach(function (side) {
+        var fPod = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.26), aeroMat);
+        fPod.position.set(side * 0.36, 0.22, 2.38);
+        aeroGrp.add(fPod);
+      });
+      var rPod = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.24), aeroMat);
+      rPod.position.set(0, 0.96, -2.44);
+      aeroGrp.add(rPod);
+      aeroGrp.visible = false;
+      tg.add(aeroGrp);
+      tg.userData.activeAero = aeroGrp;
+
+      /* 5. Custom Invented Car Tool Emitter Fin */
+      var customGrp = new THREE.Group();
+      var customMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.8, roughness: 0.2 });
+      var fin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.92), customMat);
+      fin.position.set(0, 0.94, -1.16);
+      customGrp.add(fin);
+      customGrp.visible = false;
+      tg.add(customGrp);
+      tg.userData.customTool = customGrp;
+
+      root.add(tg);
+      root.userData.regToolsGroup = tg;
+    }
+
+    var g = root.userData.regToolsGroup;
+    g.userData.fanCar.visible = tools.indexOf('fan_car') !== -1;
+    g.userData.sixWheeler.visible = tools.indexOf('six_wheeler') !== -1;
+    g.userData.groundEffect.visible = tools.indexOf('ground_effect') !== -1;
+    g.userData.activeAero.visible = (tools.indexOf('active_aero') !== -1 || tools.indexOf('drs') !== -1);
+    g.userData.customTool.visible = hasCustom;
+  }
+
   global.F1Car3D = {
     createCar: createF1Car,
+    applyRegulationDimensions: applyRegulationDimensions,
     disposeObject: disposeObject,
     createStudioEnvironment: createStudioEnvironment,
     createContactShadow: createContactShadow,
@@ -1730,7 +2092,10 @@
     renderOrthoViews: renderOrthoViews,
     eraForYear: normalizeEra,
     ERAS: CAR_ERAS,
-    LIVERY_STYLES: ['modern', 'two-tone', 'racing-stripe', 'chevron', 'classic'],
+    LIVERY_STYLES: [
+      'modern', 'two-tone', 'racing-stripe', 'chevron', 'classic',
+      'redbull', 'ferrari_hp', 'merc_arrow', 'williams_duracell', 'audi_slash', 'cadillac_split'
+    ],
     CAMERA_PRESETS: {
       hero:  { theta:  0.76, phi: 0.24, radius: 6.30, targetY: 0.44 },
       side:  { theta:  Math.PI / 2, phi: 0.08, radius: 7.40, targetY: 0.46 },

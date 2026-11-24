@@ -132,9 +132,19 @@
           <label for="fsim-era-sel">Sporting &amp; Technical Era Rules</label>
           <select id="fsim-era-sel">
             <option value="auto" selected>Auto-Match Grid Era</option>
-            {% for er in era_rules %}
-            <option value="{{ er.key }}">{{ er.label }}</option>
-            {% endfor %}
+            <optgroup label="Official FIA Eras">
+              {% for er in era_rules %}
+              <option value="{{ er.key }}">{{ er.label }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup id="fsim-custom-formulas-grp" label="Custom Voted Formulas">
+              {% for cf in custom_formulas %}
+              <option value="{{ cf.key }}">★ {{ cf.label }}</option>
+              {% endfor %}
+              {% if not custom_formulas %}
+              <option value="" disabled>Create &amp; save in Career Reg Architect…</option>
+              {% endif %}
+            </optgroup>
           </select>
         </div>
         <div class="arena-control-group">
@@ -436,7 +446,8 @@
     latestYear: {{ latest_year }},
     circuits: {{ circuits | tojson }},
     defaultCircuit: {{ default_circuit | tojson }},
-    eraRules: {{ era_rules | tojson }}
+    eraRules: {{ era_rules | tojson }},
+    customFormulas: {{ custom_formulas | tojson }}
   };
 </script>
 <script src="/static/vendor/three.min.js"></script>

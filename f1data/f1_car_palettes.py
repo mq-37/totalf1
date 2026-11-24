@@ -14,7 +14,19 @@ CAR_PNG_DIR = Path(__file__).resolve().parent.parent / "static" / "cars" / "png"
 
 SLOT_ORDER = ("main", "secondary", "accent", "pop", "detail")
 
-LIVERY_STYLES = ("modern", "two-tone", "racing-stripe", "chevron", "classic")
+LIVERY_STYLES = (
+    "modern",
+    "two-tone",
+    "racing-stripe",
+    "chevron",
+    "classic",
+    "redbull",
+    "ferrari_hp",
+    "merc_arrow",
+    "williams_duracell",
+    "audi_slash",
+    "cadillac_split",
+)
 
 CAR_ERAS = ("1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s")
 
@@ -70,11 +82,18 @@ def infer_team_era(
     return "2020s"
 
 _STYLE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
-    (("mclaren", "alpine", "sauber", "kick", "red bull", "rbr", "alphatauri", "virgin", "marussia", "force india", "racing point"), "two-tone"),
-    (("williams", "brabham", "tyrrell", "ligier", "matra", "talbot", "prost", "minardi", "stewart", "penske", "zakspeed", "aguri"), "racing-stripe"),
-    (("jordan", "benetton", "renault", "brawn", "toro rosso", "racing bulls", "arrows", "footwork", "spyker", "toleman", "larrousse", "leyton"), "chevron"),
-    (("lotus", "mercedes", "maserati", "alfa", "porsche", "vanwall", "lancia", "cooper", "brm", "jaguar", "shadow", "wolf", "march", "iso"), "classic"),
-    (("ferrari", "aston martin", "haas", "toyota", "honda", "bar"), "modern"),
+    (("racing bulls", "vcarb"), "redbull"),
+    (("red bull", "rbr"), "redbull"),
+    (("ferrari",), "ferrari_hp"),
+    (("mercedes",), "merc_arrow"),
+    (("williams",), "williams_duracell"),
+    (("audi",), "audi_slash"),
+    (("cadillac",), "cadillac_split"),
+    (("mclaren", "alpine", "sauber", "kick", "alphatauri", "virgin", "marussia", "force india", "racing point"), "two-tone"),
+    (("brabham", "tyrrell", "ligier", "matra", "talbot", "prost", "minardi", "stewart", "penske", "zakspeed", "aguri"), "racing-stripe"),
+    (("jordan", "benetton", "renault", "brawn", "toro rosso", "arrows", "footwork", "spyker", "toleman", "larrousse", "leyton"), "chevron"),
+    (("lotus", "maserati", "alfa", "porsche", "vanwall", "lancia", "cooper", "brm", "jaguar", "shadow", "wolf", "march", "iso"), "classic"),
+    (("aston martin", "haas", "toyota", "honda", "bar"), "modern"),
 ]
 
 
@@ -86,9 +105,16 @@ def infer_livery_style(team_name: str | None) -> str:
     for keys, style in _STYLE_KEYWORDS:
         if any(k in low for k in keys):
             return style
-    # Deterministic fallback across the 5 styles for minor historical constructors
+    # Deterministic fallback across the base 5 styles for minor historical constructors
+    base_styles = ("modern", "two-tone", "racing-stripe", "chevron", "classic")
     h = sum(ord(ch) * (i + 1) for i, ch in enumerate(low))
-    return LIVERY_STYLES[h % len(LIVERY_STYLES)]
+    return base_styles[h % len(base_styles)]
+
+
+def resolve_livery(team_name: str | None, year: int | str | None = 2026) -> dict:
+    """Year-aware livery resolver combining authentic palettes, pattern styles, paint finish & motifs."""
+    from .livery_registry import resolve_team_livery
+    return resolve_team_livery(team_name, year)
 
 # generic words that must not drive team matching ("Racing Bulls" vs "Red Bull Racing")
 _STOP_TOKENS = {"racing", "team", "f1"}

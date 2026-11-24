@@ -3,9 +3,41 @@
 (function () {
   "use strict";
 
-  const BOOT = window.F1_FULLSIM_BOOT || { latestYear: 2026, circuits: [], defaultCircuit: null, eraRules: [] };
+  const BOOT = window.F1_FULLSIM_BOOT || { latestYear: 2026, circuits: [], defaultCircuit: null, eraRules: [], customFormulas: [] };
   const CIRCUITS = BOOT.circuits || [];
-  const ERA_RULES = BOOT.eraRules || [];
+  let ERA_RULES = (BOOT.eraRules || []).concat(BOOT.customFormulas || []);
+  const PADDOCK_PROFILE_CACHE = {};
+
+  async function refreshCustomFormulasList() {
+    try {
+      const r = await fetch("/api/sim/eras");
+      if (!r.ok) return;
+      const d = await r.json();
+      const off = d.official_eras || d.eras || [];
+      const cust = d.custom_voted_formulas || [];
+      ERA_RULES = off.concat(cust);
+      const grp = document.getElementById("fsim-custom-formulas-grp");
+      if (grp) {
+        grp.innerHTML = cust.length
+          ? cust.map((c) => `<option value="${c.key}">★ ${c.label}</option>`).join("")
+          : `<option value="" disabled>Create &amp; save in Career Reg Architect…</option>`;
+      }
+    } catch (_) {}
+  }
+
+  async function loadSeasonPaddockProfiles(year) {
+    const y = Number(year) || 2026;
+    if (PADDOCK_PROFILE_CACHE[y]) return PADDOCK_PROFILE_CACHE[y];
+    try {
+      const r = await fetch(`/api/paddock/profiles?year=${y}`);
+      if (r.ok) {
+        const d = await r.json();
+        PADDOCK_PROFILE_CACHE[y] = d;
+        return d;
+      }
+    } catch (_) {}
+    return null;
+  }
   const F1_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
   const ENG = window.F1RaceEngine;
@@ -3037,7 +3069,8 @@
           balanceBias: c.eng ? c.eng.balanceBias : 0,
           floorHealth: c.components && c.components.floor ? c.components.floor.health : 95,
           suspHealth: c.components && c.components.suspension ? c.components.suspension.health : 95,
-          palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
+          palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era,
+          regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
         })),
         raceState: {
           eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
@@ -3153,7 +3186,7 @@
       });
     });
     getEl("fsim-restart-btn")?.addEventListener("click", launchCurrentRound);
-    getEl("fsim-setup-toggle")?.addEventListener("click", () => toggleSetupDrawer());
+    getEl("fsim-setup-toggle")?.addEventListener("click", () => { refreshCustomFormulasList(); toggleSetupDrawer(); });
     getEl("fsim-setup-close")?.addEventListener("click", () => toggleSetupDrawer(false));
     getEl("fsim-radio-toggle")?.addEventListener("click", () => toggleRadioDrawer());
     getEl("fsim-radio-close")?.addEventListener("click", () => toggleRadioDrawer(false));
@@ -3282,7 +3315,8 @@
             idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
             inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
             liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear,
-            palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
+            palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era,
+            regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
           })),
           raceState: {
             eraKey: (fs.eraRule && fs.eraRule.key) || "2026",

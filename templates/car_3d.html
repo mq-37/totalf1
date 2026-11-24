@@ -87,7 +87,7 @@
 
 {% block scripts %}
   <script src="/static/vendor/three.min.js"></script>
-  <script src="/static/js/f1_car_3d.js"></script>
+  <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
   <script>
     (function () {
       var TEAMS = {{ teams | tojson }};

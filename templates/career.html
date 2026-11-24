@@ -404,13 +404,15 @@
           </div>
         </div>
 
-        <!-- NEW TAB: FIA STEWARDS' ROOM, 12-PT SUPER LICENCE, PU SUPPLIERS & F1 COMMISSION -->
+        <!-- NEW TAB: FIA STEWARDS' ROOM, REG ARCHITECT CAD GRAPHER, PADDOCK POLITICS & 12-PT SUPER LICENCE -->
         <div id="car-tab-stewards" class="car-tab-pane">
           <div class="car-two-col car-stewards-grid">
             <div class="car-panel">
               <div class="car-panel-head">
                 <div class="car-subtabs">
-                  <button type="button" class="car-btn-xs car-btn-red active" data-stew-sub="hearings"><i class="fas fa-gavel"></i> Stewards' Summons</button>
+                  <button type="button" class="car-btn-xs car-btn-red active" data-stew-sub="hearings"><i class="fas fa-gavel"></i> Stewards</button>
+                  <button type="button" class="car-btn-xs" data-stew-sub="architect"><i class="fas fa-drafting-compass"></i> Reg Architect &amp; CAD</button>
+                  <button type="button" class="car-btn-xs" data-stew-sub="politics"><i class="fas fa-users-cog"></i> Paddock Politics &amp; TPs</button>
                   <button type="button" class="car-btn-xs" data-stew-sub="pu"><i class="fas fa-bolt"></i> PU Suppliers</button>
                   <button type="button" class="car-btn-xs" data-stew-sub="commission"><i class="fas fa-landmark"></i> F1 Commission</button>
                 </div>
@@ -418,6 +420,12 @@
               </div>
               <div id="car-stew-sub-hearings" class="car-subpane active">
                 <div id="car-stewards-pending"></div>
+              </div>
+              <div id="car-stew-sub-architect" class="car-subpane">
+                <div id="car-reg-architect-host" class="car-reg-host"></div>
+              </div>
+              <div id="car-stew-sub-politics" class="car-subpane">
+                <div id="car-politics-host" class="car-politics-host"></div>
               </div>
               <div id="car-stew-sub-pu" class="car-subpane">
                 <div id="car-pu-contracts-grid" class="car-rd-grid"></div>
@@ -1092,6 +1100,7 @@
 <script src="/static/js/f1_custom_season.js?v={{ asset_v }}"></script>
 <script src="/static/js/career_hq_3d.js?v={{ asset_v }}"></script>
 <script src="/static/js/career_analytics.js?v={{ asset_v }}"></script>
+<script src="/static/js/reg_grapher.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_profile.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
 <script src="/static/js/career.js?v={{ asset_v }}"></script>
