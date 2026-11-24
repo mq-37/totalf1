@@ -104,6 +104,11 @@
     drsAnnounced: false,
     vscLaps: 0,
     safetyCarLaps: 0,
+    scUnlapped: false,
+    redFlag: null,
+    redFlagUsed: false,
+    debrisZones: [],
+    nextDebrisId: 1,
     yellowSector: 0,
     yellowTimer: 0,
     bestSectors: [999, 999, 999],
@@ -139,12 +144,129 @@
   const fmtLapTime = ENG.fmtLapTime;
   const isInDrsZone = ENG.isInDrsZone;
   const hasSatisfiedTwoCompoundRule = ENG.hasSatisfiedTwoCompoundRule;
-  function playSfx(name) {
+  function playSfx(name, ...args) {
     if (!fs.sfxOn || !window.F1Sfx) return;
     try {
-      if (typeof window.F1Sfx[name] === "function") window.F1Sfx[name]();
+      if (typeof window.F1Sfx[name] === "function") window.F1Sfx[name](...args);
       else if (window.F1Sfx.play) window.F1Sfx.play(name);
     } catch (_) {}
+  }
+
+  // Phase 2 Helpers: Trackside Smoking Breakdown Parking, Carbon Debris, Physical SC & Red Flag Standing Restarts!
+  function parkBreakdownCar(car, reason, kind) {
+    if (!car) return;
+    car.dnf = true;
+    car.dnfReason = reason || "Mechanical";
+    car.breakdownKind = kind || "engine";
+    car.parkedProg = ((car.totalProg % 1) + 1) % 1;
+    const nearSf = car.parkedProg < 0.12 || car.parkedProg > 0.88;
+    const pitSide = (fs.geom && fs.geom.pitSide) || 1;
+    car.parkedSide = nearSf ? -pitSide : (car.idx % 2 === 0 ? 1 : -1);
+    car.parkedYawOff = car.parkedSide * (kind === "crash" ? 0.78 : 0.34);
+    car.smokeActive = true;
+    car.cleared = false;
+    car.liveKph = 0;
+    car.livePhysKph = 0;
+    car.liveGear = 1;
+  }
+
+  function spawnDebrisZone(prog, lat, curLap) {
+    if (fs.debrisZones.length >= 6) fs.debrisZones.shift();
+    fs.debrisZones.push({
+      id: fs.nextDebrisId++,
+      prog: ((prog % 1) + 1) % 1,
+      lat: Math.max(-5, Math.min(5, lat || 0)),
+      lapAdded: curLap || 1,
+      clearAtLap: (curLap || 1) + 2,
+    });
+  }
+
+  function deploySafetyCar(reason, laps, fastMode) {
+    if (fs.finished || (fs.redFlag && fs.redFlag.active)) return;
+    fs.safetyCarLaps = Math.max(fs.safetyCarLaps || 0, laps || 2);
+    fs.scUnlapped = false;
+    fs.stats.scs += 1;
+    const leaderLap = Math.max(...fs.cars.map((c) => c.lap), 0) + 1;
+    if (!fastMode) {
+      showToast(`⚠️ SAFETY CAR DEPLOYED — ${reason}`, "warn");
+      showStewardsBanner("⚠ FIA RACE CONTROL · SAFETY CAR DEPLOYED", reason, "info");
+      playSfx("radioAlert");
+      updateChyron(`⚠ FIA SAFETY CAR DEPLOYED · ${reason.toUpperCase()}`);
+    }
+    addCommentary(leaderLap, `⚠️ FIA SAFETY CAR DEPLOYED! ${reason} — pack bunching behind the Aston Martin GT Safety Car!`, "warn");
+    if (fs.telemetry) fs.telemetry.addEvent(leaderLap, "sc", "Safety Car", reason, -1);
+  }
+
+  function triggerRedFlag(reason, fastMode) {
+    if (fs.finished || (fs.redFlag && fs.redFlag.active)) return;
+    const sorted = ENG.sortRaceStandings(fs.cars, false);
+    const leadLap = Math.max(1, Math.floor((sorted[0] && sorted[0].totalProg) || 1));
+    fs.redFlagUsed = true;
+    fs.safetyCarLaps = 0;
+    fs.vscLaps = 0;
+    fs.yellowSector = 0;
+    fs.redFlag = {
+      active: true,
+      timer: fastMode ? 0.1 : 4.5,
+      maxTimer: 4.5,
+      reason: reason || "Severe track obstruction",
+      leadLap,
+    };
+    if (!fastMode) {
+      showToast(`🚩 RED FLAG — SESSION SUSPENDED (${fs.redFlag.reason})`, "warn");
+      showStewardsBanner("🚩 FIA RED FLAG · SESSION SUSPENDED", `${fs.redFlag.reason} — Free tyre change & wing repairs in Pit Lane before Standing Restart!`, "penalty");
+      playSfx("radioAlert");
+      updateChyron(`🚩 RED FLAG · PIT LANE REPAIRS & FREE TYRES`);
+    }
+    addCommentary(leadLap, `🚩 RED FLAG! Session suspended (${fs.redFlag.reason}). Cars enter Pit Lane for free tyre swaps & wing repairs ahead of a Standing Restart!`, "warn");
+    if (fs.telemetry) fs.telemetry.addEvent(leadLap, "incident", "RED FLAG", fs.redFlag.reason, -1);
+  }
+
+  function executeRedFlagStandingRestart(fastMode) {
+    if (!fs.redFlag) return;
+    const leadLap = fs.redFlag.leadLap || 1;
+    fs.redFlag = null;
+    fs.debrisZones = [];
+    fs.cars.forEach((c) => { if (c.dnf) c.cleared = true; });
+    const running = ENG.sortRaceStandings(fs.cars, false).filter((c) => !c.dnf && !c.finishedRace);
+    const wantComp = fs.wetness >= 60 ? "wet" : (fs.wetness >= 22 ? "inter" : (fs.totalLaps - leadLap <= 6 ? "soft" : "medium"));
+    const perim = Math.max(1800, (fs.circuit && fs.circuit.length_km ? fs.circuit.length_km * 1000 : 4800));
+    const progStep = Math.max(0.0020, Math.min(0.0052, 16.5 / perim));
+    const startOffset = Math.max(0.0020, 9.0 / perim);
+
+    if (window.F1TrackArchitect) {
+      fs.startSeq = window.F1TrackArchitect.createStandingStartState(running, fs.circuit, { isRestart: true, skip: !!fastMode });
+    }
+    running.forEach((car, i) => {
+      car.totalProg = leadLap - (startOffset + i * progStep);
+      car.lap = Math.max(0, leadLap - 1);
+      car.latOffset = (i % 2 === 0 ? -2.55 : 2.55);
+      car.inPit = 0;
+      car.pitDuration = 0;
+      car.wingDamaged = false;
+      car.compound = wantComp;
+      car.nextCompound = wantComp;
+      car.tyreLife = 100;
+      car.tyreTemp = (COMPOUNDS[wantComp] || COMPOUNDS.medium).optTemp - 2;
+      if (COMPOUNDS[wantComp] && COMPOUNDS[wantComp].wet > 0) car.usedWet = true;
+      else car.dryCompoundsUsed.add(wantComp);
+      if (Array.isArray(car.stintHistory)) {
+        const lastSt = car.stintHistory[car.stintHistory.length - 1];
+        if (lastSt) lastSt.endLap = Math.max(lastSt.startLap, leadLap);
+        car.stintHistory.push({ compound: wantComp, startLap: leadLap, endLap: fs.totalLaps });
+      }
+      car.currentLapS = computeCarLapTime(car, fs.circuit, fs.wetness);
+    });
+    if (running[0]) fs.focusIdx = running[0].idx;
+    if (fs.cam && fs.geom && window.F1TrackRenderer && running[0]) {
+      const p0 = window.F1TrackRenderer.sampleTrack(fs.geom, running[0].totalProg);
+      fs.cam.x = p0.x; fs.cam.y = p0.y;
+    }
+    addCommentary(leadLap, `🔴 STANDING RESTART! ${running.length} cars grid up on fresh ${(COMPOUNDS[wantComp] || COMPOUNDS.medium).name}s — waiting for 5 red lights!`, "win");
+    if (!fastMode) {
+      showToast(`🔴 STANDING RESTART — ${running.length} CARS ON THE GRID!`, "warn");
+      updateChyron(`🔴 STANDING RESTART · POLE: ${running[0] ? running[0].card.code3 : "P1"}`);
+    }
   }
 
   function showToast(msg, tone) {
@@ -725,14 +847,61 @@
       }
     }
 
-    // Draw all 20-24 real 3D CPU cars!
+    // Draw scattered track Carbon-Fibre Debris Shards in 2D!
+    if (fs.debrisZones && fs.debrisZones.length) {
+      fs.debrisZones.forEach((dz) => {
+        const dp = R.sampleTrack(fs.geom, dz.prog);
+        ctx.save();
+        ctx.translate(dp.x + (dp.nx || 0) * (dz.lat || 0), dp.y + (dp.ny || 0) * (dz.lat || 0));
+        for (let k = 0; k < 7; k++) {
+          const ang = k * 1.9 + dz.id;
+          const r = 1.2 + (k % 3) * 1.4;
+          ctx.fillStyle = k % 3 === 0 ? "#f97316" : "#1e293b";
+          ctx.fillRect(Math.cos(ang) * r - 0.9, Math.sin(ang) * r - 0.6, 1.8, 1.2);
+        }
+        ctx.restore();
+      });
+    }
+
+    // Draw all 20-24 real 3D CPU cars (plus visibly parked smoking trackside breakdowns!)
     fs.carScreenPos = [];
     const labels = [];
     const drawOrder = renderCars.slice().sort((a, b) => (a.idx === activeFocusIdx ? 1 : 0) - (b.idx === activeFocusIdx ? 1 : 0));
     let focusHudInfo = null;
 
     drawOrder.forEach((car) => {
-      if (car.dnf) return;
+      if (car.dnf) {
+        if (car.cleared) return;
+        const bPose = R.sampleTrack(fs.geom, car.parkedProg != null ? car.parkedProg : car.totalProg);
+        const bSide = car.parkedSide != null ? car.parkedSide : (car.idx % 2 === 0 ? 1 : -1);
+        const bx = bPose.x + (bPose.nx || 0) * (bSide * 10.5);
+        const by = bPose.y + (bPose.ny || 0) * (bSide * 10.5);
+        const bAng = Math.atan2(bPose.ty, bPose.tx) + (car.parkedYawOff || (bSide * 0.4));
+        const comp = COMPOUNDS[car.compound] || COMPOUNDS.medium;
+        R.drawMiniF1Car(ctx, bx, by, bAng, (car.card && car.card.hero_color) || "#64748b", comp.color, {
+          isPlayer: false, wingDamaged: true, zoom: fs.cam.zoom, era: (car.card && car.card.hero_era) || "2020s",
+        });
+        // Rising breakdown smoke wisps on the 2D runoff verge!
+        const tNow = performance.now() * 0.002;
+        ctx.save();
+        for (let s = 0; s < 3; s++) {
+          const cyc = ((tNow + s * 0.33 + car.idx * 0.17) % 1);
+          ctx.fillStyle = `rgba(148,163,184,${(Math.sin(cyc * Math.PI) * 0.55).toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(bx + cyc * 6, by - cyc * 8, 1.8 + cyc * 3.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        const bsp = R.worldToScreen(fs.cam, bx, by, cssW, cssH);
+        if (bsp.x > -20 && bsp.x < cssW + 20 && bsp.y > -20 && bsp.y < cssH + 20) {
+          labels.push({
+            x: bsp.x + 12, y: bsp.y - 4, pos: "OUT",
+            code: `${(car.card && car.card.code3) || "DNF"}💨`,
+            color: "#ef4444", compColor: "#ef4444", drsOpen: false, isFocused: false, inPit: false,
+          });
+        }
+        return;
+      }
       const inPit = car.inPit > 0 && car.pitDuration > 0;
       const pitProgress = inPit ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : null;
       const pose = inPit
@@ -876,7 +1045,8 @@
 
     const flagEl = getEl("fsim-flag-pill");
     if (flagEl) {
-      if (fs.finished) { flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
+      if (fs.finished) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
+      else if (fs.redFlag && fs.redFlag.active) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.style.background = "rgba(220,38,38,.36)"; flagEl.style.borderColor = "#ef4444"; flagEl.style.color = "#fecaca"; flagEl.innerHTML = `<i class="fas fa-flag"></i> RED FLAG (${Math.ceil(fs.redFlag.timer)}s)`; }
       else if (fs.startSeq && fs.startSeq.active && !fs.startSeq.lightsOut) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.style.background = "rgba(239,68,68,.24)"; flagEl.style.borderColor = "rgba(239,68,68,.65)"; flagEl.style.color = "#fca5a5"; flagEl.innerHTML = `<i class="fas fa-traffic-light"></i> GRID ${fs.startSeq.litCount || 0}/5`; }
       else if (fs.chequeredFlag) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
       else if (fs.safetyCarLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
@@ -1097,12 +1267,26 @@
     const lapScale = (fs.circuit.base_lap_s / 22.0);
     const simDt = dt * lapScale;
 
+    // FIA Red Flag Suspension Countdown (Pit-Lane Repairs + Free Tyre Change -> 5-Red-Lights Standing Restart!)
+    if (fs.redFlag && fs.redFlag.active) {
+      fs.redFlag.timer -= dt;
+      fs.cars.forEach((c) => {
+        if (!c.dnf) { c.liveKph = 0; c.livePhysKph = 0; c.liveGear = 1; c.aiStatus = "🚩 RED FLAG · PIT REPAIR"; }
+      });
+      if (fs.redFlag.timer <= 0) {
+        executeRedFlagStandingRestart(fastMode);
+      }
+      if (!fastMode && (performance.now() - fs.lastUiSync > 220)) { fs.lastUiSync = performance.now(); renderHud(); }
+      return !fastMode ? false : true;
+    }
+
     // FIA 5-Red-Lights Standing Start Sequence (0 kph grid hold -> randomized hold -> LIGHTS OUT!)
     if (fs.startSeq && fs.startSeq.active && window.F1TrackArchitect) {
       const sRes = window.F1TrackArchitect.stepStandingStart(fs.startSeq, fs.cars, dt, fastMode);
       if (sRes.newLight > 0 && !fastMode) {
         playSfx("startLight", sRes.newLight);
-        updateChyron(`🔴 ${"●".repeat(sRes.newLight)}${"○".repeat(5 - sRes.newLight)} · FIA STANDING START`);
+        updateChyron(`🔴 ${"●".repeat(sRes.newLight)}${"○".repeat(5 - sRes.newLight)} · ${fs.startSeq.bannerLabel || "FIA STANDING START"}`);
+        renderHud();
       }
       if (sRes.lightsOutNow) {
         const pole = fs.cars[0];
@@ -1117,6 +1301,7 @@
         if (stalled && !fastMode) msg += ` ⚠️ ${stalled.card.code3} triggers anti-stall off the line!`;
         addCommentary(1, msg, "win");
         updateChyron(`🟢 LIGHTS OUT · POLE: ${pole ? pole.card.code3 : "P1"}`);
+        if (!fastMode) renderHud();
       }
       if (sRes.holding) {
         return false;
@@ -1380,34 +1565,51 @@
           return;
         }
 
-        // Era-Scaled Mechanical DNF
+        // Era-Scaled Mechanical DNF (car parks visibly trackside with rising engine smoke!)
         const raceMechChance = Math.min(0.28, (car.card.game.stats.dnf_rate / 100) * 0.42 * (era.reliability_dnf_mult || 1.0)) * Math.sqrt(fs.chaosMult);
         const perLapDnf = raceMechChance / Math.max(10, fs.totalLaps);
         const pushRisk = car.paceMode === "push" ? 1.25 : 0.85;
         if (car.lap >= 2 && fs.stats.dnfs < 8 && Math.random() < perLapDnf * pushRisk) {
-          car.dnf = true;
-          car.dnfReason = "Mechanical";
+          parkBreakdownCar(car, "Mechanical", "engine");
           fs.stats.dnfs += 1;
           fs.stats.incidents += 1;
           const secNum = Math.floor((((car.totalProg % 1) + 1) % 1) * 3) + 1;
-          fs.yellowSector = secNum; fs.yellowTimer = 5.5;
+          fs.yellowSector = secNum; fs.yellowTimer = 6.5;
           const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || `Sector ${secNum}`;
-          addCommentary(car.lap + 1, `💥 MECHANICAL DNF! ${car.card.clean_name} parks it at ${corner}!`, "warn");
-          if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "dnf", `${car.card.code3} DNF`, `Mechanical retirement at ${corner}`, car.idx);
+          addCommentary(car.lap + 1, `💨 MECHANICAL DNF! ${car.card.clean_name} pulls off smoking at ${corner} — Yellow Flag S${secNum}!`, "warn");
+          if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "dnf", `${car.card.code3} DNF`, `Smoking mechanical retirement at ${corner}`, car.idx);
           if (fs.safetyCarLaps === 0 && fs.vscLaps === 0) {
             const roll = Math.random();
-            if (roll < 0.34 * (era.sc_chance_mult || 1.0)) {
-              fs.safetyCarLaps = 2; fs.stats.scs += 1;
-              if (!fastMode) { showToast("⚠️ SAFETY CAR DEPLOYED!", "warn"); playSfx("radioAlert"); }
-              addCommentary(car.lap + 1, "⚠️ SAFETY CAR DEPLOYED! Pack bunching up & cheap pit window open!", "warn");
-              if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "sc", "Safety Car", `Deployed after ${car.card.code3} retirement`, -1);
-            } else if (era.vsc_enabled && roll < 0.65) {
+            if (roll < 0.36 * (era.sc_chance_mult || 1.0)) {
+              deploySafetyCar(`${car.card.code3} stopped smoking at ${corner}`, 2, fastMode);
+            } else if (era.vsc_enabled && roll < 0.68) {
               fs.vscLaps = 1;
               if (!fastMode) { showToast("⚠️ VIRTUAL SAFETY CAR (VSC)!", "warn"); playSfx("radioAlert"); }
-              addCommentary(car.lap + 1, "⚠️ VIRTUAL SAFETY CAR (VSC) deployed!", "warn");
+              addCommentary(car.lap + 1, "⚠️ VIRTUAL SAFETY CAR (VSC) deployed while marshals recover stranded car!", "warn");
             }
           }
           return;
+        }
+
+        // FIA Track Limits Strike Counter (Art. 33.3: 3 strikes -> Black & White Flag; 4th -> +5s Penalty!)
+        if (car.lap >= 2 && fs.safetyCarLaps === 0 && fs.vscLaps === 0 && (car.paceMode === "push" || car.inDrsRange)) {
+          if (Math.random() < 0.022 * (fs.chaosMult || 1)) {
+            car.trackLimitStrikes = (car.trackLimitStrikes || 0) + 1;
+            if (car.trackLimitStrikes === 3) {
+              if (!fastMode && (car.pos <= 8 || car.idx === fs.focusIdx)) {
+                showStewardsBanner("🏁 FIA BLACK & WHITE FLAG · ART. 33.3", `${car.card.clean_name} — 3 Track Limits Strikes (Final Warning)`, "info");
+              }
+              addCommentary(car.lap + 1, `🏁 BLACK & WHITE FLAG: ${car.card.clean_name} warned for track limits (Strike 3/3)!`, "info");
+            } else if (car.trackLimitStrikes >= 4 && (car.trackLimitStrikes - 4) % 2 === 0) {
+              car.timePenaltyS = (car.timePenaltyS || 0) + 5;
+              if (!fastMode) {
+                showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY (ART. 33.3)", `${car.card.clean_name} — Exceeding Track Limits (Strike ${car.trackLimitStrikes})`, "penalty");
+                playSfx("radioAlert");
+              }
+              addCommentary(car.lap + 1, `⚖️ FIA PENALTY: +5s for ${car.card.clean_name} (Track Limits — Art. 33.3)!`, "warn");
+              if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "incident", `${car.card.code3} +5s Pen`, "Track Limits (Art. 33.3)", car.idx);
+            }
+          }
         }
 
         // Era-Aware CPU Pit Strategy (Refuelling, Weather Hysteresis, 2-Compound Rule, Pit Errors!)
@@ -1502,14 +1704,21 @@
           if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.target.idx, `🌀 SPIN AT ${corner.toUpperCase()}!`); }
           if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "incident", `Spin at ${corner}`, `${ev.chaser.card.code3} & ${ev.target.card.code3}`, ev.target.idx);
         } else if (ev.type === "crash") {
-          fs.yellowSector = ev.sector; fs.yellowTimer = 7.5;
-          if (ev.target.dnf) { fs.stats.dnfs += 1; ev.target.dnfReason = "Collision"; }
-          if (ev.chaser.dnf) { fs.stats.dnfs += 1; ev.chaser.dnfReason = "Collision"; }
-          const msg = `🚨 CROFTY: HUGE INCIDENT AT ${corner.toUpperCase()}! ${aName} & ${bName} tangle — SAFETY CAR DEPLOYED!`;
-          if (fs.safetyCarLaps === 0) { fs.safetyCarLaps = 2; fs.stats.scs += 1; }
+          fs.yellowSector = ev.sector; fs.yellowTimer = 8.5;
+          spawnDebrisZone(ev.target.totalProg, ev.target.latOffset, leaderLap + 1);
+          let crashDnfs = 0;
+          if (ev.target.dnf) { parkBreakdownCar(ev.target, "Collision", "crash"); fs.stats.dnfs += 1; crashDnfs += 1; }
+          if (ev.chaser.dnf) { parkBreakdownCar(ev.chaser, "Collision", "crash"); fs.stats.dnfs += 1; crashDnfs += 1; }
+          const msg = `🚨 CROFTY: HUGE INCIDENT AT ${corner.toUpperCase()}! ${aName} & ${bName} tangle — carbon debris across the circuit!`;
           addCommentary(leaderLap + 1, msg, "warn", clipId);
           if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.chaser.idx, `🚨 CRASH AT ${corner.toUpperCase()}!`); }
-          if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "sc", `Crash & SC at ${corner}`, `${aName} & ${bName}`, ev.chaser.idx);
+          if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "sc", `Crash & Debris at ${corner}`, `${aName} & ${bName}`, ev.chaser.idx);
+          // Realistic & rare Red Flag (~7% on severe multi-car pile-ups with remaining laps!)
+          if (!fs.redFlagUsed && leaderLap >= 2 && leaderLap <= fs.totalLaps - 3 && (crashDnfs >= 2 || Math.random() < 0.08 * (fs.chaosMult || 1))) {
+            triggerRedFlag(`Heavy collision & barrier debris at ${corner}`, fastMode);
+          } else if (fs.safetyCarLaps === 0) {
+            deploySafetyCar(`Collision & debris at ${corner}`, 2, fastMode);
+          }
         }
       });
 
@@ -1528,10 +1737,33 @@
 
     const newLeaderLap = Math.max(...fs.cars.map((c) => c.lap), 0);
     if (newLeaderLap > prevLeaderLap) {
+      // Clear marshaled track debris zones once cleared
+      if (fs.debrisZones.length) {
+        fs.debrisZones = fs.debrisZones.filter((dz) => newLeaderLap < dz.clearAtLap);
+      }
+      // Torrential Monsoon Red Flag check (wetness >= 88%, rare & realistic!)
+      if (!fs.redFlagUsed && fs.wetness >= 88 && newLeaderLap >= 2 && newLeaderLap <= fs.totalLaps - 3 && Math.random() < 0.25) {
+        triggerRedFlag(`Torrential standing water (${Math.round(fs.wetness)}%)`, fastMode);
+      }
       if (fs.safetyCarLaps > 0) {
+        // FIA Art. 55.13: Lapped Cars May Now Overtake the Safety Car before final SC lap!
+        if (fs.safetyCarLaps === 2 && !fs.scUnlapped) {
+          fs.scUnlapped = true;
+          const leaderProg = Math.max(...fs.cars.filter((c) => !c.dnf).map((c) => c.totalProg), 0);
+          const lapped = fs.cars.filter((c) => !c.dnf && !c.finishedRace && (leaderProg - c.totalProg) >= 0.92);
+          if (lapped.length) {
+            lapped.forEach((lc) => { lc.totalProg += 1.0; lc.lap = Math.floor(lc.totalProg); });
+            addCommentary(newLeaderLap + 1, `🟡 FIA ART. 55.13: Lapped cars (${lapped.map((x) => x.card.code3).join(", ")}) overtake the Safety Car to unlap themselves!`, "info");
+            if (!fastMode) showStewardsBanner("⚠ FIA ART. 55.13 · UNLAPPING", `Lapped cars may now overtake the Safety Car (${lapped.length} unlapped)`, "info");
+          }
+        }
         fs.safetyCarLaps -= 1;
-        if (fs.safetyCarLaps === 0) {
-          addCommentary(newLeaderLap + 1, "🟢 SAFETY CAR IN THIS LAP — GREEN FLAG RESTART!", "win");
+        if (fs.safetyCarLaps === 1) {
+          addCommentary(newLeaderLap + 1, "🟡 SAFETY CAR IN THIS LAP — roof lights extinguished, pack preparing for restart!", "warn");
+        } else if (fs.safetyCarLaps === 0) {
+          fs.scUnlapped = false;
+          fs.debrisZones = [];
+          addCommentary(newLeaderLap + 1, "🟢 SAFETY CAR IN — GREEN FLAG RESTART!", "win");
           if (!fastMode) showToast("🟢 SAFETY CAR IN — RACING RESUMES!", "win");
         }
       }
@@ -1865,6 +2097,10 @@
     fs.drsAnnounced = false;
     fs.vscLaps = 0;
     fs.safetyCarLaps = 0;
+    fs.scUnlapped = false;
+    fs.redFlag = null;
+    fs.redFlagUsed = false;
+    fs.debrisZones = [];
     fs.yellowSector = 0;
     fs.yellowTimer = 0;
     fs.bestSectors = [999, 999, 999];
@@ -2095,6 +2331,8 @@
         cars: fs.cars.map((c) => ({
           idx: c.idx, code3: c.card.code3, team: c.card.hero_team, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
+          wingDamaged: !!c.wingDamaged, parkedProg: c.parkedProg, parkedSide: c.parkedSide, parkedYawOff: c.parkedYawOff,
+          breakdownKind: c.breakdownKind, smokeActive: c.smokeActive, cleared: !!c.cleared,
           liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
@@ -2112,7 +2350,10 @@
           totalLaps: fs.totalLaps,
           wetness: fs.wetness,
           scActive: fs.safetyCarLaps > 0,
+          scInThisLap: fs.safetyCarLaps === 1,
           vscActive: fs.vscLaps > 0,
+          redFlag: !!(fs.redFlag && fs.redFlag.active),
+          debrisZones: fs.debrisZones,
           yellowSector: fs.yellowSector,
           chequered: fs.chequeredFlag || fs.finished,
           startSeq: fs.startSeq,
@@ -2156,6 +2397,37 @@
     }
 
     getEl("fsim-start-btn")?.addEventListener("click", startNewBroadcast);
+    getEl("fsim-rc-sc-btn")?.addEventListener("click", () => {
+      if (!fs.running || fs.finished) return;
+      toggleSetupDrawer(false);
+      deploySafetyCar("Race Control Manual SC Deployment", 2, false);
+      renderHud();
+    });
+    getEl("fsim-rc-rf-btn")?.addEventListener("click", () => {
+      if (!fs.running || fs.finished) return;
+      toggleSetupDrawer(false);
+      triggerRedFlag("Race Control Manual Red Flag", false);
+      renderHud();
+    });
+    getEl("fsim-rc-brk-btn")?.addEventListener("click", () => {
+      if (!fs.running || fs.finished) return;
+      toggleSetupDrawer(false);
+      const cand = fs.cars.find((c) => !c.dnf && !c.finishedRace && c.pos >= 4) || fs.cars.find((c) => !c.dnf && !c.finishedRace);
+      if (!cand) return;
+      parkBreakdownCar(cand, "Engine Failure", "engine");
+      fs.stats.dnfs += 1;
+      fs.stats.incidents += 1;
+      const curLap = Math.max(1, (cand.lap || 0) + 1);
+      const secNum = Math.floor((((cand.totalProg % 1) + 1) % 1) * 3) + 1;
+      fs.yellowSector = secNum; fs.yellowTimer = 8.0;
+      spawnDebrisZone(cand.totalProg, cand.latOffset, curLap);
+      const victim = fs.cars.find((c) => !c.dnf && c.idx !== cand.idx);
+      if (victim) victim.wingDamaged = true;
+      addCommentary(curLap, `💨 BREAKDOWN! ${cand.card.clean_name} pulls off smoking in Sector ${secNum} with carbon debris on track!`, "warn");
+      showStewardsBanner("⚠ YELLOW FLAG · TRACKSIDE BREAKDOWN", `${cand.card.clean_name} parked smoking off-track — Marshals clearing debris`, "info");
+      playSfx("radioAlert");
+      renderHud();
+    });
     getEl("fsim-custom-season-btn")?.addEventListener("click", () => {
       if (!window.F1CustomSeason) return;
       window.F1CustomSeason.open({

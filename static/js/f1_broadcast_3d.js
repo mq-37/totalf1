@@ -511,7 +511,96 @@
     drsBar.position.set(0, 1.06, -2.38);
     carGrp.add(drsBar);
 
-    return { ringMat, brakeMat, rainMat, drsMat };
+    // 6. Procedural Damaged Front-Wing Overlay (visibly cracked/tilted endplate scraping asphalt!)
+    const dmgWingGrp = new THREE.Group();
+    const brokenEndplate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.62, 0.14, 0.42),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65, metalness: 0.35 })
+    );
+    brokenEndplate.position.set(0.62, 0.13, 2.38);
+    brokenEndplate.rotation.set(0.18, 0.28, -0.44);
+    const scrapeGlow = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.08, 0.14),
+      new THREE.MeshBasicMaterial({ color: 0xf97316 })
+    );
+    scrapeGlow.position.set(0.76, 0.08, 2.48);
+    dmgWingGrp.add(brokenEndplate, scrapeGlow);
+    dmgWingGrp.visible = false;
+    carGrp.add(dmgWingGrp);
+
+    return { ringMat, brakeMat, rainMat, drsMat, dmgWingGrp };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Physical 3D FIA Safety Car (Aston Martin Racing Green GT Coupe + LED Lightbar!)
+  // ---------------------------------------------------------------------------
+  function buildSafetyCar3D() {
+    const sc = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x00594f, roughness: 0.22, metalness: 0.72 });
+    const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 0.14, metalness: 0.85 });
+    const limeMat = new THREE.MeshBasicMaterial({ color: 0xc8ff00 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x11151d, roughness: 0.85 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3, metalness: 0.8 });
+
+    // Sculpted GT lower chassis & bonnet
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.62, 4.75), bodyMat);
+    chassis.position.set(0, 0.50, 0);
+    chassis.castShadow = true;
+    sc.add(chassis);
+
+    // Aerodynamic coupe greenhouse / cabin
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.56, 2.25), cabinMat);
+    cabin.position.set(0, 1.02, -0.22);
+    cabin.castShadow = true;
+    sc.add(cabin);
+
+    // Lime-yellow FIA side stripe & rear GT wing
+    const stripeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 4.2), limeMat);
+    stripeL.position.set(-1.04, 0.44, 0);
+    const stripeR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 4.2), limeMat);
+    stripeR.position.set(1.04, 0.44, 0);
+    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.08, 0.38), cabinMat);
+    spoiler.position.set(0, 1.04, -2.18);
+    sc.add(stripeL, stripeR, spoiler);
+
+    // Glowing LED Headlights & Taillights
+    const hlMat = new THREE.MeshBasicMaterial({ color: 0xfef9c3 });
+    const tlMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+    [-0.68, 0.68].forEach((ox) => {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.08), hlMat);
+      hl.position.set(ox, 0.56, 2.39);
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.14, 0.08), tlMat);
+      tl.position.set(ox, 0.58, -2.39);
+      sc.add(hl, tl);
+    });
+
+    // 4 GT Wheels
+    const wGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.32, 14);
+    wGeo.rotateZ(Math.PI * 0.5);
+    const rGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.34, 10);
+    rGeo.rotateZ(Math.PI * 0.5);
+    [[-1.02, 0.36, 1.48], [1.02, 0.36, 1.48], [-1.02, 0.36, -1.48], [1.02, 0.36, -1.48]].forEach(([x, y, z]) => {
+      const w = new THREE.Mesh(wGeo, tireMat); w.position.set(x, y, z); sc.add(w);
+      const r = new THREE.Mesh(rGeo, rimMat); r.position.set(x, y, z); sc.add(r);
+    });
+
+    // FIA Roof Lightbar (Flashing Amber -> Green when "Safety Car In This Lap"!)
+    const barFrame = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.14, 0.34), cabinMat);
+    barFrame.position.set(0, 1.37, -0.15);
+    sc.add(barFrame);
+    const amberL = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const amberR = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const centerMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+    const lampL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.38), amberL);
+    lampL.position.set(-0.42, 1.39, -0.15);
+    const lampR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.38), amberR);
+    lampR.position.set(0.42, 1.39, -0.15);
+    const lampC = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.38), centerMat);
+    lampC.position.set(0, 1.39, -0.15);
+    sc.add(lampL, lampR, lampC);
+
+    sc.visible = false;
+    return { group: sc, amberL, amberR, centerMat };
   }
 
   // ---------------------------------------------------------------------------
@@ -530,13 +619,16 @@
       ctx.fillRect(0, 0, 512, 256);
 
       // Top broadcast red/gold header bar
-      ctx.fillStyle = rs.chequered ? "#facc15" : (rs.scActive ? "#f59e0b" : "#e10600");
+      ctx.fillStyle = rs.redFlag ? "#dc2626" : (rs.chequered ? "#facc15" : (rs.scActive ? "#f59e0b" : "#e10600"));
       ctx.fillRect(0, 0, 512, 52);
-      ctx.fillStyle = (rs.chequered || rs.scActive) ? "#0f172a" : "#ffffff";
+      ctx.fillStyle = (rs.chequered || rs.scActive) && !rs.redFlag ? "#0f172a" : "#ffffff";
       ctx.font = "900 26px sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(
-        rs.chequered ? "🏁 CHEQUERED FLAG" : (rs.scActive ? "⚠ SAFETY CAR" : `F1 LIVE · ${(circuitName || "GP").toUpperCase().slice(0, 18)}`),
+        rs.redFlag ? "🚩 RED FLAG · SUSPENDED"
+          : (rs.chequered ? "🏁 CHEQUERED FLAG"
+            : (rs.scActive ? (rs.scInThisLap ? "⚠ SC IN THIS LAP" : "⚠ FIA SAFETY CAR")
+              : `F1 LIVE · ${(circuitName || "GP").toUpperCase().slice(0, 18)}`)),
         16, 35
       );
       ctx.textAlign = "right";
@@ -856,6 +948,11 @@
       sparkSystem: null,
       magSparkSystem: null,
       spraySystem: null,
+      breakdownSmokeSystem: null,
+      safetyCar3D: null,
+      marshalPanels: [],
+      debrisGroup: null,
+      debrisKey: "",
       carMeshes: new Map(),   // carIdx -> { group, isHero, fx }
       carPhysics: new Map(),  // carIdx -> F1VehiclePhysics state
       pitCrewGroup: null,
@@ -911,6 +1008,11 @@
       state.sparkSystem = null;
       state.magSparkSystem = null;
       state.spraySystem = null;
+      state.breakdownSmokeSystem = null;
+      state.safetyCar3D = null;
+      state.marshalPanels = [];
+      state.debrisGroup = null;
+      state.debrisKey = "";
       state.camInit = false;
     }
 
@@ -1698,6 +1800,37 @@
       state.sparkSystem = makePool(360, 0xffb326, 0.34, 0.95, sparkTex, false);
       state.magSparkSystem = makePool(180, 0xfff3b0, 0.36, 0.95, sparkTex, false);
       state.spraySystem = makePool(240, 0x9fb4ca, 0.72, 0.24, mistTex, false);
+      state.breakdownSmokeSystem = makePool(220, 0x64748b, 1.85, 0.52, mistTex, false);
+
+      // 13b. Physical 3D FIA Safety Car + Trackside FIA Digital Marshal Flag Panels + Persistent Track Debris Group
+      state.safetyCar3D = buildSafetyCar3D();
+      grp.add(state.safetyCar3D.group);
+
+      state.debrisGroup = new THREE.Group();
+      grp.add(state.debrisGroup);
+      state.debrisKey = "";
+
+      state.marshalPanels = [];
+      const postSteel = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.55 });
+      for (let mi = 0; mi < 12; mi++) {
+        const mProg = (mi + 0.5) / 12;
+        const mp = sample3DTrack(mProg);
+        const rx = -mp.tz, rz = mp.tx;
+        const side = (mProg < 0.12 || mProg > 0.88) ? -pitSide : (mi % 2 === 0 ? 1 : -1);
+        const mx = mp.x + rx * side * 14.4;
+        const mz = mp.z + rz * side * 14.4;
+        const pGrp = new THREE.Group();
+        pGrp.position.set(mx, 0, mz);
+        pGrp.rotation.y = Math.atan2(mp.tx, mp.tz);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 3.6, 6), postSteel);
+        pole.position.y = 1.8;
+        const panelMat = new THREE.MeshBasicMaterial({ color: 0x111827 });
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.15, 1.75), panelMat);
+        panel.position.set(0, 3.35, 0);
+        pGrp.add(pole, panel);
+        grp.add(pGrp);
+        state.marshalPanels.push({ mat: panelMat, sector: Math.floor(mProg * 3) + 1 });
+      }
 
       // 14. Obstruction-Free Elevated Trackside TV Broadcast Cameras
       state.tvCams = (layout ? layout.tvCams : []).map((tc) => ({
@@ -1873,10 +2006,130 @@
       // Reset pit box states each frame before animating active pitting cars
       const activeBoxState = new Map();
 
+      // Sync Persistent 3D Track Carbon-Fibre Debris Shards (cleared by marshals / SC / Red Flag!)
+      const debrisZones = Array.isArray(rs.debrisZones) ? rs.debrisZones : [];
+      const dKey = debrisZones.map((d) => d.id).join(",");
+      if (state.debrisGroup && dKey !== state.debrisKey) {
+        state.debrisKey = dKey;
+        while (state.debrisGroup.children.length) {
+          const ch = state.debrisGroup.children[0];
+          state.debrisGroup.remove(ch);
+          if (ch.geometry) ch.geometry.dispose();
+          if (ch.material) ch.material.dispose();
+        }
+        const carbMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.7, metalness: 0.25 });
+        const orangeMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+        debrisZones.forEach((dz) => {
+          const sp = sample3DTrack(dz.prog || 0);
+          const rx = -sp.tz, rz = sp.tx;
+          for (let k = 0; k < 10; k++) {
+            const ang = (k * 2.399) + (dz.id || 1);
+            const rad = 0.8 + (k % 5) * 1.15;
+            const lx = (dz.lat || 0) + Math.cos(ang) * rad;
+            const lz = Math.sin(ang) * rad * 1.4;
+            const shard = new THREE.Mesh(
+              new THREE.BoxGeometry(0.32 + (k % 3) * 0.14, 0.06, 0.22 + (k % 2) * 0.16),
+              k % 4 === 0 ? orangeMat : carbMat
+            );
+            shard.position.set(
+              sp.x + rx * lx + sp.tx * lz,
+              0.08,
+              sp.z + rz * lx + sp.tz * lz
+            );
+            shard.rotation.set(0.1 * k, ang, 0.2 * (k % 3));
+            state.debrisGroup.add(shard);
+          }
+        });
+      }
+
+      // Animate Trackside FIA Digital Marshal Flag Panels (Red Flag / Safety Car / Yellow Sector!)
+      if (state.marshalPanels && state.marshalPanels.length) {
+        const blinkOn = Math.floor(state.elapsed * 4.5) % 2 === 0;
+        for (let mi = 0; mi < state.marshalPanels.length; mi++) {
+          const mp = state.marshalPanels[mi];
+          if (rs.redFlag) {
+            mp.mat.color.setHex(blinkOn ? 0xef4444 : 0x7f1d1d);
+          } else if (rs.scActive || rs.vscActive || (rs.yellowSector > 0 && mp.sector === rs.yellowSector)) {
+            mp.mat.color.setHex(blinkOn ? 0xfacc15 : 0x713f12);
+          } else {
+            mp.mat.color.setHex(0x111827);
+          }
+        }
+      }
+
+      // Physical 3D FIA Safety Car ahead of P1 during Safety Car periods!
+      if (state.safetyCar3D) {
+        if (rs.scActive && !rs.redFlag) {
+          const leaderCar = cars.find((c) => !c.dnf && c.pos === 1) || cars.find((c) => !c.dnf);
+          if (leaderCar) {
+            state.safetyCar3D.group.visible = true;
+            const scProg = (leaderCar.totalProg || 0) + 0.013;
+            const scPose = sample3DTrack(scProg);
+            const scPhase = Math.floor(state.elapsed * 6.5) % 2;
+            const scIn = !!rs.scInThisLap;
+            // On final SC lap near pit entry, peel slightly toward pitSide!
+            const pMod = ((scProg % 1) + 1) % 1;
+            const peel = (scIn && pMod > 0.88) ? (state.pitSide * ((pMod - 0.88) / 0.12) * 8.5) : 0;
+            state.safetyCar3D.group.position.set(
+              scPose.x + (-scPose.tz) * peel,
+              0.04,
+              scPose.z + scPose.tx * peel
+            );
+            state.safetyCar3D.group.rotation.y = Math.atan2(scPose.tx, scPose.tz);
+            if (scIn) {
+              // Roof lights switch OFF / Green when Safety Car is coming in this lap!
+              state.safetyCar3D.amberL.color.setHex(0x1e293b);
+              state.safetyCar3D.amberR.color.setHex(0x1e293b);
+              state.safetyCar3D.centerMat.color.setHex(scPhase === 0 ? 0x22c55e : 0x14532d);
+            } else {
+              state.safetyCar3D.amberL.color.setHex(scPhase === 0 ? 0xfacc15 : 0x78350f);
+              state.safetyCar3D.amberR.color.setHex(scPhase === 1 ? 0xfacc15 : 0x78350f);
+              state.safetyCar3D.centerMat.color.setHex(0x22c55e);
+            }
+          }
+        } else {
+          state.safetyCar3D.group.visible = false;
+        }
+      }
+
       cars.forEach((car) => {
         const existing = state.carMeshes.get(car.idx);
         if (car.dnf) {
-          if (existing) existing.group.visible = false;
+          // Procedural Trackside Smoking Breakdown / Crash Car — NO MORE VANISHING DNFs!
+          if (car.cleared) {
+            if (existing) existing.group.visible = false;
+            return;
+          }
+          const entry = ensureCarMesh(car, false);
+          const mesh = entry.group;
+          mesh.visible = true;
+          const bPose = sample3DTrack(car.parkedProg != null ? car.parkedProg : (car.totalProg || 0));
+          const bSide = car.parkedSide != null ? car.parkedSide : (car.idx % 2 === 0 ? 1 : -1);
+          const bLat = bSide * 11.4;
+          const bx = bPose.x + (-bPose.tz) * bLat;
+          const bz = bPose.z + bPose.tx * bLat;
+          const bYaw = Math.atan2(bPose.tx, bPose.tz) + (car.parkedYawOff != null ? car.parkedYawOff : (bSide * 0.42));
+          mesh.position.set(bx, 0.05, bz);
+          mesh.rotation.order = "YXZ";
+          mesh.rotation.set(0.03, bYaw, bSide * 0.05);
+          if (entry.fx) {
+            entry.fx.brakeMat.opacity = 0;
+            entry.fx.drsMat.opacity = 0;
+            entry.fx.rainMat.opacity = rainBlink;
+            if (entry.fx.dmgWingGrp) entry.fx.dmgWingGrp.visible = !!car.wingDamaged || car.breakdownKind === "crash";
+          }
+          if (!paused && car.smokeActive !== false && state.breakdownSmokeSystem && Math.random() < 0.55) {
+            spawnParticle(
+              state.breakdownSmokeSystem,
+              bx + (Math.random() - 0.5) * 0.9,
+              0.72 + Math.random() * 0.3,
+              bz + (Math.random() - 0.5) * 0.9,
+              (Math.random() - 0.5) * 1.4,
+              1.6 + Math.random() * 1.5,
+              (Math.random() - 0.5) * 1.4,
+              2.2 + Math.random() * 1.2
+            );
+          }
           return;
         }
         const entry = ensureCarMesh(car, nearestIds.has(car.idx));
@@ -1954,13 +2207,28 @@
         mesh.rotation.order = "YXZ";
         mesh.rotation.set(pitchRad, yaw, rollRad);
 
-        // Update dynamic Pirelli tyre compound ring, glowing brakes, DRS & wet rain light
+        // Update dynamic Pirelli tyre compound ring, glowing brakes, DRS, wet rain light & 3D damaged front wing!
         if (entry.fx) {
           entry.fx.ringMat.color.setHex(COMPOUND_HEX[car.compound] || 0xfacc15);
           const braking = (car.liveLongG || 0) < -1.1 || (pitMotion && pitMotion.phase === "turn_in");
           entry.fx.brakeMat.opacity = braking ? 0.92 : 0.0;
           entry.fx.drsMat.opacity = (!inPit && (car.drsOpen || (dyn && dyn.inXMode))) ? 0.95 : 0.0;
           entry.fx.rainMat.opacity = wetness >= 20 ? rainBlink : 0.08;
+          if (entry.fx.dmgWingGrp) entry.fx.dmgWingGrp.visible = !!car.wingDamaged;
+        }
+        // Front-wing endplate scraping asphalt sparks when damaged!
+        if (!paused && !inPit && car.wingDamaged && (car.liveKph || 0) > 130 && Math.random() < 0.45) {
+          const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+          spawnParticle(
+            state.sparkSystem,
+            wx + fwdX * 2.2 + (Math.random() - 0.5) * 0.5,
+            0.09,
+            wz + fwdZ * 2.2 + (Math.random() - 0.5) * 0.5,
+            -fwdX * 14 + (Math.random() - 0.5) * 3,
+            1.1 + Math.random() * 1.4,
+            -fwdZ * 14 + (Math.random() - 0.5) * 3,
+            0.22
+          );
         }
 
         // Authentic Per-Car Physics Particles:
@@ -2044,6 +2312,7 @@
       stepPool(state.sparkSystem, stepDt, 12.5);
       stepPool(state.magSparkSystem, stepDt, 12.0);
       stepPool(state.spraySystem, stepDt, 1.4);
+      stepPool(state.breakdownSmokeSystem, stepDt, -0.55);
 
       // Keep sun shadow frustum centered right on the hero car for crisp shadows everywhere on track!
       if (state.sunLight) {
@@ -2147,9 +2416,13 @@
         const dispKph = isHold ? 0 : (focPitMotion ? Math.round(focPitMotion.speedKph) : Math.round(focCar.liveKph != null ? focCar.liveKph : 260));
         const dispGear = isHold ? 1 : (focPitMotion && focPitMotion.stopped ? "N" : (focCar.liveGear || 6));
         let statusTag = "";
-        if (isHold) {
+        if (rs.redFlag) {
+          statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(239,68,68,.7);background:rgba(153,27,27,.45);color:#fecaca;">🚩 <b>RED FLAG · PIT REPAIR</b></span>`;
+        } else if (isHold) {
           const dots = "🔴".repeat(startSeq.litCount || 0) + "⚫".repeat(Math.max(0, 5 - (startSeq.litCount || 0)));
           statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(239,68,68,.55);color:#fca5a5;">${dots} <b>GRID HOLD</b></span>`;
+        } else if (rs.scActive) {
+          statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(250,204,21,.65);color:#fde047;">⚠️ <b>${rs.scInThisLap ? "SC IN THIS LAP" : "FIA SAFETY CAR"}</b></span>`;
         } else if (focPitMotion && focPitMotion.stopped) {
           statusTag = `<span class="b3d-phys-tag" style="border-color:rgba(250,204,21,.55);color:#fde047;">🔧 <b>PIT BOX SERVICE</b></span>`;
         } else if (focDyn) {

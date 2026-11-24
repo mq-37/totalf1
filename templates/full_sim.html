@@ -145,11 +145,18 @@
           </select>
         </div>
       </div>
-      <div class="sim-drawer-circuit-meta" style="justify-content:space-between;align-items:center;">
-        <label class="fsim-autoadv-chk">
-          <input type="checkbox" id="fsim-autoadv-chk" checked>
-          <span>Auto-advance to next GP in Championship mode (6s podium pause)</span>
-        </label>
+      <div class="sim-drawer-circuit-meta" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="fsim-autoadv-chk">
+            <input type="checkbox" id="fsim-autoadv-chk" checked>
+            <span>Auto-advance to next GP (6s podium pause)</span>
+          </label>
+          <span style="opacity:.35;">|</span>
+          <span class="muted small" style="font-weight:700;letter-spacing:.04em;">RACE CONTROL:</span>
+          <button type="button" id="fsim-rc-sc-btn" class="sim-dir-btn" style="border-color:rgba(245,158,11,.55);color:#fde047;padding:4px 9px;font-size:.76rem;" title="Deploy Physical FIA Safety Car"><i class="fas fa-car-side"></i> Test SC</button>
+          <button type="button" id="fsim-rc-rf-btn" class="sim-dir-btn" style="border-color:rgba(239,68,68,.65);color:#fca5a5;padding:4px 9px;font-size:.76rem;" title="Trigger FIA Red Flag & Standing Restart"><i class="fas fa-flag"></i> Red Flag</button>
+          <button type="button" id="fsim-rc-brk-btn" class="sim-dir-btn" style="border-color:rgba(148,163,184,.5);color:#e2e8f0;padding:4px 9px;font-size:.76rem;" title="Simulate Trackside Smoking Breakdown & Debris"><i class="fas fa-fire-extinguisher"></i> Breakdown</button>
+        </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <button type="button" id="fsim-custom-season-btn" class="sim-dir-btn" style="border-color:#facc15;color:#fde047;"><i class="fas fa-magic"></i> Custom Season Builder</button>
           <button type="button" id="fsim-start-btn" class="btn-racing"><i class="fas fa-tv"></i> Start Full CPU Broadcast</button>

@@ -2446,9 +2446,17 @@
         const dnfChance = (car.driver.stats.dnf_rate / 100) / Math.max(14, cr.totalLaps * 1.6) * dnfScale * 0.35;
         if (car.lap >= 2 && Math.random() < dnfChance) {
           car.dnf = true;
+          car.breakdownKind = "engine";
+          car.parkedProg = ((car.totalProg % 1) + 1) % 1;
+          const nearSf = car.parkedProg < 0.12 || car.parkedProg > 0.88;
+          const pitSide = (cr.geom && cr.geom.pitSide) || 1;
+          car.parkedSide = nearSf ? -pitSide : (car.idx % 2 === 0 ? 1 : -1);
+          car.parkedYawOff = car.parkedSide * 0.36;
+          car.smokeActive = true;
+          car.cleared = false;
           const sec = Math.floor((((car.totalProg % 1) + 1) % 1) * 3) + 1;
-          cr.yellowSector = sec; cr.yellowTimer = 5.5;
-          getEl("cr-radio-latest").textContent = `💥 YELLOW S${sec} — ${car.cleanName} retires with mechanical failure!`;
+          cr.yellowSector = sec; cr.yellowTimer = 6.5;
+          getEl("cr-radio-latest").textContent = `💨 YELLOW S${sec} — ${car.cleanName} pulls off smoking with mechanical failure!`;
           if (cr.safetyCarLaps === 0 && cr.vscLaps === 0) {
             const roll = Math.random();
             if (!cr.redFlagUsed && car.lap >= 3 && car.lap <= cr.totalLaps - 3 && roll < 0.08) {
@@ -3138,6 +3146,8 @@
         cars: cr.cars.map((c) => ({
           idx: c.idx, code3: c.code3, team: c.teamName, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.color,
+          wingDamaged: !!c.wingDamaged, parkedProg: c.parkedProg, parkedSide: c.parkedSide, parkedYawOff: c.parkedYawOff,
+          breakdownKind: c.breakdownKind, smokeActive: c.smokeActive, cleared: !!c.cleared,
           liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
@@ -3154,6 +3164,7 @@
           totalLaps: cr.totalLaps,
           wetness: cr.wetness,
           scActive: cr.safetyCarLaps > 0,
+          scInThisLap: cr.safetyCarLaps === 1,
           vscActive: cr.vscLaps > 0,
           yellowSector: cr.yellowSector,
           chequered: cr.chequeredFlag || cr.finished,
@@ -3476,14 +3487,24 @@
 
   getEl("car-rf-restart-btn")?.addEventListener("click", () => {
     const sorted = cr.cars.slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : b.totalProg - a.totalProg));
-    const leadLap = Math.floor(sorted[0]?.totalProg || 1);
+    const leadLap = Math.max(1, Math.floor(sorted[0]?.totalProg || 1));
     const c0 = getEl("rf-tyre-0")?.value || "soft";
     const c1 = getEl("rf-tyre-1")?.value || "soft";
+    const running = sorted.filter((c) => !c.dnf);
+    sorted.forEach((c) => { if (c.dnf) c.cleared = true; });
+    const perim = Math.max(1800, (cr.circuit && cr.circuit.length_km ? cr.circuit.length_km * 1000 : 4800));
+    const progStep = Math.max(0.0020, Math.min(0.0052, 16.5 / perim));
+    const startOffset = Math.max(0.0020, 9.0 / perim);
+    if (window.F1TrackArchitect) {
+      cr.startSeq = window.F1TrackArchitect.createStandingStartState(running, cr.circuit, { isRestart: true });
+    }
     let pIdx = 0;
-    sorted.forEach((car, i) => {
-      if (car.dnf) return;
-      car.totalProg = leadLap + 0.01 - 0.0038 * i;
+    running.forEach((car, i) => {
+      car.totalProg = leadLap - (startOffset + i * progStep);
+      car.lap = Math.max(0, leadLap - 1);
+      car.latOffset = (i % 2 === 0 ? -2.55 : 2.55);
       car.inPit = 0; car.pitDuration = 0; car.boxNextLap = false;
+      car.wingDamaged = false; car.fixWingOnPit = false;
       let newComp = cr.wetness >= 60 ? "wet" : (cr.wetness >= 22 ? "inter" : "soft");
       if (car.isPlayerTeam) { newComp = pIdx === 0 ? c0 : c1; pIdx += 1; }
       if (COMPOUNDS[newComp]) {
@@ -3495,7 +3516,7 @@
       car.currentLapS = computeCrLapTime(car);
     });
     getEl("car-redflag-modal").classList.add("hidden");
-    getEl("cr-radio-latest").textContent = "🟢 STANDING RESTART! Lights out after the Red Flag — fresh tyres for everyone!";
+    getEl("cr-radio-latest").textContent = "🔴 STANDING RESTART! Cars lined up on fresh tyres — waiting for 5 red lights!";
     cr.paused = false;
     renderCrHud();
   });
