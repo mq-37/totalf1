@@ -7,8 +7,9 @@
       <h1 class="hero-title">LOCAL&nbsp;F1</h1>
       <p class="hero-sub">Seventy-five seasons of Formula 1, catalogued. Driver cards, team liveries and career records — exhibited season by season, from 1950 to today.</p>
       <div class="hero-doors">
+        <a href="/sim" class="hero-door is-primary-door"><i class="fas fa-tv"></i> Full Broadcast Sim</a>
         <a href="/career" class="hero-door is-primary-door"><i class="fas fa-briefcase"></i> F1 Career Manager</a>
-        <a href="/play" class="hero-door"><i class="fas fa-gamepad"></i> Play &amp; GPS Sim</a>
+        <a href="/play" class="hero-door"><i class="fas fa-gamepad"></i> 3D Card Arena</a>
         <a href="/cards" class="hero-door"><i class="fas fa-id-card"></i> Driver Cards</a>
         <a href="/races/{{ latest or '' }}" class="hero-door"><i class="fas fa-flag-checkered"></i> Races {{ latest or '' }}</a>
         <a href="/drivers/{{ latest or '' }}" class="hero-door"><i class="fas fa-helmet-safety"></i> Drivers {{ latest or '' }}</a>
@@ -65,7 +66,7 @@
           <a href="/driver" class="badge">Driver Search</a>
           <a href="/dev/car-liveries" class="badge">Car Liveries</a>
           <a href="/dev/car-3d" class="badge">3D Car Studio</a>
-          <button type="button" id="prefetch-images-btn" class="badge" style="cursor:pointer;">Prefetch Next 10 Images</button>
+          <button type="button" id="prefetch-images-btn" class="badge btn-clickable">Prefetch Next 10 Images</button>
           <span id="prefetch-images-status" class="muted small" aria-live="polite"></span>
         </div>
       </div>
@@ -95,26 +96,6 @@
 
 {% block scripts %}
   <script src="/static/vendor/three.min.js"></script>
-  <script src="/static/js/f1_car_3d.js"></script>
-  <script src="/static/js/museum.js"></script>
-  <script>
-    (function () {
-      var btn = document.getElementById('prefetch-images-btn');
-      var status = document.getElementById('prefetch-images-status');
-      if (!btn || !status) return;
-      btn.addEventListener('click', async function () {
-        btn.disabled = true;
-        status.textContent = 'Prefetching up to 10 driver images…';
-        try {
-          var res = await fetch('/api/prefetch/driver-images?limit=10', { method: 'POST' });
-          var data = await res.json();
-          status.textContent = 'Done: ' + (data.fetched || 0) + ' fetched, ' + (data.existing || 0) + ' cached, ' + (data.failed || 0) + ' failed.';
-        } catch (e) {
-          status.textContent = 'Prefetch failed (offline or server error).';
-        } finally {
-          btn.disabled = false;
-        }
-      });
-    })();
-  </script>
+  <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/museum.js?v={{ asset_v }}"></script>
 {% endblock %}

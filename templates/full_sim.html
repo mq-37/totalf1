@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Full CPU Sim — F1 TV Broadcast Director · Local F1{% endblock %}
 {% block head %}
-  <link rel="stylesheet" href="/static/css/sim.css?v=20261123b">
+  <link rel="stylesheet" href="/static/css/sim.css?v={{ asset_v }}">
 {% endblock %}
 {% block content %}
 <div id="fsim-app" class="sim-cockpit-root fsim-broadcast-shell">
@@ -383,14 +383,13 @@
   };
 </script>
 <script src="/static/vendor/three.min.js"></script>
-<script src="/static/js/f1_car_3d.js?v=20261123b"></script>
-<script src="/static/js/f1_sfx.js?v=20261123b"></script>
-<script src="/static/js/f1_race_engine.js?v=20261123b"></script>
-<script src="/static/js/f1_timing_tower.js?v=20261123b"></script>
-<script src="/static/js/f1_broadcast_3d.js?v=20261123b"></script>
-<script src="/static/js/f1_radio_engine.js?v=20261123b"></script>
-<script src="/static/js/f1_race_analytics.js?v=20261123b"></script>
-<script src="/static/js/f1_custom_season.js?v=20261123b"></script>
-<script src="/static/js/f1_track_renderer.js?v=20261123b"></script>
-<script src="/static/js/full_sim.js?v=20261123b"></script>
+<script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_race_engine.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_timing_tower.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_broadcast_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_radio_engine.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_race_analytics.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_custom_season.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+<script src="/static/js/full_sim.js?v={{ asset_v }}"></script>
 {% endblock %}

@@ -1,0 +1,243 @@
+/* ==========================================================================
+   Local F1 — Broadcast Archive, Analytics & Site-Wide UI Standards
+   Brings Home, Cards, Archive, Profiles & Studio to /sim broadcast parity.
+   ========================================================================== */
+
+/* Utility spacing & layout classes (replaces inline style= sprawl) */
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.mb-24 { margin-bottom: 24px; }
+.mb-32 { margin-bottom: 32px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-24 { margin-top: 24px; }
+.flex-row-wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.flex-grow-search { flex: 1 1 240px; min-width: 220px; }
+.btn-clickable { cursor: pointer; }
+.align-center { align-self: center; }
+
+/* Broadcast Page Header Polish */
+.page-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+}
+.page-header h1 {
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.page-header h1 i {
+  color: var(--f1-red);
+}
+
+/* Broadcast KPI Summary Strip */
+.bc-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.bc-kpi {
+  background: linear-gradient(155deg, rgba(24, 30, 44, 0.92), rgba(14, 18, 28, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 2px solid var(--f1-red);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.bc-kpi.is-cyan { border-top-color: #38bdf8; }
+.bc-kpi.is-gold { border-top-color: #facc15; }
+.bc-kpi.is-green { border-top-color: #22c55e; }
+.bc-kpi-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+.bc-kpi-val {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.15;
+}
+.bc-kpi-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* Enhanced Broadcast Data Tables (Sortable + Filterable + Tabular Numbers) */
+.card.table-card,
+.analytics-grid > .card {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(20, 25, 36, 0.96), rgba(14, 18, 27, 0.98));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+.bc-table-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.bc-table-filter {
+  background: rgba(9, 13, 22, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: #e2e8f0;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  min-width: 200px;
+}
+.bc-table-filter:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+.bc-table-count {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+table.bc-enhanced thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(16, 21, 32, 0.98);
+  z-index: 2;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.70rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+table.bc-enhanced thead th.is-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+table.bc-enhanced thead th.is-sortable:hover,
+table.bc-enhanced thead th.sort-asc,
+table.bc-enhanced thead th.sort-desc {
+  color: #f8fafc;
+}
+table.bc-enhanced thead th.sort-asc::after { content: " ▲"; color: #38bdf8; font-size: 0.65rem; }
+table.bc-enhanced thead th.sort-desc::after { content: " ▼"; color: #38bdf8; font-size: 0.65rem; }
+
+table.bc-enhanced tbody tr {
+  transition: background-color 0.12s ease;
+}
+table.bc-enhanced tbody tr:hover {
+  background: rgba(56, 189, 248, 0.06);
+}
+table.bc-enhanced td.is-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Broadcast Podium Position Pills */
+.bc-pos-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 800;
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+}
+.bc-pos-pill.p-1 { background: linear-gradient(135deg, #facc15, #d97706); color: #0f172a; }
+.bc-pos-pill.p-2 { background: linear-gradient(135deg, #e2e8f0, #94a3b8); color: #0f172a; }
+.bc-pos-pill.p-3 { background: linear-gradient(135deg, #f59e0b, #b45309); color: #fff; }
+
+/* Team 3D car cell in Teams standings (extracted from inline <style> in teams.html) */
+.team-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.team-cell-car {
+  width: 96px;
+  height: auto;
+  flex: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+/* Live Rating Balance Audit Panel (Analytics Overall) */
+.bc-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.bc-bal-card {
+  background: rgba(9, 13, 22, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 9px;
+  padding: 12px 14px;
+}
+.bc-bal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.bc-bal-head strong {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  color: #f8fafc;
+}
+.bc-bal-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: #38bdf8;
+}
+.bc-bal-row {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 0.78rem;
+}
+.bc-bal-bar-wrap {
+  height: 6px;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.bc-bal-bar {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #e10600, #38bdf8);
+}
+.bc-bal-ovr {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #facc15;
+}
+
+/* Focus-visible accessibility ring across the whole app */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}

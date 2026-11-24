@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}F1 Team Principal Career · Local F1{% endblock %}
 {% block head %}
-  <link rel="stylesheet" href="/static/css/sim.css?v=20261123b">
-  <link rel="stylesheet" href="/static/css/career.css?v=20261123b">
+  <link rel="stylesheet" href="/static/css/sim.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/css/career.css?v={{ asset_v }}">
 {% endblock %}
 {% block content %}
 <div id="career-app" class="car-app">
@@ -968,16 +968,15 @@
   window.F1_CAREER_BOOT = {{ career_boot | tojson }};
 </script>
 <script src="/static/vendor/three.min.js"></script>
-<script src="/static/js/f1_car_3d.js?v=20261123b"></script>
-<script src="/static/js/f1_sfx.js?v=20261123b"></script>
-<script src="/static/js/f1_race_engine.js?v=20261123b"></script>
-<script src="/static/js/f1_timing_tower.js?v=20261123b"></script>
-<script src="/static/js/f1_broadcast_3d.js?v=20261123b"></script>
-<script src="/static/js/f1_radio_engine.js?v=20261123b"></script>
-<script src="/static/js/f1_race_analytics.js?v=20261123b"></script>
-<script src="/static/js/f1_custom_season.js?v=20261123b"></script>
-<script src="/static/js/career_hq_3d.js?v=20261123b"></script>
-<script src="/static/js/f1_profile.js?v=20261123b"></script>
-<script src="/static/js/f1_track_renderer.js?v=20261123b"></script>
-<script src="/static/js/career.js?v=20261123b"></script>
+<script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_race_engine.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_timing_tower.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_broadcast_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_radio_engine.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_race_analytics.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_custom_season.js?v={{ asset_v }}"></script>
+<script src="/static/js/career_hq_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_profile.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+<script src="/static/js/career.js?v={{ asset_v }}"></script>
 {% endblock %}

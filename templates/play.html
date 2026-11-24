@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Play — F1 Card Arena · Local F1{% endblock %}
 {% block head %}
-  <link rel="stylesheet" href="/static/css/play.css">
-  <link rel="stylesheet" href="/static/css/sim.css">
+  <link rel="stylesheet" href="/static/css/play.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/css/sim.css?v={{ asset_v }}">
 {% endblock %}
 {% block content %}
   <div class="page-header">
@@ -749,12 +749,11 @@
     };
   </script>
   <script src="/static/vendor/three.min.js"></script>
-  <script src="/static/js/f1_car_3d.js"></script>
-  <script src="/static/js/f1_sfx.js"></script>
-  <script src="/static/js/f1_race_engine.js"></script>
-  <script src="/static/js/play_arena_3d.js"></script>
-  <script src="/static/js/f1_track_renderer.js"></script>
-  <script src="/static/js/f1_profile.js"></script>
-  <script src="/static/js/track_sim.js"></script>
-  <script src="/static/js/play.js"></script>
+  <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_race_engine.js?v={{ asset_v }}"></script>
+  <script src="/static/js/play_arena_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_profile.js?v={{ asset_v }}"></script>
+  <script src="/static/js/track_sim.js?v={{ asset_v }}"></script>
+  <script src="/static/js/play.js?v={{ asset_v }}"></script>
 {% endblock %}

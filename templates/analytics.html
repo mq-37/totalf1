@@ -13,7 +13,7 @@
     <a href="/analytics/tracks" class="nav-link{% if request.url.path == '/analytics/tracks' %} active{% endif %}">Per Track</a>
   </nav>
 
-  <div class="card" style="margin-bottom: 24px;">
+  <div class="card mb-24">
     <form method="get" action="/analytics" class="form-inline">
       <label for="year" class="label-inline">Season</label>
       <select id="year" name="year" onchange="this.form.submit()">

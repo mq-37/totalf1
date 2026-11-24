@@ -6,9 +6,9 @@
     <p class="breadcrumb"><a href="/">Home</a> → {{ season }} season schedule</p>
   </div>
 
-  <div class="card toolbar-card" style="margin-bottom: 18px;">
+  <div class="card toolbar-card mb-20">
     <div class="toolbar">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="flex-row-wrap">
         <span class="badge">{{ races | length }} Rounds</span>
         {% if calendar_source == 'local' %}
         <span class="muted small">Local SQLite archive ({{ season }})</span>
@@ -17,7 +17,8 @@
         {% endif %}
       </div>
       <div class="toolbar-actions">
-        <a href="/play?mode=sim"><button type="button"><i class="fas fa-route"></i> 24-Circuit GPS Simulator</button></a>
+        <a href="/sim"><button type="button"><i class="fas fa-tv"></i> Full Broadcast Sim</button></a>
+        <a href="/play?mode=sim"><button type="button" class="btn-secondary"><i class="fas fa-route"></i> 3D Card Arena</button></a>
         <a href="/career"><button type="button" class="btn-secondary"><i class="fas fa-briefcase"></i> Career Manager</button></a>
       </div>
     </div>

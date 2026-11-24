@@ -2086,7 +2086,7 @@
         car.latOffset = (car.latOffset || 0) + (cruiseLat - (car.latOffset || 0)) * Math.min(1, dt * 1.8);
         car.battleState = "clean";
         car.battleSpeedMult = 0.36;
-        car.aiObs = { state: "clean", badge: "🏁 COOLDOWN", detail: "CHEQUERED FLAG · CELEBRATION LAP", color: "#22c55e" };
+        car.aiObs = { state: "clean", badge: "🏁 COOLDOWN", detail: "CHEQUERED FLAG · CELEBRATION LAP", color: "#22c55e", targetLat: cruiseLat };
         continue;
       }
       const dna = getDriverDna(car);
@@ -2923,14 +2923,16 @@
       const ptsCurve = [{ x: wx, y: wy }];
       const steps = 8;
       const span = 0.028;
+      const targetLat = Number.isFinite(obs.targetLat) ? obs.targetLat : curLat;
       for (let s = 1; s <= steps; s++) {
         const u = s / steps;
         const ease = u * u * (3 - 2 * u); // smoothstep S-curve
         const ps = sampleTrack(geom, car.totalProg + span * u);
-        const futLat = curLat + (obs.targetLat - curLat) * ease;
+        const futLat = curLat + (targetLat - curLat) * ease;
         ptsCurve.push({ x: ps.x + ps.nx * futLat, y: ps.y + ps.ny * futLat });
       }
       const pEnd = ptsCurve[ptsCurve.length - 1];
+      if (!Number.isFinite(wx) || !Number.isFinite(wy) || !Number.isFinite(pEnd.x) || !Number.isFinite(pEnd.y)) return;
       const ribbonGrad = ctx.createLinearGradient(wx, wy, pEnd.x, pEnd.y);
       ribbonGrad.addColorStop(0, col);
       ribbonGrad.addColorStop(1, "rgba(0,0,0,0)");

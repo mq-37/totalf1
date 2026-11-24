@@ -6,13 +6,13 @@
     <p class="breadcrumb"><a href="/">Home</a> → Driver Search (1950–Present)</p>
   </div>
 
-  <div class="card toolbar-card" style="margin-bottom: 20px;">
-    <form method="get" action="/driver" class="form-inline" style="gap:10px;">
-      <input type="text" id="q" name="q" placeholder="Search any F1 driver from 1950 to today (e.g. Senna, Fangio, Verstappen)…" value="{{ q or '' }}" class="input-search" style="flex:1;min-width:240px;" autofocus/>
+  <div class="card toolbar-card mb-20">
+    <form method="get" action="/driver" class="form-inline flex-row-wrap">
+      <input type="text" id="q" name="q" placeholder="Search any F1 driver from 1950 to today (e.g. Senna, Fangio, Verstappen)…" value="{{ q or '' }}" class="input-search flex-grow-search" autofocus/>
       <button type="submit"><i class="fas fa-search"></i> Search</button>
     </form>
-    <div class="link-list" style="margin-top:12px;">
-      <span class="muted small" style="align-self:center;">Legends &amp; Stars:</span>
+    <div class="link-list mt-12">
+      <span class="muted small align-center">Legends &amp; Stars:</span>
       <a href="/driver?q=Verstappen" class="badge">Max Verstappen</a>
       <a href="/driver?q=Hamilton" class="badge">Lewis Hamilton</a>
       <a href="/driver?q=Senna" class="badge">Ayrton Senna</a>

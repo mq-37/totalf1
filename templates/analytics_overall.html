@@ -2,7 +2,7 @@
 {% block title %}Analytics · Overall — Local F1{% endblock %}
 {% block content %}
   <div class="page-header">
-    <h1>Overall Analytics</h1>
+    <h1><i class="fas fa-chart-line"></i> Overall Analytics</h1>
     <p class="breadcrumb"><a href="/">Home</a> → <a href="/analytics">Analytics</a> → Overall</p>
   </div>
 
@@ -12,6 +12,35 @@
     <a href="/analytics/team" class="nav-link">Per Team</a>
     <a href="/analytics/tracks" class="nav-link">Per Track</a>
   </nav>
+
+  <div class="bc-kpi-strip">
+    <div class="bc-kpi">
+      <span class="bc-kpi-label">Seasons Recorded</span>
+      <div class="bc-kpi-val">{{ driver_champions | length }}</div>
+      <span class="bc-kpi-sub">1950 – Present FIA Archive</span>
+    </div>
+    <div class="bc-kpi is-gold">
+      <span class="bc-kpi-label">All-Time Points Leader</span>
+      <div class="bc-kpi-val">{{ driver_totals[0]['driver_name'] if driver_totals else '—' }}</div>
+      <span class="bc-kpi-sub">{{ driver_totals[0]['total_points'] if driver_totals else 0 }} career pts</span>
+    </div>
+    <div class="bc-kpi is-cyan">
+      <span class="bc-kpi-label">Constructor Points Leader</span>
+      <div class="bc-kpi-val">{{ team_totals[0]['team'] if team_totals else '—' }}</div>
+      <span class="bc-kpi-sub">{{ team_totals[0]['total_points'] if team_totals else 0 }} total pts</span>
+    </div>
+    <div class="bc-kpi is-green">
+      <span class="bc-kpi-label">Rating Calibration</span>
+      <div class="bc-kpi-val">Era-Balanced</div>
+      <span class="bc-kpi-sub">Bayesian H2H + Peak Efficiency</span>
+    </div>
+  </div>
+
+  <section class="card mb-24">
+    <h2><i class="fas fa-balance-scale"></i> Cross-Era Rating Balance Inspector</h2>
+    <p class="muted small">Live audit of calibrated driver OVR spread &amp; race-by-race teammate duel diversity across eras.</p>
+    <div id="bc-balance-audit-host"><p class="muted small">Loading balance telemetry…</p></div>
+  </section>
 
   <div class="analytics-grid">
     <section class="card">
