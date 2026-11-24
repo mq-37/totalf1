@@ -41,9 +41,9 @@
 
           {% if car_slug %}
           <div class="team-livery-hero">
-            <div class="plinth" data-team="{{ team }}" data-color="{{ colors.primary }}" data-era="{{ car_era or '2020s' }}">
+            <div class="plinth" data-team="{{ team }}" data-color="{{ colors.primary }}" data-era="{{ car_era or '2020s' }}"{% if car_year %} data-year="{{ car_year }}"{% endif %}>
               <canvas class="plinth-canvas" aria-label="3D model of the {{ team }} livery car"></canvas>
-              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png" alt="{{ team }} 3D livery car"/>
+              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png?v={{ asset_v }}" alt="{{ team }} 3D livery car"/>
               <span class="plinth-hint">drag to orbit · scroll to zoom</span>
             </div>
             {% if car_palette %}
@@ -205,7 +205,7 @@
             </header>
             <div class="exhibit-car">
               {% if c.car_slug %}
-              <img src="/static/cars/png/{{ c.car_slug }}.png" alt="{{ team }} 3D livery" loading="lazy"/>
+              <img src="/static/cars/png/{{ c.car_slug }}.png?v={{ asset_v }}" alt="{{ team }} 3D livery" loading="lazy"/>
               {% endif %}
               <span class="exhibit-teams">{{ team }}</span>
             </div>

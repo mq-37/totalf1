@@ -161,6 +161,7 @@ def car_palette_api(team: str, year: Optional[int] = Query(None)):
         "finish": spec["finish"],
         "motif": spec.get("motif", "standard"),
         "label": spec.get("label", resolved),
+        "year": spec["year"],
         "era": era,
     })
 

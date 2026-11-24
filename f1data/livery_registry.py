@@ -366,8 +366,12 @@ FAMILY_RESOLVERS: list[tuple[tuple[str, ...], Any]] = [
     (("lotus",), _resolve_lotus),
     (("benetton",), _resolve_benetton),
     (("jordan",), _resolve_jordan),
-    # Engine-supplier works constructors last
-    (("ferrari",), _resolve_ferrari),
+]
+
+# Works PU constructors ONLY match when they are the actual constructor name
+# (not when listed as an engine supplier suffix like "Kick Sauber Ferrari", "Force India Mercedes", "Caterham Renault").
+WORKS_PREFIX_RESOLVERS: list[tuple[tuple[str, ...], Any]] = [
+    (("ferrari", "scuderia ferrari"), _resolve_ferrari),
     (("mercedes",), _resolve_mercedes),
     (("renault",), _resolve_renault),
 ]
@@ -379,6 +383,12 @@ def resolve_team_livery(team_name: str | None, year: int | str | None = 2026) ->
     y = _yr(year)
     for keys, fn in FAMILY_RESOLVERS:
         if any(k in low for k in keys):
+            out = dict(fn(y))
+            out["year"] = y
+            out["team"] = team_name or ""
+            return out
+    for prefixes, fn in WORKS_PREFIX_RESOLVERS:
+        if any(low == p or low.startswith(p + " ") for p in prefixes):
             out = dict(fn(y))
             out["year"] = y
             out["team"] = team_name or ""

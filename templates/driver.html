@@ -49,9 +49,9 @@
           </div>
           <div class="profile-hero-car">
             {% if car_slug %}
-            <div class="plinth plinth-driver" data-team="{{ latest_team }}" data-color="{{ tcolors.primary }}" data-era="{{ car_era or '2020s' }}"{% if latest_year %} data-year="{{ latest_year }}"{% endif %}>
+            <div class="plinth plinth-driver" data-team="{{ latest_team }}" data-color="{{ tcolors.primary }}" data-era="{{ car_era or '2020s' }}"{% if latest_year %} data-year="{{ latest_year }}"{% endif %}{% if avatar and avatar.helmet %} data-helmet="{{ avatar.helmet }}"{% endif %}>
               <canvas class="plinth-canvas" aria-label="{{ latest_team }} car exhibit"></canvas>
-              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png" alt="{{ latest_team }} 3D car"/>
+              <img class="plinth-fallback" src="/static/cars/png/{{ car_slug }}.png?v={{ asset_v }}" alt="{{ latest_team }} 3D car"/>
               <span class="plinth-hint">drag to orbit</span>
             </div>
             {% else %}
@@ -338,7 +338,7 @@
             </header>
             <div class="exhibit-car">
               {% if c.car_slug %}
-              <img src="/static/cars/png/{{ c.car_slug }}.png" alt="{{ c.team }} 3D livery" loading="lazy"/>
+              <img src="/static/cars/png/{{ c.car_slug }}.png?v={{ asset_v }}" alt="{{ c.team }} 3D livery" loading="lazy"/>
               {% endif %}
               <span class="exhibit-teams">{{ c.team or 'All-Time Career' }}</span>
             </div>

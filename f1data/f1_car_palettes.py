@@ -111,8 +111,10 @@ _STYLE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
     (("benetton", "toro rosso", "arrows", "footwork", "spyker", "toleman", "larrousse", "leyton"), "chevron"),
     (("maserati", "alfa", "porsche", "vanwall", "lancia", "cooper", "brm", "jaguar", "shadow", "wolf", "march", "iso"), "classic"),
     (("toyota", "honda", "bar"), "modern"),
-    # Works PU constructors checked after customer teams
-    (("ferrari",), "ferrari_hp"),
+]
+
+_WORKS_STYLE_PREFIXES: list[tuple[tuple[str, ...], str]] = [
+    (("ferrari", "scuderia ferrari"), "ferrari_hp"),
     (("mercedes",), "merc_arrow"),
     (("renault",), "renault_mildseven"),
 ]
@@ -125,6 +127,9 @@ def infer_livery_style(team_name: str | None) -> str:
     low = _norm(team_name)
     for keys, style in _STYLE_KEYWORDS:
         if any(k in low for k in keys):
+            return style
+    for prefixes, style in _WORKS_STYLE_PREFIXES:
+        if any(low == p or low.startswith(p + " ") for p in prefixes):
             return style
     # Deterministic fallback across the base 5 styles for minor historical constructors
     base_styles = ("modern", "two-tone", "racing-stripe", "chevron", "classic")
@@ -192,14 +197,24 @@ def find_car_png_slug(
     year: int | str | None = None,
     era: str | None = None,
 ) -> str | None:
-    """Return the year/era-specific studio PNG slug (e.g. 'ferrari--1950s') when available.
+    """Return the exact-year (e.g. 'ferrari--2026', 'red-bull-racing-honda-rbpt--2024') or
+    decade-era ('ferrari--1950s') studio PNG slug when available.
 
-    Always selects the 3D car chassis era by YEAR (not just constructor name), so 1956 Ferrari
-    uses the 1950s torpedo cigar while 2004 Ferrari uses the 2000s V10 and 2026 Ferrari uses 2020s!
+    Always checks exact season year first so every aero generation & year-specific livery
+    (e.g. 2024 vs 2025 vs 2026 Ferrari, 2014 vs 2017 vs 2024 vs 2026 Red Bull) displays its
+    exact faithful 3D chassis & livery!
     """
     base = find_slug(team_name)
     if not base:
         return None
+    if year is not None:
+        try:
+            y_int = int(str(year).strip()[:4])
+            year_slug = f"{base}--{y_int}"
+            if (CAR_PNG_DIR / f"{year_slug}.png").exists():
+                return year_slug
+        except Exception:
+            pass
     target_era = era or (era_for_year(year) if year is not None else None)
     if target_era:
         era_slug = f"{base}--{target_era}"

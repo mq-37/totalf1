@@ -64,7 +64,7 @@
         {% set first_team = r['teams'][0] if r.get('teams') else '' %}
         {% set car_slug = r.get('car_png_slug') or (car_slugs.get(first_team) if car_slugs and first_team else none) %}
         {% if car_slug %}
-        <img src="/static/cars/png/{{ car_slug }}.png" alt="{{ first_team }} 3D livery" loading="lazy"/>
+        <img src="/static/cars/png/{{ car_slug }}.png?v={{ asset_v }}" alt="{{ first_team }} 3D livery" loading="lazy"/>
         {% endif %}
         <span class="exhibit-teams">{% if r.get('teams') %}{{ r['teams'] | join(' · ') }}{% else %}—{% endif %}</span>
       </div>

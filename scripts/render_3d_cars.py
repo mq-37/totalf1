@@ -32,7 +32,31 @@ TRAF1_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TRAF1_DIR))
 
 from f1data.f1_car_palettes import load_palettes, slugify, find_slug, infer_livery_style, infer_team_era, era_for_year  # noqa: E402
+from f1data.livery_registry import resolve_team_livery  # noqa: E402
 from f1data import server as srv_mod  # noqa: E402
+
+
+def _chassis_bucket(era_or_year: int | str) -> str:
+    s = str(era_or_year).strip()
+    if s.isdigit() and len(s) == 4:
+        y = int(s)
+        if y <= 1960: return "1955"
+        if y <= 1967: return "1965"
+        if y <= 1970: return "1968"
+        if y <= 1972: return "1971"
+        if y <= 1979: return "1975"
+        if y <= 1988: return "1988"
+        if y <= 1993: return "1991"
+        if y <= 1997: return "1995"
+        if y <= 2005: return "2004"
+        if y <= 2008: return "2008"
+        if y <= 2013: return "2012"
+        if y <= 2016: return "2014"
+        if y == 2017: return "2017"
+        if y <= 2021: return "2020"
+        if y <= 2025: return "2024"
+        return "2026"
+    return s or "2020s"
 
 
 def _free_port() -> int:
@@ -51,13 +75,13 @@ def _find_chrome() -> str:
 
 async def _batch_render(
     base_url: str,
-    teams: list[tuple[str, str, dict[str, str], str]],
+    teams: list[tuple[str, str, dict[str, str], str, int | str, str]],
     out_dir: Path,
     preset: str,
     width: int,
     height: int,
     suffix: str = "",
-) -> int:
+) -> tuple[int, int]:
     import websockets
 
     chrome = _find_chrome()
@@ -137,23 +161,36 @@ async def _batch_render(
                     raise RuntimeError("3D render harness failed to initialize")
 
                 written = 0
+                rendered_unique = 0
+                render_cache: dict[str, bytes] = {}
                 presets = [p.strip() for p in preset.split(",") if p.strip()]
                 multi = len(presets) > 1
-                for name, slug, pal, era_name in teams:
-                    style_name = infer_livery_style(name)
+                for name, slug, pal, style_name, era_or_year, finish_name in teams:
+                    bucket = _chassis_bucket(era_or_year)
                     for pr in presets:
-                        expr = f"window.renderLiveryPng({json.dumps(pal)}, {json.dumps(pr)}, {width}, {height}, {json.dumps(style_name)}, {json.dumps(era_name)})"
-                        r = await send("Runtime.evaluate", {"expression": expr, "returnByValue": True})
-                        val = (r.get("result") or {}).get("value")
-                        if not isinstance(val, str) or not val.startswith("data:image/png;base64,"):
-                            raise RuntimeError(f"Failed rendering {name} ({pr}): {r}")
-                        png_bytes = base64.b64decode(val.split(",", 1)[1])
+                        cache_key = json.dumps(
+                            [bucket, pr, width, height, style_name, finish_name, pal],
+                            sort_keys=True,
+                        )
+                        png_bytes = render_cache.get(cache_key)
+                        if png_bytes is None:
+                            expr = (
+                                f"window.renderLiveryPng({json.dumps(pal)}, {json.dumps(pr)}, "
+                                f"{width}, {height}, {json.dumps(style_name)}, {json.dumps(era_or_year)}, {json.dumps(finish_name)})"
+                            )
+                            r = await send("Runtime.evaluate", {"expression": expr, "returnByValue": True})
+                            val = (r.get("result") or {}).get("value")
+                            if not isinstance(val, str) or not val.startswith("data:image/png;base64,"):
+                                raise RuntimeError(f"Failed rendering {name} ({pr}, {era_or_year}): {r}")
+                            png_bytes = base64.b64decode(val.split(",", 1)[1])
+                            render_cache[cache_key] = png_bytes
+                            rendered_unique += 1
                         sfx = f"-{pr}" if multi else suffix
                         (out_dir / f"{slug}{sfx}.png").write_bytes(png_bytes)
                         written += 1
 
                 reader_task.cancel()
-                return written
+                return written, rendered_unique
         finally:
             proc.terminate()
             try:
@@ -178,35 +215,59 @@ def main() -> None:
     year_map = srv_mod._team_peak_years_map(db)
     pal_by_slug = {slugify(name): (name, pal) for name, pal in palettes.items()}
 
-    # 1. Default per-team PNG (<slug>.png)
-    jobs: list[tuple[str, str, dict[str, str], str]] = []
+    # 1. Default per-team PNG (<slug>.png) using team's peak/latest year + year-accurate livery registry!
+    jobs: list[tuple[str, str, dict[str, str], str, int | str, str]] = []
     seen_targets: set[str] = set()
     for name, pal in palettes.items():
         if args.team and args.team.lower() not in name.lower():
             continue
         sl = slugify(name)
-        era_name = args.era or infer_team_era(name, team_years_map=year_map)
-        jobs.append((name, sl, pal, era_name))
+        peak_yr = year_map.get(name)
+        if not peak_yr:
+            era_fb = infer_team_era(name, team_years_map=year_map)
+            peak_yr = int(era_fb[:4]) + 5 if era_fb[:4].isdigit() else 2026
+        spec = resolve_team_livery(name, peak_yr)
+        era_or_yr: int | str = args.era if args.era else int(peak_yr)
+        jobs.append((name, sl, spec["palette"], spec["style"], era_or_yr, spec["finish"]))
         seen_targets.add(sl)
 
-    # 2. Year/era-specific PNG (<slug>--<era>.png) for EVERY (team, decade) pair in F1 history!
+    # 2. Exact-year PNG (<slug>--<year>.png) AND decade PNG (<slug>--<era>.png) for EVERY (team, year) in F1 history!
     if not args.era:
-        hist_pairs: set[tuple[str, str]] = set()
+        hist_exact: dict[tuple[str, int], str] = {}
+        hist_decades: dict[tuple[str, str], tuple[int, str]] = {}
         for tbl in ("drivers_standings", "team_standings"):
             try:
                 for row in db._conn.execute(f"SELECT DISTINCT team, year FROM {tbl} WHERE team IS NOT NULL AND team != ''").fetchall():
-                    sl = find_slug(row["team"])
+                    t_raw = str(row["team"])
+                    y_int = int(row["year"])
+                    sl = find_slug(t_raw)
                     if sl and sl in pal_by_slug:
-                        hist_pairs.add((sl, era_for_year(row["year"])))
+                        hist_exact[(sl, y_int)] = t_raw
+                        er = era_for_year(y_int)
+                        prev = hist_decades.get((sl, er))
+                        if prev is None or y_int > prev[0]:
+                            hist_decades[(sl, er)] = (y_int, t_raw)
             except Exception:
                 pass
-        for sl, er in sorted(hist_pairs):
-            tname, pal = pal_by_slug[sl]
-            if args.team and args.team.lower() not in tname.lower():
+
+        for (sl, er), (rep_yr, t_raw) in sorted(hist_decades.items()):
+            tname, _ = pal_by_slug[sl]
+            if args.team and args.team.lower() not in tname.lower() and args.team.lower() not in t_raw.lower():
                 continue
             target_slug = f"{sl}--{er}"
             if target_slug not in seen_targets:
-                jobs.append((tname, target_slug, pal, er))
+                spec = resolve_team_livery(t_raw, rep_yr)
+                jobs.append((t_raw, target_slug, spec["palette"], spec["style"], rep_yr, spec["finish"]))
+                seen_targets.add(target_slug)
+
+        for (sl, y_int), t_raw in sorted(hist_exact.items()):
+            tname, _ = pal_by_slug[sl]
+            if args.team and args.team.lower() not in tname.lower() and args.team.lower() not in t_raw.lower():
+                continue
+            target_slug = f"{sl}--{y_int}"
+            if target_slug not in seen_targets:
+                spec = resolve_team_livery(t_raw, y_int)
+                jobs.append((t_raw, target_slug, spec["palette"], spec["style"], y_int, spec["finish"]))
                 seen_targets.add(target_slug)
 
     teams = jobs
@@ -232,9 +293,9 @@ def main() -> None:
             time.sleep(0.1)
 
         t0 = time.perf_counter()
-        n = asyncio.run(_batch_render(base_url, teams, Path(args.out), args.preset, args.width, args.height, args.suffix))
+        n, uniq = asyncio.run(_batch_render(base_url, teams, Path(args.out), args.preset, args.width, args.height, args.suffix))
         dt = time.perf_counter() - t0
-        print(f"Rendered {n} 3D car PNGs to {args.out} in {dt:.2f}s ({args.width}x{args.height}, preset={args.preset})")
+        print(f"Rendered {n} 3D car PNGs ({uniq} unique WebGL renders) to {args.out} in {dt:.2f}s ({args.width}x{args.height}, preset={args.preset})")
     finally:
         server.should_exit = True
         thread.join(timeout=5)

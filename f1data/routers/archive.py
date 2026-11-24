@@ -651,17 +651,15 @@ async def team_page(team: str, request: Request):
     db = srv.get_db()
     name = db.resolve_team_name(team)
     data = db.team_profile(name)
-    from ..f1_car_palettes import find_slug, load_palettes, infer_livery_style, infer_team_era
-    car_slug = find_slug(name)
-    car_palette = load_palettes().get(name)
-    if car_palette is None and car_slug:
-        # display name (e.g. "McLaren") -> palette keyed by its full family name
-        for pal_name, pal in load_palettes().items():
-            if find_slug(pal_name) == car_slug:
-                car_palette = pal
-                break
+    from ..f1_car_palettes import find_car_png_slug, infer_team_era
+    from ..livery_registry import resolve_team_livery
     last_year = (data.get("range") or {}).get("last_year")
-    car_era = infer_team_era(name, year=last_year, team_years_map=srv._team_peak_years_map(db))
+    year_map = srv._team_peak_years_map(db)
+    target_year = int(last_year) if last_year else (year_map.get(name) or 2026)
+    car_slug = find_car_png_slug(name, year=target_year)
+    livery_spec = resolve_team_livery(name, target_year)
+    car_palette = livery_spec["palette"]
+    car_era = infer_team_era(name, year=target_year, team_years_map=year_map)
     team_cards = _build_team_cards_bundle(db, name)
     return srv.templates.TemplateResponse(
         "team.html",
@@ -670,8 +668,9 @@ async def team_page(team: str, request: Request):
             **data,
             "car_slug": car_slug,
             "car_palette": car_palette,
-            "car_livery_style": infer_livery_style(name),
+            "car_livery_style": livery_spec["style"],
             "car_era": car_era,
+            "car_year": target_year,
             "team_cards": team_cards,
         },
     )

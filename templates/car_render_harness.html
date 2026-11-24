@@ -37,18 +37,42 @@
       lights.fill.intensity = 1.35;
       lights.rim.intensity = 1.25;
 
-      var carsByEra = {};
-      function getCarForEra(eraName) {
-        var er = eraName || '2020s';
-        if (!carsByEra[er]) {
-          var c = F1Car3D.createCar({}, 'modern', er);
+      var carsByKey = {};
+      function chassisBucketKey(eraOrYear) {
+        if (eraOrYear == null) return '2026';
+        var s = String(eraOrYear).trim();
+        var m = s.match(/^(\d{4})$/);
+        if (!m) return s || '2020s';
+        var y = parseInt(m[1], 10);
+        if (y <= 1960) return '1955';
+        if (y <= 1967) return '1965';
+        if (y <= 1970) return '1968';
+        if (y <= 1972) return '1971';
+        if (y <= 1979) return '1975';
+        if (y <= 1988) return '1988';
+        if (y <= 1993) return '1991';
+        if (y <= 1997) return '1995';
+        if (y <= 2005) return '2004';
+        if (y <= 2008) return '2008';
+        if (y <= 2013) return '2012';
+        if (y <= 2016) return '2014';
+        if (y === 2017) return '2017';
+        if (y <= 2021) return '2020';
+        if (y <= 2025) return '2024';
+        return '2026';
+      }
+      function getCarForEra(eraOrYear) {
+        var key = chassisBucketKey(eraOrYear);
+        if (!carsByKey[key]) {
+          var arg = /^\d{4}$/.test(key) ? parseInt(key, 10) : key;
+          var c = F1Car3D.createCar({}, 'modern', arg);
           c.visible = false;
           scene.add(c);
-          carsByEra[er] = c;
+          carsByKey[key] = c;
         }
-        return carsByEra[er];
+        return carsByKey[key];
       }
-      var activeCar = getCarForEra('2020s');
+      var activeCar = getCarForEra(2026);
       activeCar.visible = true;
       var shadow = F1Car3D.createContactShadow();
       shadow.material.opacity = 0.55;
@@ -63,7 +87,7 @@
         var pr = F1Car3D.CAMERA_PRESETS[presetName] || { theta: 0.88, phi: 0.22, radius: 6.75, targetY: 0.44 };
         /* Card/PDF 2:1 framing: centered dynamic 3/4 front-side angle filling the frame cleanly */
         if (presetName === 'card') {
-          pr = { theta: 0.92, phi: 0.22, radius: 6.75, targetY: 0.44 };
+          pr = { theta: 0.92, phi: 0.22, radius: 6.55, targetY: 0.44 };
         }
         var y = pr.radius * Math.sin(pr.phi) + pr.targetY;
         var r = pr.radius * Math.cos(pr.phi);
@@ -71,16 +95,16 @@
         camera.lookAt(0, pr.targetY, 0.12);
       }
 
-      window.renderLiveryPng = function (palette, presetName, width, height, styleName, eraName) {
+      window.renderLiveryPng = function (palette, presetName, width, height, styleName, eraOrYear, finishName) {
         width = width || 640;
         height = height || 320;
-        var nextCar = getCarForEra(eraName || '2020s');
+        var nextCar = getCarForEra(eraOrYear || 2026);
         if (activeCar !== nextCar) {
           activeCar.visible = false;
           nextCar.visible = true;
           activeCar = nextCar;
         }
-        activeCar.userData.setPalette(palette, styleName || 'modern');
+        activeCar.userData.setPalette(palette, styleName || 'modern', finishName || undefined);
         if (palette && palette.main) {
           lights.rim.color.set(palette.main);
         }

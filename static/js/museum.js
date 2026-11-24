@@ -22,17 +22,22 @@
     var color = container.getAttribute('data-color') || '#d9a441';
     var explicitEra = container.getAttribute('data-era') || '';
     var explicitYear = container.getAttribute('data-year') || '';
+    var helmetHex = container.getAttribute('data-helmet') || '';
+    var helmetAccent = container.getAttribute('data-helmet-accent') || '';
     var canvas = container.querySelector('canvas');
     if (!canvas || !team) return;
 
-    /* Prefer the real sculpted 3D F1 car (f1_car_3d.js) + lightweight palette API */
+    /* Prefer the real sculpted 3D F1 car (f1_car_3d.js) + lightweight year-aware palette API */
     if (window.F1Car3D && window.THREE) {
       var url = '/api/car/' + encodeURIComponent(team) + '/palette' + (explicitYear ? ('?year=' + encodeURIComponent(explicitYear)) : '');
       fetch(url)
         .then(function (r) { if (!r.ok) throw new Error('no palette'); return r.json(); })
-        .then(function (data) { initCar3DScene(data.palette || {}, data.style || 'modern', explicitEra || data.era || '2020s'); })
+        .then(function (data) {
+          var eraOrYear = explicitYear ? parseInt(explicitYear, 10) : (data.year || explicitEra || data.era || '2020s');
+          initCar3DScene(data.palette || {}, data.style || 'modern', eraOrYear, data.finish || '');
+        })
         .catch(function () {
-          initCar3DScene({ main: color, secondary: '#161920', accent: '#ffffff', pop: '#ffffff', detail: '#2a303c' }, 'modern', explicitEra || '2020s');
+          initCar3DScene({ main: color, secondary: '#161920', accent: '#ffffff', pop: '#ffffff', detail: '#2a303c' }, 'modern', explicitYear ? parseInt(explicitYear, 10) : (explicitEra || '2020s'), '');
         });
       return;
     }
@@ -42,7 +47,7 @@
       .then(function (data) { initScene(data); })
       .catch(function () { container.classList.add('no3d'); });
 
-    function initCar3DScene(palette, liveryStyle, carEra) {
+    function initCar3DScene(palette, liveryStyle, carEra, carFinish) {
       var renderer;
       try {
         renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
@@ -88,8 +93,14 @@
       ring.position.y = 0.002;
       scene.add(ring);
 
-      /* Sculpted 3D F1 car + soft contact shadow */
-      var car = F1Car3D.createCar(palette, liveryStyle, carEra || '2020s');
+      /* Sculpted 3D F1 car + soft contact shadow (exact year chassis + authentic finish + driver helmet!) */
+      var car = F1Car3D.createCar(palette, liveryStyle, carEra || 2026);
+      if (car.userData && car.userData.setPalette) {
+        var palCopy = Object.assign({}, palette);
+        if (helmetHex) palCopy.pop = helmetHex;
+        if (helmetAccent && !palette.accent) palCopy.accent = helmetAccent;
+        car.userData.setPalette(palCopy, liveryStyle, carFinish || undefined);
+      }
       scene.add(car);
       scene.add(F1Car3D.createContactShadow());
 

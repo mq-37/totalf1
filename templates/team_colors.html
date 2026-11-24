@@ -58,7 +58,7 @@
           </td>
           <td>
             {% if t.car_slug %}
-            <img src="/static/cars/png/{{ t.car_slug }}.png" alt="{{ t.name }} 3D car" loading="lazy" style="height:44px;width:auto;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));"/>
+            <img src="/static/cars/png/{{ t.car_slug }}.png?v={{ asset_v }}" alt="{{ t.name }} 3D car" loading="lazy" style="height:44px;width:auto;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));"/>
             {% else %}
             <span class="muted small">—</span>
             {% endif %}

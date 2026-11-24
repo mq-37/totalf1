@@ -22,7 +22,7 @@
           <td>{{ r["position"] }}</td>
           <td>
             <div class="team-cell">
-              {% if slug %}<img class="team-cell-car" src="/static/cars/png/{{ slug }}.png" alt="{{ r['team'] }} 3D car" loading="lazy"/>{% endif %}
+              {% if slug %}<img class="team-cell-car" src="/static/cars/png/{{ slug }}.png?v={{ asset_v }}" alt="{{ r['team'] }} 3D car" loading="lazy"/>{% endif %}
               <a href="/team/{{ r['team'].replace(' ', '-') }}">{{ r["team"] }}</a>
             </div>
           </td>

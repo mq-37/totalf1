@@ -48,7 +48,7 @@
       <div class="exhibit-car">
         {% set car_slug = car_slugs.get(r['team']) if car_slugs and r['team'] else none %}
         {% if car_slug %}
-        <img src="/static/cars/png/{{ car_slug }}.png" alt="{{ r['team'] }} 3D livery" loading="lazy"/>
+        <img src="/static/cars/png/{{ car_slug }}.png?v={{ asset_v }}" alt="{{ r['team'] }} 3D livery" loading="lazy"/>
         {% endif %}
         <span class="exhibit-teams">{{ r['team'] }}</span>
       </div>

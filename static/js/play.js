@@ -86,7 +86,7 @@
 
   function renderCarImg(slug, alt) {
     if (!slug) return `<div class="gc-car-empty">No 3D livery</div>`;
-    return `<img class="gc-car-img" src="/static/cars/png/${esc(slug)}.png" alt="${esc(alt)}" loading="lazy">`;
+    return `<img class="gc-car-img" src="/static/cars/png/${esc(slug)}.png?v=20261124k" alt="${esc(alt)}" loading="lazy">`;
   }
 
   // =========================================================================
@@ -1381,7 +1381,7 @@
       const seen = new Set();
       const imgs = (t.cars || []).filter((cc) => cc.car_slug && !seen.has(cc.car_slug) && seen.add(cc.car_slug)).slice(0, 5);
       c2.querySelector(".clue-body").innerHTML = imgs.length
-        ? `<div class="clue-cars">${imgs.map((cc) => `<img src="/static/cars/png/${esc(cc.car_slug)}.png" alt="Team car" title="${showAll ? esc(cc.name) : "Mystery livery"}">`).join("")}</div>`
+        ? `<div class="clue-cars">${imgs.map((cc) => `<img src="/static/cars/png/${esc(cc.car_slug)}.png?v=20261124k" alt="Team car" title="${showAll ? esc(cc.name) : "Mystery livery"}">`).join("")}</div>`
         : esc(t.unique_teams.join(" · "));
     } else {
       c2.classList.add("locked");
