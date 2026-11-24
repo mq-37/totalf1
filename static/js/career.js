@@ -3110,13 +3110,20 @@
       cr.b3d.updateAndRender({
         circuit: cr.circuit,
         cars: cr.cars.map((c) => ({
-          idx: c.idx, code3: c.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+          idx: c.idx, code3: c.code3, team: c.teamName, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.color,
           liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && cr.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
+          fuelKg: Math.max(8, (1 - (c.lap / Math.max(1, cr.totalLaps))) * 95),
+          setupRideHeight: c.eng && c.eng.actual ? c.eng.actual.rideHeight : null,
+          setupAeroBalance: c.eng && c.eng.actual ? c.eng.actual.aeroBalance : null,
+          balanceBias: c.eng ? c.eng.balanceBias : 0,
+          floorHealth: c.components && c.components.floor ? c.components.floor.health : 95,
+          suspHealth: c.components && c.components.suspension ? c.components.suspension.health : 95,
         })),
         raceState: {
+          eraKey: (DATA && DATA.state && DATA.state.era === "legends") ? "1990s" : "2026",
           lap: Math.min(cr.totalLaps, Math.max(1, (sorted3d[0]?.lap || 0) + 1)),
           totalLaps: cr.totalLaps,
           wetness: cr.wetness,

@@ -2048,14 +2048,21 @@
       fs.b3d.updateAndRender({
         circuit: fs.circuit,
         cars: fs.cars.map((c) => ({
-          idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+          idx: c.idx, code3: c.card.code3, team: c.card.hero_team, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
           inPit: c.inPit, pitDuration: c.pitDuration, dnf: c.dnf, color: c.card.hero_color,
           liveKph: c.livePhysKph || c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
+          fuelKg: c.fuelKg,
+          setupRideHeight: c.eng && c.eng.actual ? c.eng.actual.rideHeight : null,
+          setupAeroBalance: c.eng && c.eng.actual ? c.eng.actual.aeroBalance : null,
+          balanceBias: c.eng ? c.eng.balanceBias : 0,
+          floorHealth: c.components && c.components.floor ? c.components.floor.health : 95,
+          suspHealth: c.components && c.components.suspension ? c.components.suspension.health : 95,
           palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, era: c.card.hero_era,
         })),
         raceState: {
+          eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
           lap: Math.min(fs.totalLaps, Math.max(1, (sorted3d[0]?.lap || 0) + 1)),
           totalLaps: fs.totalLaps,
           wetness: fs.wetness,

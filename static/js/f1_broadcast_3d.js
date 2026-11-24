@@ -834,6 +834,7 @@
       circuitId: "",
       circuitName: "",
       trackPts: [],
+      trackSpline: null,
       pitPts: [],
       pitSide: 1,
       tvCams: [],
@@ -849,8 +850,10 @@
       djBeams: [],
       helicopter: null,
       sparkSystem: null,
+      magSparkSystem: null,
       spraySystem: null,
-      carMeshes: new Map(), // carIdx -> { group, isHero, fx }
+      carMeshes: new Map(),   // carIdx -> { group, isHero, fx }
+      carPhysics: new Map(),  // carIdx -> F1VehiclePhysics state
       pitCrewGroup: null,
       camPosSmooth: new THREE.Vector3(),
       camLookSmooth: new THREE.Vector3(),
@@ -889,6 +892,8 @@
         scene.remove(entry.group);
       });
       state.carMeshes.clear();
+      state.carPhysics.clear();
+      state.trackSpline = null;
       state.flagUniforms = [];
       state.smokePuffs = [];
       state.djBeams = [];
@@ -896,13 +901,15 @@
       state.helicopter = null;
       state.crowdRef = null;
       state.sparkSystem = null;
+      state.magSparkSystem = null;
       state.spraySystem = null;
       state.camInit = false;
     }
 
     function sample3DTrack(prog) {
+      if (state.trackSpline) return state.trackSpline.sample(prog);
       const pts = state.trackPts;
-      if (!pts.length) return { x: 0, z: 0, tx: 1, tz: 0 };
+      if (!pts.length) return { x: 0, z: 0, tx: 1, tz: 0, curv: 0, bumpMm: 0 };
       const n = pts.length;
       const p = (((prog % 1) + 1) % 1) * n;
       const i0 = Math.floor(p) % n;
@@ -917,6 +924,8 @@
         z: a.z + (b.z - a.z) * f,
         tx: tx / tl,
         tz: tz / tl,
+        curv: 0,
+        bumpMm: 0,
       };
     }
 
@@ -982,42 +991,43 @@
       grp.add(sun.target);
       state.sunLight = sun;
 
-      // 3. Build Smooth Densified 3D Circuit Centerline
+      // 3. Build C2-Continuous Catmull-Rom 3D Circuit Centerline (Eliminates all corner kinks & camera jitter!)
       const raw = circuit.points;
-      let perim = 0;
-      for (let i = 0; i < raw.length; i++) {
-        const a = raw[i], b = raw[(i + 1) % raw.length];
-        perim += Math.hypot(b[0] - a[0], b[1] - a[1]);
-      }
-      const targetPerimM = Math.max(2400, Math.min(5400, (circuit.length_km || 5.0) * 660));
-      const scale = targetPerimM / Math.max(10, perim);
-
-      let cx = 0, cz = 0;
-      raw.forEach(([x, y]) => { cx += x; cz += y; });
-      cx /= raw.length; cz /= raw.length;
-
-      const pts = [];
-      const nRaw = raw.length;
-      for (let i = 0; i < nRaw; i++) {
-        const a = raw[i], b = raw[(i + 1) % nRaw];
-        for (let k = 0; k < 2; k++) {
-          const t = k * 0.5;
-          pts.push({
-            x: ((a[0] + (b[0] - a[0]) * t) - cx) * scale,
-            z: ((a[1] + (b[1] - a[1]) * t) - cz) * scale,
-            tx: 1, tz: 0,
-          });
+      let pts = [];
+      if (global.F1VehiclePhysics && global.F1VehiclePhysics.buildTrackSpline) {
+        state.trackSpline = global.F1VehiclePhysics.buildTrackSpline(raw, circuit.length_km, circuit.id, circuit.biome);
+        // Sample 360 ultra-smooth spline vertices for crisp curved asphalt/kerb ribbons
+        for (let i = 0; i < 360; i++) {
+          pts.push(state.trackSpline.sample(i / 360));
+        }
+      } else {
+        let perim = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const a = raw[i], b = raw[(i + 1) % raw.length];
+          perim += Math.hypot(b[0] - a[0], b[1] - a[1]);
+        }
+        const targetPerimM = Math.max(2400, Math.min(5400, (circuit.length_km || 5.0) * 660));
+        const scale = targetPerimM / Math.max(10, perim);
+        let cx = 0, cz = 0;
+        raw.forEach(([x, y]) => { cx += x; cz += y; });
+        cx /= raw.length; cz /= raw.length;
+        const nRaw = raw.length;
+        for (let i = 0; i < nRaw; i++) {
+          const a = raw[i], b = raw[(i + 1) % nRaw];
+          for (let k = 0; k < 2; k++) {
+            const t = k * 0.5;
+            pts.push({ x: ((a[0] + (b[0] - a[0]) * t) - cx) * scale, z: ((a[1] + (b[1] - a[1]) * t) - cz) * scale, tx: 1, tz: 0 });
+          }
+        }
+        const nn = pts.length;
+        for (let i = 0; i < nn; i++) {
+          const prev = pts[(i - 1 + nn) % nn], next = pts[(i + 1) % nn];
+          const dx = next.x - prev.x, dz = next.z - prev.z;
+          const len = Math.max(1e-5, Math.hypot(dx, dz));
+          pts[i].tx = dx / len; pts[i].tz = dz / len;
         }
       }
       const n = pts.length;
-      for (let i = 0; i < n; i++) {
-        const prev = pts[(i - 1 + n) % n];
-        const next = pts[(i + 1) % n];
-        const dx = next.x - prev.x, dz = next.z - prev.z;
-        const len = Math.max(1e-5, Math.hypot(dx, dz));
-        pts[i].tx = dx / len;
-        pts[i].tz = dz / len;
-      }
       state.trackPts = pts;
 
       // 4. Textured Biome Ground Plane + Harbour/Lake Water with Luxury Yachts!
@@ -1541,35 +1551,61 @@
       grp.add(heli.group);
       state.helicopter = heli;
 
-      // 13. GPU Particle Pools for Titanium Skid-Block Sparks & Wet Rain Spray Roostertails (Soft Radial Glow Sprites!)
-      const makeGlowTex = () => {
+      // 13. GPU Particle Pools: Sharp Titanium/Magnesium Bottoming Sparks + Subtle Non-Blinding Rain Mist!
+      const makeSparkSprite = () => {
         const cv = document.createElement("canvas");
         cv.width = 32; cv.height = 32;
         const c2 = cv.getContext("2d");
-        const g = c2.createRadialGradient(16, 16, 1, 16, 16, 16);
-        g.addColorStop(0, "rgba(255,255,255,1)");
-        g.addColorStop(0.45, "rgba(255,255,255,0.65)");
-        g.addColorStop(1, "rgba(255,255,255,0)");
+        const g = c2.createRadialGradient(16, 16, 0.5, 16, 16, 14);
+        g.addColorStop(0.0, "rgba(255,250,210,1)");
+        g.addColorStop(0.35, "rgba(255,170,35,0.92)");
+        g.addColorStop(0.75, "rgba(255,88,10,0.38)");
+        g.addColorStop(1.0, "rgba(255,40,0,0)");
         c2.fillStyle = g;
         c2.fillRect(0, 0, 32, 32);
         return new THREE.CanvasTexture(cv);
       };
-      const glowSpriteTex = makeGlowTex();
-      const makePool = (count, colorHex, size, opacity) => {
+      const makeMistSprite = () => {
+        const cv = document.createElement("canvas");
+        cv.width = 32; cv.height = 32;
+        const c2 = cv.getContext("2d");
+        const g = c2.createRadialGradient(16, 16, 2, 16, 16, 15);
+        g.addColorStop(0.0, "rgba(165,186,208,0.42)");
+        g.addColorStop(0.55, "rgba(148,168,190,0.18)");
+        g.addColorStop(1.0, "rgba(148,168,190,0)");
+        c2.fillStyle = g;
+        c2.fillRect(0, 0, 32, 32);
+        return new THREE.CanvasTexture(cv);
+      };
+      const sparkTex = makeSparkSprite();
+      const mistTex = makeMistSprite();
+      const makePool = (count, colorHex, size, opacity, tex, additive) => {
         const pos = new Float32Array(count * 3);
         const vel = new Float32Array(count * 3);
         const life = new Float32Array(count);
         for (let i = 0; i < count; i++) { pos[i * 3 + 1] = -999; life[i] = 0; }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        const mat = new THREE.PointsMaterial({ color: colorHex, map: glowSpriteTex, size, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+        const mat = new THREE.PointsMaterial({
+          color: colorHex,
+          map: tex,
+          size,
+          transparent: true,
+          opacity,
+          depthWrite: false,
+          blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+        });
         const ptsMesh = new THREE.Points(geo, mat);
         ptsMesh.frustumCulled = false;
         grp.add(ptsMesh);
         return { geo, pos, vel, life, cursor: 0, count };
       };
-      state.sparkSystem = makePool(260, 0xfde047, 1.05, 0.95);
-      state.spraySystem = makePool(380, 0xe2e8f0, 3.2, 0.36);
+      // Fine, crisp fiery titanium sparks (ONLY fired on real chassis bottoming-out!)
+      state.sparkSystem = makePool(360, 0xffb326, 0.34, 0.95, sparkTex, false);
+      // 1980s/90s bright white-gold magnesium skid sparks
+      state.magSparkSystem = makePool(180, 0xfff3b0, 0.36, 0.95, sparkTex, false);
+      // Subtle translucent slate rain mist (NormalBlending — NEVER blinding white orbs!)
+      state.spraySystem = makePool(240, 0x9fb4ca, 0.72, 0.24, mistTex, false);
 
       // 14. Place 14 Elevated Off-Side Trackside TV Broadcast Cameras
       state.tvCams = [];
@@ -1723,8 +1759,11 @@
 
       let focPos = new THREE.Vector3();
       let focFwd = new THREE.Vector3(0, 0, 1);
+      let focDyn = null;
       let pittingCarPos = null;
       const rainBlink = (Math.floor(state.elapsed * 5) % 2 === 0) ? 0.95 : 0.15;
+      const VP = global.F1VehiclePhysics;
+      const eraKey = (rs && rs.eraKey) || "2026";
 
       cars.forEach((car) => {
         const existing = state.carMeshes.get(car.idx);
@@ -1739,39 +1778,91 @@
         const pose = inPit
           ? sample3DPit(1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration)))
           : sample3DTrack(car.totalProg);
-        const rx = -pose.tz, rz = pose.tx;
-        const latM = inPit ? 0 : Math.max(-5.8, Math.min(5.8, (car.latOffset || 0) * 1.15));
-        const wx = pose.x + rx * latM;
-        const wz = pose.z + rz * latM;
+        const latTarget = inPit ? 0 : Math.max(-5.6, Math.min(5.6, (car.latOffset || 0) * 1.12));
 
-        mesh.position.set(wx, 0.06, wz);
-        mesh.rotation.y = Math.atan2(pose.tx, pose.tz);
+        let wx, wz, heaveY = 0.06, yaw = Math.atan2(pose.tx, pose.tz), pitchRad = 0, rollRad = 0, dyn = null;
+        if (VP && VP.stepCarPhysics) {
+          let pState = state.carPhysics.get(car.idx);
+          if (!pState) {
+            pState = VP.createCarPhysicsState(car, eraKey);
+            state.carPhysics.set(car.idx, pState);
+          }
+          dyn = VP.stepCarPhysics(pState, {
+            x: pose.x,
+            z: pose.z,
+            tx: pose.tx,
+            tz: pose.tz,
+            curv: pose.curv || 0,
+            bumpMm: pose.bumpMm || 0,
+            targetLat: latTarget,
+            liveKph: car.liveKph || 220,
+            liveLongG: car.liveLongG || 0,
+            drsOpen: !!car.drsOpen,
+            fuelKg: car.fuelKg,
+            floorHealth: car.floorHealth,
+            suspHealth: car.suspHealth,
+            balanceBias: car.balanceBias,
+            inPit,
+          }, stepDt > 0 ? stepDt : 0.016, { wetness });
+          wx = dyn.wx;
+          wz = dyn.wz;
+          heaveY = dyn.heaveY;
+          yaw = dyn.yaw;
+          pitchRad = dyn.pitchRad;
+          rollRad = dyn.rollRad;
+        } else {
+          const rx = -pose.tz, rz = pose.tx;
+          wx = pose.x + rx * latTarget;
+          wz = pose.z + rz * latTarget;
+        }
+
+        mesh.position.set(wx, heaveY, wz);
+        mesh.rotation.order = "YXZ";
+        mesh.rotation.set(pitchRad, yaw, rollRad);
 
         // Update dynamic Pirelli tyre compound ring, glowing brakes, DRS & wet rain light
         if (entry.fx) {
           entry.fx.ringMat.color.setHex(COMPOUND_HEX[car.compound] || 0xfacc15);
           const braking = (car.liveLongG || 0) < -1.1;
           entry.fx.brakeMat.opacity = braking ? 0.92 : 0.0;
-          entry.fx.drsMat.opacity = car.drsOpen ? 0.95 : 0.0;
+          entry.fx.drsMat.opacity = (car.drsOpen || (dyn && dyn.inXMode)) ? 0.95 : 0.0;
           entry.fx.rainMat.opacity = wetness >= 20 ? rainBlink : 0.08;
         }
 
-        // Emit Titanium Sparks on fast straights & Rain Spray roostertails when wet!
+        // Authentic Per-Car Physics Particles:
+        // 1. Titanium / Magnesium Skid-Block Sparks ONLY when THIS car physically bottoms out!
+        // 2. Subtle, non-blinding low-wake rain mist ONLY in wet conditions (never obstructing POV!)
         if (!paused && !inPit && nearestIds.has(car.idx)) {
-          if ((car.liveKph || 0) >= 272 && Math.random() < 0.35) {
-            spawnParticle(
-              state.sparkSystem,
-              wx - pose.tx * 2.1, 0.14, wz - pose.tz * 2.1,
-              -pose.tx * 16 + (Math.random() - 0.5) * 4, 1.8 + Math.random() * 2.4, -pose.tz * 16 + (Math.random() - 0.5) * 4,
-              0.38
-            );
+          const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+          if (dyn && dyn.bottoming > 0.06) {
+            const sparkPool = dyn.skidType === "magnesium" ? state.magSparkSystem : state.sparkSystem;
+            const burst = Math.max(1, Math.round(dyn.bottoming * 5));
+            for (let b = 0; b < burst; b++) {
+              const spreadX = (Math.random() - 0.5) * 0.75;
+              const spreadZ = (Math.random() - 0.5) * 0.75;
+              spawnParticle(
+                sparkPool,
+                wx - fwdX * (1.8 + Math.random() * 0.6) + spreadX * 0.4,
+                0.08 + Math.random() * 0.05,
+                wz - fwdZ * (1.8 + Math.random() * 0.6) + spreadZ * 0.4,
+                -fwdX * (18 + Math.random() * 14) + spreadX * 4.5,
+                0.9 + Math.random() * 2.2 * dyn.bottoming,
+                -fwdZ * (18 + Math.random() * 14) + spreadZ * 4.5,
+                0.22 + Math.random() * 0.18
+              );
+            }
           }
-          if (wetness >= 22 && Math.random() < 0.55) {
+          // Subtle low rear-diffuser water mist (only for cars ahead/around, never blinding!)
+          if (wetness >= 28 && (!focCar || car.idx !== focCar.idx) && Math.random() < (wetness / 100) * 0.36) {
             spawnParticle(
               state.spraySystem,
-              wx - pose.tx * 2.5 + (Math.random() - 0.5) * 1.4, 0.55, wz - pose.tz * 2.5 + (Math.random() - 0.5) * 1.4,
-              -pose.tx * 9 + (Math.random() - 0.5) * 3, 2.2 + Math.random() * 2.2, -pose.tz * 9 + (Math.random() - 0.5) * 3,
-              0.62
+              wx - fwdX * 2.7 + (Math.random() - 0.5) * 1.1,
+              0.24 + Math.random() * 0.16,
+              wz - fwdZ * 2.7 + (Math.random() - 0.5) * 1.1,
+              -fwdX * 5.5 + (Math.random() - 0.5) * 1.8,
+              0.55 + Math.random() * 0.85,
+              -fwdZ * 5.5 + (Math.random() - 0.5) * 1.8,
+              0.38
             );
           }
         }
@@ -1780,13 +1871,15 @@
           pittingCarPos = new THREE.Vector3(wx, 0.8, wz);
         }
         if (focCar && car.idx === focCar.idx) {
-          focPos.set(wx, 0.06, wz);
-          focFwd.set(pose.tx, 0, pose.tz).normalize();
+          focPos.set(wx, heaveY, wz);
+          focFwd.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
+          focDyn = dyn;
         }
       });
 
-      stepPool(state.sparkSystem, stepDt, 9.5);
-      stepPool(state.spraySystem, stepDt, 2.2);
+      stepPool(state.sparkSystem, stepDt, 12.5);
+      stepPool(state.magSparkSystem, stepDt, 12.0);
+      stepPool(state.spraySystem, stepDt, 1.4);
 
       // Keep sun shadow frustum centered right on the hero car for crisp shadows everywhere on track!
       if (state.sunLight) {
@@ -1814,13 +1907,17 @@
       let desiredFov = 54;
 
       if (effMode === "pov") {
-        desiredPos.copy(focPos).addScaledVector(focFwd, -0.55);
-        desiredPos.y = 1.48;
-        desiredLook.copy(focPos).addScaledVector(focFwd, 30);
-        desiredLook.y = 1.05;
-        desiredFov = 68 + Math.min(10, ((focCar?.liveKph || 220) - 180) * 0.06);
-        state.camPosSmooth.copy(desiredPos);
-        state.camLookSmooth.copy(desiredLook);
+        // Silky Suspension-Coupled Onboard Halo T-Cam POV (zero vertex-kink jitter + authentic heave/pitch feel!)
+        const pitchLookY = focDyn ? (-focDyn.pitchRad * 7.5) : 0;
+        desiredPos.copy(focPos).addScaledVector(focFwd, -0.58);
+        desiredPos.y = focPos.y + 1.42;
+        desiredLook.copy(focPos).addScaledVector(focFwd, 32);
+        desiredLook.y = 1.05 + pitchLookY;
+        desiredFov = 66 + Math.min(10, ((focCar?.liveKph || 220) - 180) * 0.055);
+        const pLerp = state.camInit ? Math.min(1, (dt || 0.016) * 24) : 1;
+        const lLerp = state.camInit ? Math.min(1, (dt || 0.016) * 16) : 1;
+        state.camPosSmooth.lerp(desiredPos, pLerp);
+        state.camLookSmooth.lerp(desiredLook, lLerp);
       } else if (effMode === "chase") {
         desiredPos.copy(focPos).addScaledVector(focFwd, -10.8);
         desiredPos.y = 3.85;
@@ -1871,10 +1968,14 @@
         const camLabel = effMode === "pov" ? "ONBOARD T-CAM POV"
           : (effMode === "chase" ? "3RD PERSON CHASE"
             : (effMode === "pitlane" ? "PITLANE CAM" : "TRACKSIDE TV CAM"));
+        const physTag = focDyn
+          ? `<span class="b3d-phys-tag">RH <b>${focDyn.minRideMm}mm</b> · DF <b>${(focDyn.downforceKg / 1000).toFixed(1)}t</b>${focDyn.bottoming > 0.15 ? ` · <em style="color:#fbbf24;font-style:normal;font-weight:900;">⚡ PLANK</em>` : (focDyn.inXMode ? ` · <em style="color:#38bdf8;font-style:normal;font-weight:800;">X-MODE</em>` : "")}</span>`
+          : "";
         hudEl.innerHTML = `
           <span class="b3d-cam-tag"><i class="fas fa-video"></i> ${camLabel}${state.mode === "director" ? " · AUTO" : ""}</span>
           <span class="b3d-drv-tag"><i style="background:${focCar.color || "#e10600"}"></i>P${focCar.pos || 1} <b>${focCar.code3 || "DRV"}</b></span>
           <span class="b3d-speed-tag"><b>${Math.round(focCar.liveKph || 260)}</b> KPH · G${focCar.liveGear || 6}</span>
+          ${physTag}
         `;
       }
     }
