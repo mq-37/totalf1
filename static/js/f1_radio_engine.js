@@ -453,14 +453,18 @@
       const actionsHtml = Array.isArray(payload.actions) && payload.actions.length
         ? `<div class="tr-actions">${payload.actions.map((a, idx) => `<button type="button" class="tr-act-btn" data-tr-act="${idx}">${esc(a.label)}</button>`).join("")}</div>`
         : "";
+      const replyHtml = payload.engReply
+        ? `<div class="tr-reply"><i class="fas fa-reply"></i> ${esc(payload.engReply)}</div>`
+        : "";
       containerEl.innerHTML = `
         <div class="tr-card tone-${esc(payload.tone || "info")}" style="--tr-col:${esc(payload.color || "#e10600")}">
           <div class="tr-head">
-            <span class="tr-badge"><i class="fas fa-headset"></i> TEAM RADIO</span>
+            <span class="tr-badge"><i class="fas fa-headset"></i> ${payload.engReply ? "2-WAY RADIO" : "TEAM RADIO"}</span>
             <strong class="tr-route">${esc(payload.speaker)} → ${esc(payload.to)}</strong>
             <span class="tr-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
           </div>
           <div class="tr-body">"${esc(payload.text)}"</div>
+          ${replyHtml}
           ${actionsHtml}
         </div>
       `;
@@ -482,8 +486,10 @@
       if (o.voiceEnabled && o.voiceEnabled()) {
         if (global.F1Sfx && global.F1Sfx.speak) {
           const isBoard = String(payload.speaker || "").toUpperCase() === "PIT BOARD";
+          const cleanReply = payload.engReply ? String(payload.engReply).replace(/^[^:]{2,26}:\s*/, "").slice(0, 175) : "";
           global.F1Sfx.speak({
             text: payload.text.slice(0, 190),
+            replyText: isBoard ? "" : cleanReply,
             role: isBoard ? "stewards" : (payload.isEngineer ? "engineer" : "driver"),
             archetype: payload.archetype || "",
             driverName: payload.driverName || "",
@@ -503,7 +509,7 @@
       }
 
       clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => containerEl.classList.add("hidden"), payload.actions ? 8500 : 5400);
+      hideTimer = setTimeout(() => containerEl.classList.add("hidden"), payload.actions ? 8500 : (payload.engReply ? 7200 : 5400));
     }
 
     return {
@@ -535,6 +541,7 @@
           speaker: msg.speaker,
           to: msg.to,
           text: msg.text,
+          engReply: msg.engReply || "",
           tone: msg.tone,
           color,
           isEngineer: msg.speaker !== (car.code3 || (car.card && car.card.code3) || "DRV"),

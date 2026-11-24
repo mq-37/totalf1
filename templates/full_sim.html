@@ -144,6 +144,15 @@
             <option value="24">24 CPU Cars (Full Pack)</option>
           </select>
         </div>
+        <div class="arena-control-group">
+          <label for="fsim-weekend-sel">Weekend Structure</label>
+          <select id="fsim-weekend-sel">
+            <option value="direct" selected>Grand Prix Direct (Standing Start)</option>
+            <option value="formation">Formation Lap + Grand Prix</option>
+            <option value="quali">Live Q1 / Q2 / Q3 Shootout + GP</option>
+            <option value="sprint">⚡ 2026 Sprint Weekend (Q + 5L Sprint + GP)</option>
+          </select>
+        </div>
       </div>
       <div class="sim-drawer-circuit-meta" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -235,6 +244,30 @@
       <!-- Floating Checkered Flag / Championship Finish Overlay -->
       <div id="fsim-finish-banner" class="sim-finish-overlay hidden"></div>
 
+      <!-- Live Q1 / Q2 / Q3 Knockout Qualifying Shootout Modal -->
+      <div id="fsim-quali-modal" class="fsim-quali-modal hidden" role="dialog" aria-label="Live FIA Knockout Qualifying">
+        <div class="fsim-quali-head">
+          <div>
+            <span id="fsim-quali-badge" class="fsim-quali-badge">Q1 · KNOCKOUT</span>
+            <strong id="fsim-quali-title">FIA QUALIFYING SHOOTOUT</strong>
+            <small id="fsim-quali-sub" class="muted">Top 15 advance to Q2</small>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="fsim-quali-clock" class="fsim-quali-clock">18:00</span>
+            <button type="button" id="fsim-quali-skip-btn" class="sim-dir-btn" style="border-color:#38bdf8;color:#7dd3fc;"><i class="fas fa-forward"></i> Skip Session</button>
+            <button type="button" id="fsim-quali-go-btn" class="btn-racing hidden"><i class="fas fa-flag-checkered"></i> Proceed to Grid</button>
+          </div>
+        </div>
+        <div class="fsim-quali-body">
+          <table class="fsim-quali-table">
+            <thead>
+              <tr><th>P</th><th>DRIVER</th><th>TEAM</th><th>S1</th><th>S2</th><th>S3</th><th>BEST LAP</th><th>GAP</th><th>STATUS</th></tr>
+            </thead>
+            <tbody id="fsim-quali-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Bottom-Left Camera Zoom & Layer Toggles -->
       <div class="sim-map-toggles">
         <div class="sim-3d-group" role="group" aria-label="3D Broadcast Cameras">
@@ -297,6 +330,7 @@
           <span class="sim-psych-pill" id="fsim-f-conf" title="Driver Race Confidence (affects pace, passing boldness & mistake risk)">CONF <b>60</b></span>
           <span class="sim-psych-pill" id="fsim-f-mom" title="Live Race Momentum">MOM <b>•</b></span>
           <span class="sim-psych-pill" id="fsim-f-aff" title="Historical Track × Era Affinity">TRK <b>+0.0</b></span>
+          <span class="sim-psych-pill" id="fsim-f-pitwin" title="Predicted Pit-Stop Rejoin Position & Traffic Window">PIT <b>—</b></span>
           <span class="sim-psych-pill" id="fsim-f-era" title="Active Technical Regulation Era">2026</span>
         </div>
         <div class="fsim-mini-meters">

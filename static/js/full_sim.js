@@ -107,6 +107,11 @@
     scUnlapped: false,
     redFlag: null,
     redFlagUsed: false,
+    formationLap: null,
+    weekendFormat: "direct",
+    sprintPhase: null, // null | "sprint" | "gp"
+    qualiOrderedCards: null,
+    qualiAbort: null,
     debrisZones: [],
     nextDebrisId: 1,
     yellowSector: 0,
@@ -1034,7 +1039,64 @@
     });
 
     R.stepAndDrawFx(ctx, fs.fx, fs.paused ? 0 : (fs.lastDt || 0.016), fs.cam.zoom);
+
+    // Phase C: Live Pit-Window "Rejoin Ghost" Marker on 2D Track Map for the Focused Car!
+    const focCarGhost = !isReplaying && fs.running && !fs.finished && (!fs.formationLap || !fs.formationLap.active)
+      ? fs.cars.find((c) => c.idx === fs.focusIdx && !c.dnf && c.inPit <= 0 && c.lap >= 1)
+      : null;
+    if (focCarGhost && fs.circuit) {
+      const pj = computePitRejoin(focCarGhost);
+      if (pj) {
+        const gPose = R.sampleTrack(fs.geom, pj.rejoinProg);
+        const pulse = 0.65 + 0.35 * Math.sin(performance.now() * 0.007);
+        const rad = Math.max(3.6, 8.2 / Math.sqrt(Math.max(1, fs.cam.zoom)));
+        ctx.save();
+        ctx.translate(gPose.x, gPose.y);
+        ctx.strokeStyle = pj.trafficCode ? `rgba(250, 204, 21, ${pulse.toFixed(2)})` : `rgba(34, 211, 238, ${pulse.toFixed(2)})`;
+        ctx.fillStyle = pj.trafficCode ? "rgba(250, 204, 21, 0.18)" : "rgba(34, 211, 238, 0.22)";
+        ctx.lineWidth = Math.max(0.9, 1.8 / Math.sqrt(Math.max(1, fs.cam.zoom)));
+        ctx.setLineDash([3.2 / Math.sqrt(Math.max(1, fs.cam.zoom)), 2.2 / Math.sqrt(Math.max(1, fs.cam.zoom))]);
+        ctx.beginPath();
+        ctx.arc(0, 0, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+        const gSp = R.worldToScreen(fs.cam, gPose.x, gPose.y, cssW, cssH);
+        if (gSp.x > 10 && gSp.x < cssW - 10 && gSp.y > 10 && gSp.y < cssH - 10) {
+          fs._pitGhostScreen = { x: gSp.x, y: gSp.y, pj };
+        } else {
+          fs._pitGhostScreen = null;
+        }
+      } else {
+        fs._pitGhostScreen = null;
+      }
+    } else {
+      fs._pitGhostScreen = null;
+    }
+
     ctx.restore();
+
+    // Draw crisp screen-space PIT REJOIN P# tag above the ghost marker!
+    if (fs._pitGhostScreen) {
+      const { x: gx, y: gy, pj } = fs._pitGhostScreen;
+      const lbl = pj.trafficCode ? `PIT→P${pj.rejoinPos} (${pj.trafficCode})` : `PIT→P${pj.rejoinPos} CLEAN`;
+      ctx.save();
+      ctx.font = "800 8px Orbitron, sans-serif";
+      const tw = ctx.measureText(lbl).width + 10;
+      const bx = Math.max(8, Math.min(cssW - tw - 8, gx - tw * 0.5));
+      const by = Math.max(36, gy - 22);
+      ctx.fillStyle = "rgba(6, 12, 24, 0.90)";
+      ctx.strokeStyle = pj.trafficCode ? "#facc15" : "#22d3ee";
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx, by, tw, 15, 4); else ctx.rect(bx, by, tw, 15);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = pj.trafficCode ? "#fde047" : "#67e8f9";
+      ctx.textAlign = "center";
+      ctx.fillText(lbl, bx + tw * 0.5, by + 10.5);
+      ctx.restore();
+    }
 
     // Screen-Space De-Overlapped Driver Broadcast Pills (shared F1RaceEngine)
     ENG.drawDeoverlappedLabels(ctx, labels, cssW, cssH);
@@ -1085,7 +1147,8 @@
 
     const flagEl = getEl("fsim-flag-pill");
     if (flagEl) {
-      if (fs.finished) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> CHEQUERED`; }
+      if (fs.finished) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> ${fs.sprintPhase === "sprint" ? "SPRINT FINISH" : "CHEQUERED"}`; }
+      else if (fs.formationLap && fs.formationLap.active) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = `<i class="fas fa-sync-alt"></i> FORMATION LAP`; }
       else if (fs.redFlag && fs.redFlag.active) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.style.background = "rgba(220,38,38,.36)"; flagEl.style.borderColor = "#ef4444"; flagEl.style.color = "#fecaca"; flagEl.innerHTML = `<i class="fas fa-flag"></i> RED FLAG (${Math.ceil(fs.redFlag.timer)}s)`; }
       else if (fs.startSeq && fs.startSeq.active && !fs.startSeq.lightsOut) { flagEl.className = "sim-flag-pill flag-yellow"; flagEl.style.background = "rgba(239,68,68,.24)"; flagEl.style.borderColor = "rgba(239,68,68,.65)"; flagEl.style.color = "#fca5a5"; flagEl.innerHTML = `<i class="fas fa-traffic-light"></i> GRID ${fs.startSeq.litCount || 0}/5`; }
       else if (fs.chequeredFlag) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
@@ -1201,6 +1264,20 @@
       const ePill = getEl("fsim-f-era");
       if (ePill) ePill.textContent = (fs.eraRule && fs.eraRule.key ? fs.eraRule.key.toUpperCase() : "2026");
 
+      const pwPill = getEl("fsim-f-pitwin");
+      if (pwPill) {
+        const pj = (!foc.dnf && foc.inPit <= 0 && foc.lap >= 1 && !fs.finished) ? computePitRejoin(foc) : null;
+        if (pj) {
+          const pCol = pj.trafficCode ? "#facc15" : "#22d3ee";
+          pwPill.innerHTML = `PIT <b style="color:${pCol}">P${pj.rejoinPos}${pj.trafficCode ? "·" + pj.trafficCode : ""}</b>`;
+          pwPill.title = pj.trafficCode
+            ? `Pit now -> rejoins P${pj.rejoinPos} right behind ${pj.trafficCode} (+${pj.trafficGapS.toFixed(1)}s traffic)`
+            : `Pit now -> rejoins P${pj.rejoinPos} in clean air!`;
+        } else {
+          pwPill.innerHTML = `PIT <b>—</b>`;
+        }
+      }
+
       getEl("fsim-f-tyre").innerHTML = `<span class="sim-tbadge t-${foc.compound}">${fComp.code}</span> ${life}%`;
       const tempEl = getEl("fsim-f-temp");
       const t = Math.round(foc.tyreTemp);
@@ -1298,6 +1375,217 @@
   }
 
   // =========================================================================
+  // PHASE C: PIT-WINDOW REJOIN GHOST + LIVE Q1/Q2/Q3 KNOCKOUT QUALIFYING
+  // =========================================================================
+  function computePitRejoin(car) {
+    if (!car || !fs.circuit || car.dnf || car.inPit > 0) return null;
+    const baseLap = Math.max(55, car.currentLapS || fs.circuit.base_lap_s || 84);
+    const scMult = fs.safetyCarLaps > 0 ? 0.56 : (fs.vscLaps > 0 ? 0.68 : 1.0);
+    const effPitLoss = (fs.circuit.pit_loss_s || 21.5) * scMult;
+    const rejoinProg = car.totalProg - (effPitLoss / baseLap);
+    let aheadCount = 0;
+    let nearestAhead = null;
+    let minGapS = 999;
+    for (let i = 0; i < fs.cars.length; i++) {
+      const o = fs.cars[i];
+      if (o.idx === car.idx || o.dnf) continue;
+      if (o.totalProg > rejoinProg) {
+        aheadCount += 1;
+        const gS = (o.totalProg - rejoinProg) * baseLap;
+        if (gS < minGapS) {
+          minGapS = gS;
+          nearestAhead = o;
+        }
+      }
+    }
+    return {
+      rejoinProg,
+      rejoinPos: aheadCount + 1,
+      trafficCode: (nearestAhead && minGapS < 1.55) ? nearestAhead.card.code3 : "",
+      trafficGapS: minGapS,
+    };
+  }
+
+  function runLiveQualifyingShootout(cardsRaw, circuit, isSprintShootout) {
+    return new Promise((resolve) => {
+      const modal = getEl("fsim-quali-modal");
+      const badge = getEl("fsim-quali-badge");
+      const title = getEl("fsim-quali-title");
+      const sub = getEl("fsim-quali-sub");
+      const clock = getEl("fsim-quali-clock");
+      const tbody = getEl("fsim-quali-tbody");
+      const skipBtn = getEl("fsim-quali-skip-btn");
+      const goBtn = getEl("fsim-quali-go-btn");
+      if (!modal || !tbody) { resolve(cardsRaw.slice()); return; }
+
+      if (typeof fs.qualiAbort === "function") fs.qualiAbort();
+      let cancelled = false;
+      let timerId = null;
+
+      const baseLap = Math.max(62, Number(circuit.base_lap_s || 84));
+      const entries = cardsRaw.map((card, i) => ({
+        card,
+        id: i,
+        eliminatedIn: 0, // 1=Q1, 2=Q2
+        bestLap: 999,
+        sectors: ["none", "none", "none"],
+        status: "OUT LAP",
+      }));
+
+      const stages = [
+        { num: 1, code: isSprintShootout ? "SQ1" : "Q1", label: isSprintShootout ? "SPRINT QUALIFYING 1" : "Q1 · KNOCKOUT", keep: Math.min(15, Math.max(10, entries.length - 5)), mins: isSprintShootout ? 12 : 18 },
+        { num: 2, code: isSprintShootout ? "SQ2" : "Q2", label: isSprintShootout ? "SPRINT QUALIFYING 2" : "Q2 · KNOCKOUT", keep: Math.min(10, Math.max(6, entries.length - 10)), mins: isSprintShootout ? 10 : 15 },
+        { num: 3, code: isSprintShootout ? "SQ3" : "Q3", label: isSprintShootout ? "SPRINT POLE SHOOTOUT" : "Q3 · POLE SHOOTOUT", keep: 10, mins: isSprintShootout ? 8 : 12 },
+      ];
+
+      let stageIdx = 0;
+      let tick = 0;
+      const TICKS_PER_STAGE = 7;
+
+      const simLapFor = (ent, stgNum, improvementBias) => {
+        const pace = Number((ent.card.game && ent.card.game.stats && ent.card.game.stats.pace) || ent.card.overall || 78);
+        const ovr = Number(ent.card.overall || 78);
+        const skill = (pace * 0.68 + ovr * 0.32 - 80) * 0.085;
+        const gripBoost = (stgNum - 1) * 0.35 + improvementBias * 0.22;
+        const noise = (Math.random() - 0.5) * 0.88;
+        return Math.max(baseLap * 0.88, baseLap - 1.4 - skill - gripBoost + noise);
+      };
+
+      const renderStage = (finishedAll) => {
+        const stg = stages[Math.min(stageIdx, stages.length - 1)];
+        const active = entries.filter((e) => !e.eliminatedIn).sort((a, b) => a.bestLap - b.bestLap);
+        const elimQ2 = entries.filter((e) => e.eliminatedIn === 2).sort((a, b) => a.bestLap - b.bestLap);
+        const elimQ1 = entries.filter((e) => e.eliminatedIn === 1).sort((a, b) => a.bestLap - b.bestLap);
+        const ordered = [...active, ...elimQ2, ...elimQ1];
+        const poleLap = active[0] && active[0].bestLap < 900 ? active[0].bestLap : baseLap;
+
+        if (badge) badge.textContent = finishedAll ? (isSprintShootout ? "SPRINT GRID SET" : "STARTING GRID SET") : stg.label;
+        if (title) title.textContent = `${circuit.name.toUpperCase()} — ${isSprintShootout ? "2026 SPRINT SHOOTOUT" : "FIA QUALIFYING"}`;
+        if (sub) sub.textContent = finishedAll
+          ? `Pole Position: ${ordered[0]?.card.clean_name || "—"} (${fmtLapTime(poleLap)})`
+          : (stg.num < 3 ? `Top ${stg.keep} advance · Bottom ${Math.max(0, active.length - stg.keep)} eliminated` : "Top 10 fighting for Pole Position!");
+
+        if (clock) {
+          const remFrac = finishedAll ? 0 : Math.max(0, 1 - tick / TICKS_PER_STAGE);
+          const remSec = Math.round(stg.mins * 60 * remFrac);
+          const mm = String(Math.floor(remSec / 60)).padStart(2, "0");
+          const ss = String(remSec % 60).padStart(2, "0");
+          clock.textContent = finishedAll ? "00:00" : `${mm}:${ss}`;
+        }
+
+        tbody.innerHTML = ordered.map((e, idx) => {
+          const pos = idx + 1;
+          const isCutoff = !finishedAll && stg.num < 3 && pos === stg.keep;
+          const isElim = e.eliminatedIn > 0 || (!finishedAll && stg.num < 3 && pos > stg.keep);
+          const isPole = pos === 1 && e.bestLap < 900;
+          const gapTxt = e.bestLap >= 900 ? "NO TIME" : (pos === 1 ? "POLE" : `+${(e.bestLap - poleLap).toFixed(3)}`);
+          const stTxt = e.eliminatedIn === 1 ? "OUT Q1" : (e.eliminatedIn === 2 ? "OUT Q2" : (finishedAll ? (pos === 1 ? "🏆 POLE" : `GRID P${pos}`) : e.status));
+          const secHtml = e.sectors.map((s) => `<td><span class="q-sec-dot ${s}"></span></td>`).join("");
+          return `<tr class="${isCutoff ? "q-cutoff " : ""}${isElim ? "q-elim " : ""}${isPole ? "q-pole" : ""}">
+            <td><strong>${pos}</strong></td>
+            <td><span class="st-bar" style="background:${esc(e.card.hero_color || "#e10600")};display:inline-block;width:3px;height:11px;margin-right:5px;vertical-align:middle;"></span><strong>${esc(e.card.code3)}</strong> ${esc(e.card.clean_name)}</td>
+            <td class="muted">${esc(e.card.hero_team || "")}</td>
+            ${secHtml}
+            <td><strong>${e.bestLap < 900 ? fmtLapTime(e.bestLap) : "—"}</strong></td>
+            <td>${gapTxt}</td>
+            <td><span style="color:${isPole ? "#c084fc" : (isElim ? "#f87171" : "#4ade80")};font-weight:700;">${stTxt}</span></td>
+          </tr>`;
+        }).join("");
+        return ordered;
+      };
+
+      const finalizeStage = () => {
+        const stg = stages[stageIdx];
+        const active = entries.filter((e) => !e.eliminatedIn);
+        active.forEach((e) => {
+          const t = simLapFor(e, stg.num, 1.0);
+          if (t < e.bestLap) e.bestLap = t;
+          e.sectors = [Math.random() < 0.25 ? "purple" : "green", Math.random() < 0.25 ? "purple" : "green", "green"];
+        });
+        active.sort((a, b) => a.bestLap - b.bestLap);
+        if (stg.num < 3) {
+          active.slice(stg.keep).forEach((e) => {
+            e.eliminatedIn = stg.num;
+            e.status = `OUT ${stg.code}`;
+          });
+          active.slice(0, stg.keep).forEach((e) => {
+            e.bestLap = 999; // Reset clock for next qualifying segment!
+            e.sectors = ["none", "none", "none"];
+            e.status = "ADVANCES";
+          });
+          stageIdx += 1;
+          tick = 0;
+          renderStage(false);
+        } else {
+          // Q3 complete!
+          clearInterval(timerId);
+          timerId = null;
+          const finalOrder = renderStage(true);
+          skipBtn?.classList.add("hidden");
+          goBtn?.classList.remove("hidden");
+          goBtn.onclick = () => {
+            modal.classList.add("hidden");
+            resolve(finalOrder.map((e) => e.card));
+          };
+          // Auto-proceed after 2.6s so broadcast flows naturally!
+          timerId = setTimeout(() => {
+            if (!cancelled && !modal.classList.contains("hidden")) {
+              modal.classList.add("hidden");
+              resolve(finalOrder.map((e) => e.card));
+            }
+          }, 2600);
+        }
+      };
+
+      const stepTick = () => {
+        if (cancelled) return;
+        const stg = stages[stageIdx];
+        tick += 1;
+        const active = entries.filter((e) => !e.eliminatedIn);
+        let bestSoFar = Math.min(...active.map((x) => x.bestLap), 999);
+        active.forEach((e) => {
+          if (tick === 1 || Math.random() < 0.58) {
+            const t = simLapFor(e, stg.num, tick / TICKS_PER_STAGE);
+            if (t < e.bestLap) {
+              const isPurp = t < bestSoFar;
+              if (isPurp) bestSoFar = t;
+              e.bestLap = t;
+              e.sectors = [
+                isPurp ? "purple" : (Math.random() < 0.65 ? "green" : "yellow"),
+                isPurp ? "purple" : (Math.random() < 0.7 ? "green" : "yellow"),
+                isPurp ? "purple" : "green",
+              ];
+              e.status = isPurp ? "PURPLE!" : "PB LAP";
+            } else {
+              e.sectors = ["green", "yellow", "yellow"];
+              e.status = "IN PIT";
+            }
+          }
+        });
+        renderStage(false);
+        if (tick >= TICKS_PER_STAGE) finalizeStage();
+      };
+
+      modal.classList.remove("hidden");
+      skipBtn?.classList.remove("hidden");
+      goBtn?.classList.add("hidden");
+      skipBtn.onclick = () => {
+        if (cancelled) return;
+        finalizeStage();
+      };
+      fs.qualiAbort = () => {
+        cancelled = true;
+        clearInterval(timerId);
+        clearTimeout(timerId);
+        modal.classList.add("hidden");
+      };
+
+      renderStage(false);
+      timerId = setInterval(stepTick, 460);
+    });
+  }
+
+  // =========================================================================
   // SIMULATION TICK (Fixed-Timestep Substepped: Era Rules + Psychology + Telemetry)
   // =========================================================================
   function stepSimCore(effDt, fastMode) {
@@ -1306,6 +1594,53 @@
     const dt = effDt;
     const lapScale = (fs.circuit.base_lap_s / 22.0);
     const simDt = dt * lapScale;
+
+    // Phase C: Optional FIA Formation Lap (Tyre-Warming Weave -> Staggered Grid -> 5 Red Lights!)
+    if (fs.formationLap && fs.formationLap.active) {
+      if (fastMode) {
+        fs.formationLap.active = false;
+        fs.cars.forEach((c) => {
+          const opt = (COMPOUNDS[c.compound] || COMPOUNDS.medium).optTemp;
+          c.tyreTemp = opt - 2;
+        });
+        fs.startSeq = window.F1TrackArchitect
+          ? window.F1TrackArchitect.createStandingStartState(fs.cars, fs.circuit, { skip: true })
+          : null;
+      } else {
+        fs.formationLap.elapsed += dt;
+        const frac = Math.min(1, fs.formationLap.elapsed / fs.formationLap.duration);
+        fs.cars.forEach((c, idx) => {
+          const baseP = 0.02 + frac * 0.96 - idx * 0.0045;
+          c.totalProg = baseP;
+          const pose = fs.geom && window.F1TrackRenderer ? window.F1TrackRenderer.sampleTrack(fs.geom, baseP) : { curv: 0 };
+          // Authentic F1 formation-lap tyre-warming weaves on straights, settling into grid slots past 90%!
+          const weaveAmp = frac > 0.88 ? 0 : (Math.abs(pose.curv || 0) < 0.14 ? 3.2 : 0.7);
+          const gridLat = (idx % 2 === 0 ? -2.55 : 2.55);
+          c.latOffset = frac > 0.88 ? gridLat : Math.sin(fs.formationLap.elapsed * 4.6 + idx * 0.65) * weaveAmp;
+          const optT = (COMPOUNDS[c.compound] || COMPOUNDS.medium).optTemp;
+          c.tyreTemp = Math.min(optT, (c.tyreTemp || 68) + dt * 3.4);
+          c.liveKph = frac > 0.92 ? Math.max(40, Math.round((1 - (frac - 0.92) / 0.08) * 140)) : 148;
+          c.livePhysKph = c.liveKph;
+          c.liveGear = c.liveKph > 110 ? 4 : 2;
+          c.liveLongG = 0;
+          c.aiStatus = frac > 0.88 ? "GRID SLOT" : "WARMING TYRES";
+        });
+        if (fs.formationLap.elapsed >= fs.formationLap.duration) {
+          fs.formationLap.active = false;
+          fs.startSeq = window.F1TrackArchitect
+            ? window.F1TrackArchitect.createStandingStartState(fs.cars, fs.circuit)
+            : null;
+          addCommentary(1, `🔴 Formation lap complete — tyres warmed to ~${Math.round(fs.cars[0]?.tyreTemp || 96)}°C, cars locking into FIA grid boxes!`, "info");
+          showToast("🔴 CARS ON GRID — 5 RED LIGHTS IMMINENT!", "info");
+          updateChyron(`🔴 STANDING START · POLE: ${fs.cars[0]?.card.code3 || "P1"}`);
+          renderHud();
+        } else if (performance.now() - fs.lastUiSync > 220) {
+          fs.lastUiSync = performance.now();
+          renderHud();
+        }
+        return true;
+      }
+    }
 
     // FIA Red Flag Suspension Countdown (Pit-Lane Repairs + Free Tyre Change -> 5-Red-Lights Standing Restart!)
     if (fs.redFlag && fs.redFlag.active) {
@@ -2044,14 +2379,16 @@
       window.F1_FULLSIM_LAST_TELEMETRY = fs.telemetry.exportPayload(finalMeta, { raceFinished: true });
     }
 
-    // Award Era-Authentic Championship Points if in Season Mode
+    // Award Era-Authentic Championship Points (or 2026 8-7-6-5-4-3-2-1 Sprint Points!)
+    const isSprintFinish = fs.sprintPhase === "sprint";
+    const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
     const era = fs.eraRule || ENG.DEFAULT_ERA_RULES;
-    const ptsTable = Array.isArray(era.points) && era.points.length ? era.points : F1_POINTS;
-    const flPt = Number(era.fastest_lap_point || 0);
+    const ptsTable = isSprintFinish ? SPRINT_POINTS : (Array.isArray(era.points) && era.points.length ? era.points : F1_POINTS);
+    const flPt = isSprintFinish ? 0 : Number(era.fastest_lap_point || 0);
     const flTopN = Number(era.fastest_lap_top_n || 0);
     let seasonDone = false;
     if (fs.season.active) {
-      fs.season.racesRun += 1;
+      if (!isSprintFinish) fs.season.racesRun += 1;
       sorted.forEach((c, i) => {
         const key = c.card.clean_name;
         if (!fs.season.wdc[key]) {
@@ -2066,11 +2403,11 @@
           if (flPt > 0 && fs.fastestLap.driver === key && (flTopN === 0 || (i + 1) <= flTopN)) pts += flPt;
           fs.season.wdc[key].pts += pts;
           fs.season.wcc[tKey].pts += pts;
-          if (i === 0) { fs.season.wdc[key].wins += 1; fs.season.wcc[tKey].wins += 1; }
+          if (i === 0 && !isSprintFinish) { fs.season.wdc[key].wins += 1; fs.season.wcc[tKey].wins += 1; }
         }
       });
       renderSeasonStandings();
-      seasonDone = fs.season.roundIdx >= fs.season.rounds.length - 1;
+      seasonDone = !isSprintFinish && (fs.season.roundIdx >= fs.season.rounds.length - 1);
     }
 
     const finEl = getEl("fsim-finish-banner");
@@ -2079,20 +2416,27 @@
       const wdcLeader = fs.season.active
         ? Object.values(fs.season.wdc).sort((a, b) => b.pts - a.pts)[0]
         : null;
-      const seasonLine = fs.season.active
-        ? (seasonDone
-            ? `<div style="margin-top:4px;color:#4ade80;font-weight:800;">🏆 WORLD CHAMPION: ${esc(wdcLeader ? wdcLeader.name : "")} (${wdcLeader ? wdcLeader.pts : 0} pts)!</div>`
-            : `<div style="margin-top:4px;color:#38bdf8;">Round ${fs.season.roundIdx + 1}/${fs.season.rounds.length} Complete · WDC Leader: <b>${esc(wdcLeader ? wdcLeader.name : "")}</b> (${wdcLeader ? wdcLeader.pts : 0} pts)</div>`)
+      const sprintPtsLine = isSprintFinish
+        ? `<div style="margin-top:4px;color:#38bdf8;font-weight:700;">⚡ SPRINT POINTS: ${sorted.slice(0, 8).map((c, idx) => `${c.card.code3} +${SPRINT_POINTS[idx]}`).join(" · ")}</div>`
         : "";
+      const seasonLine = isSprintFinish
+        ? sprintPtsLine
+        : (fs.season.active
+          ? (seasonDone
+              ? `<div style="margin-top:4px;color:#4ade80;font-weight:800;">🏆 WORLD CHAMPION: ${esc(wdcLeader ? wdcLeader.name : "")} (${wdcLeader ? wdcLeader.pts : 0} pts)!</div>`
+              : `<div style="margin-top:4px;color:#38bdf8;">Round ${fs.season.roundIdx + 1}/${fs.season.rounds.length} Complete · WDC Leader: <b>${esc(wdcLeader ? wdcLeader.name : "")}</b> (${wdcLeader ? wdcLeader.pts : 0} pts)</div>`)
+          : "");
 
-      const nextBtn = (fs.season.active && !seasonDone)
-        ? `<button type="button" id="fsim-next-gp-btn" class="btn-racing"><i class="fas fa-forward"></i> Next GP: ${esc(fs.season.rounds[fs.season.roundIdx + 1].name)}</button>`
-        : `<button type="button" id="fsim-rematch-btn" class="btn-racing"><i class="fas fa-redo"></i> ${seasonDone ? "New Championship" : "Watch Again"}</button>`;
+      const nextBtn = isSprintFinish
+        ? `<button type="button" id="fsim-start-feature-gp" class="btn-racing"><i class="fas fa-flag-checkered"></i> Start Feature Grand Prix →</button>`
+        : ((fs.season.active && !seasonDone)
+          ? `<button type="button" id="fsim-next-gp-btn" class="btn-racing"><i class="fas fa-forward"></i> Next GP: ${esc(fs.season.rounds[fs.season.roundIdx + 1].name)}</button>`
+          : `<button type="button" id="fsim-rematch-btn" class="btn-racing"><i class="fas fa-redo"></i> ${seasonDone ? "New Championship" : "Watch Again"}</button>`);
 
       const avgStops = (fs.stats.pits / Math.max(1, fs.cars.length)).toFixed(1);
       finEl.innerHTML = `
         <div>
-          <strong>🏁 CHEQUERED FLAG — ${esc(fs.circuit.name.toUpperCase())}!</strong>
+          <strong>${isSprintFinish ? "⚡ 2026 SPRINT FINISH" : "🏁 CHEQUERED FLAG"} — ${esc(fs.circuit.name.toUpperCase())}!</strong>
           <div style="font-size:0.82rem;color:#fde047;margin-top:3px;">🏆 ${esc(podTxt)}</div>
           <div style="font-size:0.75rem;color:#cbd5e1;margin-top:2px;">
             FL: <b>${esc(fs.fastestLap.driver || "—")}</b> (${fmtLapTime(fs.fastestLap.time)}) · ${fs.stats.overtakes} Overtakes · ${fs.stats.pits} Pit Stops (${avgStops}/car) · ${fs.stats.incidents} Incidents · ${fs.stats.leadChanges} Lead Changes
@@ -2105,6 +2449,10 @@
           <button type="button" id="fsim-fin-setup" class="sim-dir-btn"><i class="fas fa-sliders-h"></i> Setup</button>
         </div>
       `;
+      getEl("fsim-start-feature-gp")?.addEventListener("click", () => {
+        clearTimeout(fs.autoAdvTimer);
+        launchCurrentRound({ afterSprint: true, qualiGrid: fs.qualiOrderedCards });
+      });
       getEl("fsim-fin-analytics")?.addEventListener("click", () => {
         clearTimeout(fs.autoAdvTimer);
         if (window.F1RaceAnalytics && window.F1_FULLSIM_LAST_TELEMETRY) {
@@ -2154,16 +2502,22 @@
     await launchCurrentRound();
   }
 
-  async function launchCurrentRound() {
+  async function launchCurrentRound(opts) {
+    const launchOpts = opts || {};
     clearTimeout(fs.autoAdvTimer);
+    if (typeof fs.qualiAbort === "function") { fs.qualiAbort(); fs.qualiAbort = null; }
     stopInstantReplay();
     fs.replayBuf = [];
     fs.replayClips = [];
     fs.stewardsBanner = null;
     fs.stewardsTimer = 0;
+    fs.formationLap = null;
     const deckSpec = getEl("fsim-deck-sel")?.value || `season:${BOOT.latestYear}`;
     const maxCars = parseInt(getEl("fsim-grid-size")?.value || "20", 10) || 20;
     const gridOrder = getEl("fsim-grid-order")?.value || "quali";
+    const weekendFmt = getEl("fsim-weekend-sel")?.value || "direct";
+    fs.weekendFormat = weekendFmt;
+    fs.sprintPhase = (weekendFmt === "sprint" && !launchOpts.afterSprint) ? "sprint" : (launchOpts.afterSprint ? "gp" : null);
     const cardsRaw = await loadDeck(deckSpec, maxCars);
     if (!cardsRaw.length) return;
 
@@ -2176,6 +2530,16 @@
     fs.simToEndActive = false;
     window.F1_FULLSIM_LAST_TELEMETRY = null;
     getEl("fsim-simtoend-ovl")?.classList.add("hidden");
+    toggleSetupDrawer(false);
+
+    // Phase C: Run Live Q1 / Q2 / Q3 Knockout Qualifying Shootout when weekendFmt is 'quali' or 'sprint'!
+    let preSortedQualiCards = Array.isArray(launchOpts.qualiGrid) && launchOpts.qualiGrid.length ? launchOpts.qualiGrid.slice() : null;
+    if (!preSortedQualiCards && (weekendFmt === "quali" || (weekendFmt === "sprint" && !launchOpts.afterSprint))) {
+      fs.running = false;
+      fs.paused = true;
+      preSortedQualiCards = await runLiveQualifyingShootout(cardsRaw, selCir, weekendFmt === "sprint");
+      fs.qualiOrderedCards = preSortedQualiCards.slice();
+    }
 
     // Fetch historical Per-Track × Per-Era × Per-Team × Per-Driver balancing & psychology profiles
     const balKey = `${selCir.id}|${fs.eraRule.key}`;
@@ -2195,7 +2559,7 @@
     const drvDnaMap = (balData && balData.driver_dna) || {};
 
     const dist = getEl("fsim-laps-sel")?.value || "15";
-    fs.totalLaps = dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15);
+    fs.totalLaps = fs.sprintPhase === "sprint" ? 5 : (dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15));
     fs.weatherMode = getEl("fsim-weather-sel")?.value || "dynamic";
     fs.chaosMult = parseFloat(getEl("fsim-chaos-sel")?.value || "1.0") || 1.0;
     fs.wetness = fs.weatherMode === "rain" ? 78 : (fs.weatherMode === "showers" ? 28 : 0);
@@ -2234,17 +2598,19 @@
     fs.staticKey = "";
     if (window.F1TrackRenderer) fs.fx = window.F1TrackRenderer.createFxState();
 
-    // Order starting grid (Qualifying Sim, Reverse Grid, or Random Shuffle)
-    let cards = cardsRaw.slice();
-    if (gridOrder === "quali") {
-      cards.sort((a, b) => ((b.game.stats.pace * 0.65 + b.overall * 0.35) + (Math.random() - 0.5) * 9)
-                         - ((a.game.stats.pace * 0.65 + a.overall * 0.35) + (Math.random() - 0.5) * 9));
-    } else if (gridOrder === "reverse") {
-      cards.reverse();
-    } else {
-      for (let i = cards.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [cards[i], cards[j]] = [cards[j], cards[i]];
+    // Order starting grid (Live Q1/Q2/Q3 Shootout, Simulated Qualifying, Reverse Grid, or Random Shuffle)
+    let cards = preSortedQualiCards ? preSortedQualiCards.slice() : cardsRaw.slice();
+    if (!preSortedQualiCards) {
+      if (gridOrder === "quali") {
+        cards.sort((a, b) => ((b.game.stats.pace * 0.65 + b.overall * 0.35) + (Math.random() - 0.5) * 9)
+                           - ((a.game.stats.pace * 0.65 + a.overall * 0.35) + (Math.random() - 0.5) * 9));
+      } else if (gridOrder === "reverse") {
+        cards.reverse();
+      } else {
+        for (let i = cards.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [cards[i], cards[j]] = [cards[j], cards[i]];
+        }
       }
     }
 
@@ -2341,14 +2707,28 @@
     getEl("fsim-dir-specs").textContent = `${selCir.length_km}km · ${selCir.turns}T · ${selCir.drs_zones} DRS · ${fs.cars.length} CPU Cars`;
     const rPill = getEl("fsim-round-pill");
     if (rPill) {
-      rPill.classList.toggle("hidden", !fs.season.active);
-      if (fs.season.active) rPill.textContent = `R${fs.season.roundIdx + 1}/${fs.season.rounds.length}`;
+      const showPill = fs.season.active || fs.sprintPhase === "sprint";
+      rPill.classList.toggle("hidden", !showPill);
+      if (fs.sprintPhase === "sprint") rPill.textContent = "⚡ SPRINT · 5L";
+      else if (fs.season.active) rPill.textContent = `R${fs.season.roundIdx + 1}/${fs.season.rounds.length}`;
     }
 
-    // Initialize FIA 5-Red-Lights Standing Start Sequence (0 kph Staggered Grid + Per-Driver Launch DNA!)
-    fs.startSeq = window.F1TrackArchitect
-      ? window.F1TrackArchitect.createStandingStartState(fs.cars, selCir)
-      : null;
+    // Initialize Optional Formation Lap OR Direct FIA 5-Red-Lights Standing Start!
+    if (weekendFmt === "formation") {
+      fs.formationLap = { active: true, elapsed: 0, duration: 9.5 };
+      fs.cars.forEach((c, idx) => {
+        c.totalProg = 0.02 - idx * 0.0045;
+        c.tyreTemp = 68;
+        c.liveKph = 140;
+        c.aiStatus = "WARMING TYRES";
+      });
+      fs.startSeq = null;
+    } else {
+      fs.formationLap = null;
+      fs.startSeq = window.F1TrackArchitect
+        ? window.F1TrackArchitect.createStandingStartState(fs.cars, selCir)
+        : null;
+    }
 
     if (fs.cam && fs.geom && window.F1TrackRenderer && fs.cars[0]) {
       const p0 = window.F1TrackRenderer.sampleTrack(fs.geom, fs.cars[0].totalProg);
@@ -2359,10 +2739,15 @@
     renderHud();
     renderSeasonStandings();
     const pole = fs.cars[0];
-    if (fs.startSeq) {
-      addCommentary(1, `🔴 Formation complete at ${selCir.name} (${selCir.gp}) — ${fs.cars.length} cars locked on the staggered FIA starting grid! Pole: ${pole.card.clean_name}.`, "info");
-      showToast(`🔴 GRID FORMED — ${selCir.name.toUpperCase()}`, "info");
-      updateChyron(`🔴 STANDING START · POLE: ${pole.card.code3}`);
+    if (fs.formationLap && fs.formationLap.active) {
+      addCommentary(1, `🟡 FORMATION LAP underway at ${selCir.name} — cars weaving to bring tyres & brakes into window! Pole: ${pole.card.clean_name}.`, "info");
+      showToast(`🟡 FORMATION LAP — WARMING TYRES`, "info");
+      updateChyron(`🟡 FORMATION LAP · WARMING TYRES · POLE: ${pole.card.code3}`);
+    } else if (fs.startSeq) {
+      const sessTag = fs.sprintPhase === "sprint" ? "2026 SPRINT" : "FIA STANDING START";
+      addCommentary(1, `🔴 Formation complete at ${selCir.name} (${selCir.gp}) — ${fs.cars.length} cars locked on the staggered grid! Pole: ${pole.card.clean_name}.`, "info");
+      showToast(`🔴 ${sessTag} — ${selCir.name.toUpperCase()}`, "info");
+      updateChyron(`🔴 ${sessTag} · POLE: ${pole.card.code3}`);
     } else {
       playSfx("lightsOut");
       const startMsg = `🟢 LIGHTS OUT at ${selCir.name} (${selCir.gp})! ${pole.card.clean_name} leads ${fs.cars.length} CPU cars away from Pole!`;

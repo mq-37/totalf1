@@ -296,11 +296,13 @@
       try { await ac.resume(); } catch (_) {}
     }
 
-    const cacheKey = `${engineMode}|${role}|${o.archetype || ""}|${o.driverName || ""}|${o.engineerName || ""}|${o.nationality || ""}|${o.tone || ""}|${rawText.slice(0, 180)}`;
+    const cacheKey = `${engineMode}|${role}|${o.archetype || ""}|${o.driverName || ""}|${o.engineerName || ""}|${o.nationality || ""}|${o.tone || ""}|${rawText.slice(0, 180)}|${(o.replyText || "").slice(0, 90)}`;
     voiceBusy = true;
 
     try {
-      let decoded = voiceBufCache.get(cacheKey);
+      let cachedEntry = voiceBufCache.get(cacheKey);
+      let decoded = cachedEntry ? cachedEntry.buf : null;
+      let usedEngine = cachedEntry ? cachedEntry.engine : "";
       if (!decoded) {
         const ab = new AbortController();
         activeVoiceAbort = ab;
@@ -322,13 +324,14 @@
         });
         activeVoiceAbort = null;
         if (!resp.ok) throw new Error(`TTS HTTP ${resp.status}`);
+        usedEngine = (resp.headers.get("X-TTS-Engine") || "").toLowerCase();
         const arrBuf = await resp.arrayBuffer();
         decoded = await ac.decodeAudioData(arrBuf.slice(0));
         if (voiceBufCache.size >= 36) {
           const oldest = voiceBufCache.keys().next().value;
           voiceBufCache.delete(oldest);
         }
-        voiceBufCache.set(cacheKey, decoded);
+        voiceBufCache.set(cacheKey, { buf: decoded, engine: usedEngine });
       }
 
       if (!voiceBusy) return false; // Cancelled while loading
@@ -372,6 +375,27 @@
           noiseBurst(0.032, 0.0, 2400, 2.5, 0.032);
         }
         voiceBusy = false;
+        // Phase C 2-Speaker Chaining: When Edge-TTS handles the first speaker, seamlessly chain the reply with the opposite role!
+        if (o.replyText && !o._isChainedReply && usedEngine !== "gemini") {
+          const replyRole = role === "engineer" ? "driver" : "engineer";
+          setTimeout(() => {
+            if (voiceBusy) return;
+            if (channel === "radio") radioBeep();
+            speak({
+              text: o.replyText,
+              role: replyRole,
+              archetype: o.archetype || "",
+              driverName: o.driverName || "",
+              engineerName: o.engineerName || "",
+              nationality: o.nationality || "",
+              tone: o.tone || "info",
+              channel,
+              engine: engineMode,
+              priority: "high",
+              _isChainedReply: true,
+            });
+          }, 220);
+        }
       };
       src.start();
       return true;
