@@ -97,6 +97,14 @@ def api_f1db_circuit(circuit_id: str):
     return profile
 
 
+@router.get("/api/f1db/what-if/{year}/{round_num}")
+def api_f1db_what_if(year: int, round_num: int):
+    pkt = f1db.get_what_if_gp_packet(year, round_num, srv.DATA_DB)
+    if pkt is None:
+        raise HTTPException(status_code=404, detail=f"Historical GP {year} Round {round_num} not found")
+    return {"ok": True, **pkt}
+
+
 @router.post("/api/f1db/sync")
 def api_f1db_sync(force: bool = Query(False)):
     from ..f1db_sync import sync_f1db, sync_latest_season_into_f1_sqlite

@@ -55,7 +55,7 @@ _FLAGS_DIR = BASE_DIR / "data" / "flags"
 if _FLAGS_DIR.exists():
     app.mount("/data/flags", StaticFiles(directory=str(_FLAGS_DIR)), name="data_flags")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-ASSET_VERSION = "20261124d"
+ASSET_VERSION = "20261124e"
 templates.env.globals["asset_v"] = ASSET_VERSION
 
 

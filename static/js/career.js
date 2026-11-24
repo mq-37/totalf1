@@ -183,6 +183,12 @@
     getEl("car-kpi-car").textContent = `${pt.car_overall}`;
     getEl("car-kpi-wcc").textContent = wccRow ? `P${wccRow.pos} (${wccRow.points}pts)` : "P—";
     getEl("car-kpi-conf").textContent = `${st.board_confidence}%`;
+    const penEl = getEl("car-kpi-pen");
+    if (penEl) {
+      const mxPen = Number(DATA.max_player_penalty_pts || 0);
+      penEl.textContent = `${mxPen}/12`;
+      penEl.style.color = mxPen >= 9 ? "#ef4444" : (mxPen >= 6 ? "#f59e0b" : "#4ade80");
+    }
     getEl("car-kpi-scouts").textContent = `${st.active_scouts.length}/${DATA.scout_slots}`;
 
     const badgeSc = getEl("car-badge-scouts");
@@ -191,6 +197,8 @@
     if (badgeRd) badgeRd.textContent = st.active_rd.length ? `${st.active_rd.length}` : "";
     const badgeDil = getEl("car-badge-dilemma");
     if (badgeDil) badgeDil.textContent = st.pending_dilemma ? "!" : "";
+    const badgeStew = getEl("car-badge-stewards");
+    if (badgeStew) badgeStew.textContent = st.pending_stewards ? "⚖!" : "";
 
     const advBtn = getEl("car-advance-season-btn");
     const raceBtn = getEl("car-go-race-btn");
@@ -214,6 +222,72 @@
     renderFacilities();
     renderStandingsAndFinance();
     renderDynasty();
+    syncTrackHolo3D();
+    if (activeTab === "rd") syncRdBlueprint3D();
+    if (activeTab === "analytics" || activeTab === "stewards") refreshCareerAnalytics();
+  }
+
+  let rdBlueprint3D = null;
+  let trackHolo3D = null;
+
+  function syncRdBlueprint3D() {
+    const cv = getEl("car-rd-3d-canvas");
+    if (!cv || !window.CareerHQ3D || !window.CareerHQ3D.createCarBlueprint3D || !DATA.player_team) return;
+    if (!rdBlueprint3D) {
+      rdBlueprint3D = window.CareerHQ3D.createCarBlueprint3D(cv, getEl("car-rd-3d-badge"));
+    }
+    if (rdBlueprint3D) {
+      const pt = DATA.player_team;
+      rdBlueprint3D.sync({
+        palette: pt.palette || { main: pt.color || "#e10600", secondary: "#111622", accent: "#facc15", pop: "#ffffff", detail: "#252c38" },
+        style: pt.livery_style || "two-tone",
+        era: pt.car_era || "2020s",
+      });
+    }
+  }
+
+  async function syncTrackHolo3D() {
+    const cv = getEl("car-next-gp-3d");
+    if (!cv || !window.CareerHQ3D || !window.CareerHQ3D.createTrackHologram3D || !DATA.state) return;
+    const st = DATA.state;
+    const cal = st.calendar || [];
+    const nextCal = cal[Math.min(st.current_round, cal.length) - 1];
+    if (!nextCal) return;
+    if (!trackHolo3D) trackHolo3D = window.CareerHQ3D.createTrackHologram3D(cv);
+    if (!trackHolo3D) return;
+    let cir = (DATA.circuits || []).find((c) => c.id === nextCal.circuit_id);
+    if ((!cir || !Array.isArray(cir.points) || cir.points.length < 4) && ENG && ENG.fetchCircuit) {
+      try { cir = await ENG.fetchCircuit(nextCal.circuit_id); } catch (_) {}
+    }
+    if (cir && Array.isArray(cir.points) && cir.points.length >= 4) {
+      trackHolo3D.sync(cir.id, cir.points, (DATA.player_team && DATA.player_team.color) || "#38bdf8");
+    }
+  }
+
+  async function refreshCareerAnalytics() {
+    if (!window.CareerAnalytics || !DATA.has_career) return;
+    try {
+      const r = await fetch("/api/career/analytics");
+      if (!r.ok) return;
+      const an = await r.json();
+      window.CareerAnalytics.renderAnalyticsWarRoom(an, {
+        onStewardAction: async (action) => {
+          const res = await postJson("/api/career/stewards/respond", { action });
+          DATA = res; renderAll(); showHqToast(res.message, res.ok);
+          refreshCareerAnalytics();
+        },
+        onSignPu: async (supplierId) => {
+          const res = await postJson("/api/career/pu/contract", { supplier_id: supplierId });
+          DATA = res; renderAll(); showHqToast(res.message, res.ok);
+          refreshCareerAnalytics();
+        },
+        onCommissionVote: async (proposalId, support) => {
+          const res = await postJson("/api/career/commission/vote", { proposal_id: proposalId, support });
+          DATA = res; renderAll(); showHqToast(res.message, res.ok);
+          refreshCareerAnalytics();
+        },
+      });
+    } catch (_) {}
   }
 
   let activeFeederSeries = "f2";
@@ -3436,17 +3510,68 @@
     }
   });
 
-  // HQ Tab navigation
+  // HQ Tab navigation + 3D Lab + Analytics + Sub-tabs + Site Nav & Banter Mode
   document.querySelectorAll("[data-car-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeTab = btn.dataset.carTab;
       document.querySelectorAll("[data-car-tab]").forEach((b) => b.classList.toggle("active", b === btn));
       document.querySelectorAll(".car-tab-pane").forEach((p) => p.classList.toggle("active", p.id === `car-tab-${activeTab}`));
       if (activeTab === "standings") requestAnimationFrame(drawWccChart);
-      if (activeTab === "dashboard") requestAnimationFrame(syncDash3DCar);
-      else { if (hqCampus3D) hqCampus3D.stop(); stopDash3DLoop(); }
+      if (activeTab === "dashboard") {
+        requestAnimationFrame(syncDash3DCar);
+        requestAnimationFrame(syncTrackHolo3D);
+      } else {
+        if (hqCampus3D) hqCampus3D.stop();
+        if (trackHolo3D) trackHolo3D.stop();
+        stopDash3DLoop();
+      }
+      if (activeTab === "rd") requestAnimationFrame(syncRdBlueprint3D);
+      else if (rdBlueprint3D) rdBlueprint3D.stop();
+      if (activeTab === "analytics" || activeTab === "stewards") refreshCareerAnalytics();
     });
   });
+
+  // Sub-tabs inside Dashboard, R&D 3D Lab, and FIA Stewards Room (keeps every room zero-scroll!)
+  [
+    ["data-dash-sub", "car-dash-sub-"],
+    ["data-rd-sub", "car-rd-sub-"],
+    ["data-stew-sub", "car-stew-sub-"],
+  ].forEach(([attr, prefix]) => {
+    document.querySelectorAll(`[${attr}]`).forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute(attr);
+        const bar = btn.closest(".car-subtabs");
+        if (bar) bar.querySelectorAll(`[${attr}]`).forEach((b) => { b.classList.toggle("active", b === btn); b.classList.toggle("car-btn-red", b === btn); });
+        const panel = btn.closest(".car-panel");
+        if (panel) panel.querySelectorAll(".car-subpane").forEach((sp) => sp.classList.toggle("active", sp.id === `${prefix}${key}`));
+      });
+    });
+  });
+
+  // Hovering or clicking any of the 6 R&D Blueprint cards focuses the 3D X-Ray Car Camera onto that component!
+  getEl("car-rd-parts-grid")?.addEventListener("mouseover", (ev) => {
+    const btn = ev.target.closest("[data-rd-part], [data-mfg-comp]");
+    const compId = btn ? (btn.dataset.rdPart || btn.dataset.mfgComp) : null;
+    if (compId && rdBlueprint3D) rdBlueprint3D.focusComponent(compId);
+  });
+  getEl("car-rd-parts-grid")?.addEventListener("mouseleave", () => {
+    if (rdBlueprint3D) rdBlueprint3D.focusComponent(null);
+  });
+
+  // Toggle Website Top Navigation Bar in Full-Screen Career Game Mode
+  getEl("car-site-nav-toggle")?.addEventListener("click", () => {
+    document.body.classList.toggle("car-site-nav-open");
+  });
+
+  // Banter Mode selector (Strict | Authentic F1 | Spicy Memes)
+  const banterSel = getEl("car-banter-sel");
+  if (banterSel && window.F1RadioEngine && window.F1RadioEngine.getBanterMode) {
+    banterSel.value = window.F1RadioEngine.getBanterMode();
+    banterSel.addEventListener("change", () => {
+      window.F1RadioEngine.setBanterMode(banterSel.value);
+      showHqToast(`Driver Dialogue Mode: ${banterSel.options[banterSel.selectedIndex].text}`, true);
+    });
+  }
 
   // Market search & filters
   getEl("car-mkt-search").addEventListener("input", renderMarket);

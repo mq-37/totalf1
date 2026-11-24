@@ -170,6 +170,19 @@ class MediaRespondReq(CareerMutationReq):
     choice_idx: int = Field(ge=0, le=4)
 
 
+class StewardsRespondReq(CareerMutationReq):
+    action: str = Field(default="accept", max_length=24)
+
+
+class PuContractReq(CareerMutationReq):
+    supplier_id: str = Field(min_length=1, max_length=40)
+
+
+class CommissionVoteReq(CareerMutationReq):
+    proposal_id: str = Field(min_length=1, max_length=40)
+    support: bool = True
+
+
 def _career_base_dir() -> Path:
     return srv.BASE_DIR
 
@@ -934,5 +947,58 @@ def api_player_profile_event(req: ProfileEventReq):
     from .. import career_db as _cdb
     prof = _cdb.record_profile_event(srv._career_base_dir(), req.event_type, req.payload)
     return {"ok": True, **prof}
+
+
+@router.get("/api/career/analytics")
+def api_career_analytics():
+    from .. import career as _career, career_extras as _cx
+    base = srv._career_base_dir()
+    state = _career.load_career(base)
+    if not state:
+        raise HTTPException(status_code=404, detail="No active career")
+    _career._ensure_career_v2(state)
+    return {"ok": True, **_cx.compute_career_analytics(state, srv.DATA_DB)}
+
+
+@router.post("/api/career/stewards/respond")
+def api_career_stewards_respond(req: StewardsRespondReq):
+    from .. import career as _career, career_db as _cdb, career_extras as _cx
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _cx.respond_stewards_hearing(state, req.action, _career._log_finance, _career._add_inbox)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/pu/contract")
+def api_career_pu_contract(req: PuContractReq):
+    from .. import career as _career, career_db as _cdb, career_extras as _cx
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _cx.sign_pu_contract(state, req.supplier_id, _career.get_player_team, _career._log_finance, _career._add_inbox)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/commission/vote")
+def api_career_commission_vote(req: CommissionVoteReq):
+    from .. import career as _career, career_db as _cdb, career_extras as _cx
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _cx.cast_commission_vote(state, req.proposal_id, req.support, _career._add_inbox)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
 
 

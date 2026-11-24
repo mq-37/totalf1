@@ -75,9 +75,10 @@
 
   <!-- ==================== MAIN TEAM PRINCIPAL HQ ==================== -->
   <section id="career-hq" class="car-hq hidden">
-    <!-- Top Team Principal Status Bar -->
+    <!-- Top Team Principal Game HUD Bar -->
     <div class="car-topbar">
       <div class="car-tb-team">
+        <button type="button" id="car-site-nav-toggle" class="sim-dir-btn" title="Show/Hide Website Navigation Bar"><i class="fas fa-bars"></i></button>
         <span id="car-team-swatch" class="car-team-swatch"></span>
         <div>
           <strong id="car-team-name">Team Name</strong>
@@ -91,15 +92,21 @@
         <div class="car-kpi"><small>CAR OVR</small><b id="car-kpi-car">0.0</b></div>
         <div class="car-kpi"><small>WCC</small><b id="car-kpi-wcc">P—</b></div>
         <div class="car-kpi"><small>BOARD</small><b id="car-kpi-conf">78%</b></div>
+        <div class="car-kpi"><small>LICENCE</small><b id="car-kpi-pen">0/12</b></div>
         <div class="car-kpi"><small>SCOUTS</small><b id="car-kpi-scouts">0/1</b></div>
       </div>
 
       <div class="car-tb-actions">
-        <a href="/career/cards.pdf" target="_blank" id="car-pdf-btn" class="sim-dir-btn" title="Export Printable Collector Cards PDF for your Career Team & Custom Livery"><i class="fas fa-file-pdf"></i> Team PDF</a>
+        <select id="car-banter-sel" class="car-banter-sel" title="Driver Radio & Paddock Banter Tone">
+          <option value="authentic">🎙 Authentic F1</option>
+          <option value="spicy">🔥 Spicy Memes</option>
+          <option value="strict">📋 Strict Broadcast</option>
+        </select>
+        <a href="/career/cards.pdf" target="_blank" id="car-pdf-btn" class="sim-dir-btn" title="Export Printable Collector Cards PDF"><i class="fas fa-file-pdf"></i> PDF</a>
         <button type="button" class="sim-dir-btn btn-trophy-pill" data-f1-trophy-pill title="Unified Player Profile & Trophy Cabinet"><i class="fas fa-trophy"></i> <span>0/20</span></button>
-        <button type="button" id="car-saves-btn" class="sim-dir-btn" title="Manage Save Slots, Rollback Checkpoints & Backups"><i class="fas fa-save"></i> Saves</button>
-        <button type="button" id="car-new-btn" class="sim-dir-btn" title="Start a new career in a new slot"><i class="fas fa-plus"></i> New</button>
-        <button type="button" id="car-advance-season-btn" class="btn-racing hidden"><i class="fas fa-trophy"></i> Start Next Season</button>
+        <button type="button" id="car-saves-btn" class="sim-dir-btn" title="Manage Save Slots & Checkpoints"><i class="fas fa-save"></i> Saves</button>
+        <button type="button" id="car-new-btn" class="sim-dir-btn" title="Start a new career"><i class="fas fa-plus"></i> New</button>
+        <button type="button" id="car-advance-season-btn" class="btn-racing hidden"><i class="fas fa-trophy"></i> Next Season</button>
         <button type="button" id="car-go-race-btn" class="btn-launch-battle car-race-cta">
           <i class="fas fa-flag-checkered"></i> <span id="car-go-race-label">Race Weekend</span>
         </button>
@@ -109,99 +116,116 @@
     <!-- Action Feedback Toast -->
     <div id="car-toast" class="car-toast hidden"></div>
 
-    <!-- HQ Workspace: Left Navigation Rail + Dynamic Stage -->
+    <!-- HQ Workspace: Left Navigation Rail + Dynamic Zero-Scroll Stage -->
     <div class="car-shell">
       <nav class="car-nav" aria-label="Team Principal HQ">
-        <button type="button" class="car-nav-btn active" data-car-tab="dashboard"><i class="fas fa-tachometer-alt"></i> HQ Dashboard <span id="car-badge-dilemma" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn active" data-car-tab="dashboard"><i class="fas fa-tachometer-alt"></i> HQ Command <span id="car-badge-dilemma" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn" data-car-tab="rd"><i class="fas fa-cogs"></i> Car R&amp;D 3D Lab <span id="car-badge-rd" class="car-nav-badge"></span></button>
+        <button type="button" class="car-nav-btn" data-car-tab="analytics"><i class="fas fa-chart-area"></i> Team Analytics</button>
+        <button type="button" class="car-nav-btn" data-car-tab="stewards"><i class="fas fa-gavel"></i> FIA Stewards <span id="car-badge-stewards" class="car-nav-badge"></span></button>
         <button type="button" class="car-nav-btn" data-car-tab="market"><i class="fas fa-users"></i> Drivers &amp; Market</button>
         <button type="button" class="car-nav-btn" data-car-tab="feeders"><i class="fas fa-graduation-cap"></i> F2 · F3 · Academy</button>
         <button type="button" class="car-nav-btn" data-car-tab="scouting"><i class="fas fa-binoculars"></i> Scouting Hub <span id="car-badge-scouts" class="car-nav-badge"></span></button>
         <button type="button" class="car-nav-btn" data-car-tab="staff"><i class="fas fa-user-tie"></i> Technical Staff</button>
-        <button type="button" class="car-nav-btn" data-car-tab="rd"><i class="fas fa-cogs"></i> Car R&amp;D <span id="car-badge-rd" class="car-nav-badge"></span></button>
         <button type="button" class="car-nav-btn" data-car-tab="facilities"><i class="fas fa-industry"></i> HQ Facilities</button>
         <button type="button" class="car-nav-btn" data-car-tab="standings"><i class="fas fa-trophy"></i> Standings &amp; Finance</button>
         <button type="button" class="car-nav-btn" data-car-tab="dynasty"><i class="fas fa-landmark"></i> Dynasty &amp; Records <span id="car-badge-rivals" class="car-nav-badge"></span></button>
       </nav>
 
       <div class="car-stage">
-        <!-- TAB 1: HQ DASHBOARD -->
+        <!-- TAB 1: ZERO-SCROLL 3D HQ COMMAND DECK -->
         <div id="car-tab-dashboard" class="car-tab-pane active">
-          <div id="car-ultimatum-banner" class="car-dilemma-banner hidden"></div>
-          <div id="car-resume-banner" class="car-resume-banner hidden"></div>
-          <div id="car-media-banner" class="car-media-banner hidden"></div>
-          <div id="car-dilemma-banner" class="car-dilemma-banner hidden"></div>
-          <div class="car-dash-grid">
-            <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-helmet-safety"></i> ACTIVE RACE LINEUP &amp; TRAINING FOCUS</span><small>Car #1 · Car #2 · Reserve</small></div>
-              <div id="car-dash-lineup" class="car-lineup-grid"></div>
-            </div>
-
-            <div class="car-panel">
-              <div class="car-panel-head">
-                <span><i class="fas fa-building"></i> LIVE 3D TEAM HQ CAMPUS</span>
-                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-                  <div class="hq3d-room-bar" role="group" aria-label="3D HQ Campus Rooms">
-                    <button type="button" class="car-btn-xs car-btn-red active" data-hq-room="garage" title="Dual-Car Race Garage & Mechanics">🏎 Garage</button>
-                    <button type="button" class="car-btn-xs" data-hq-room="office" title="Principal's Office & Real 3D Trophy Cabinet">🏢 Office</button>
-                    <button type="button" class="car-btn-xs" data-hq-room="windtunnel" title="R&D Aero Wind Tunnel & Live Airflow">💨 Wind Tunnel</button>
-                    <button type="button" class="car-btn-xs" data-hq-room="factory" title="Powertrain Dyno & Carbon Factory">⚡ Factory</button>
-                  </div>
-                  <button type="button" id="car-livery-toggle-btn" class="car-btn-xs car-btn-gold" title="Customize your 3D team livery & chassis era"><i class="fas fa-palette"></i> Livery</button>
-                </div>
-              </div>
-              <small id="car-3d-spec-tag" class="muted" style="display:block;margin:-2px 0 5px;font-size:0.68rem;">Race Garage · Drag to orbit 3D Campus</small>
-              <div class="car-dash-3d-wrap">
-                <canvas id="car-dash-3d-canvas" aria-label="Interactive 3D Team HQ Campus"></canvas>
-                <div id="car-livery-editor" class="car-livery-editor hidden">
-                  <div class="car-liv-colors">
-                    <label>Main <input type="color" id="liv-main" value="#e10600"></label>
-                    <label>Sec <input type="color" id="liv-sec" value="#111622"></label>
-                    <label>Acc <input type="color" id="liv-acc" value="#facc15"></label>
-                    <label>Pop <input type="color" id="liv-pop" value="#ffffff"></label>
-                    <label>Det <input type="color" id="liv-det" value="#252c38"></label>
-                  </div>
-                  <div class="car-liv-opts">
-                    <select id="liv-style">
-                      <option value="two-tone">Two-Tone</option>
-                      <option value="modern">Modern</option>
-                      <option value="racing-stripe">Racing Stripe</option>
-                      <option value="chevron">Chevron</option>
-                      <option value="classic">Classic</option>
-                    </select>
-                    <select id="liv-era">
-                      <option value="2020s">2020s Chassis</option>
-                      <option value="2010s">2010s Hybrid</option>
-                      <option value="2000s">2000s V10</option>
-                      <option value="1990s">1990s Airbox</option>
-                      <option value="1980s">1980s Turbo</option>
-                      <option value="1970s">1970s Wedge</option>
-                      <option value="1960s">1960s Cigar</option>
-                      <option value="1950s">1950s Torpedo</option>
-                    </select>
-                    <button type="button" id="car-livery-save-btn" class="car-btn-xs car-btn-red"><i class="fas fa-check"></i> Save Livery</button>
+          <div class="car-alert-strip">
+            <div id="car-ultimatum-banner" class="car-dilemma-banner hidden"></div>
+            <div id="car-resume-banner" class="car-resume-banner hidden"></div>
+            <div id="car-media-banner" class="car-media-banner hidden"></div>
+            <div id="car-dilemma-banner" class="car-dilemma-banner hidden"></div>
+          </div>
+          <div class="car-dash-grid car-dash-zero-scroll">
+            <!-- LEFT HERO: Living 3D Campus + Active Race Lineup -->
+            <div class="car-dash-left-col">
+              <div class="car-panel car-3d-hero-panel">
+                <div class="car-panel-head">
+                  <span><i class="fas fa-cube"></i> LIVE 3D TEAM HQ CAMPUS</span>
+                  <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+                    <div class="hq3d-room-bar" role="group" aria-label="3D HQ Campus Rooms">
+                      <button type="button" class="car-btn-xs car-btn-red active" data-hq-room="garage" title="Dual-Car Race Garage & Mechanics">🏎 Garage</button>
+                      <button type="button" class="car-btn-xs" data-hq-room="office" title="Principal's Office & Real 3D Trophy Cabinet">🏢 Office</button>
+                      <button type="button" class="car-btn-xs" data-hq-room="windtunnel" title="R&D Aero Wind Tunnel & Live Airflow">💨 Tunnel</button>
+                      <button type="button" class="car-btn-xs" data-hq-room="factory" title="Powertrain Dyno & Carbon Factory">⚡ Factory</button>
+                    </div>
+                    <button type="button" id="car-livery-toggle-btn" class="car-btn-xs car-btn-gold" title="Customize 3D team livery"><i class="fas fa-palette"></i> Livery</button>
                   </div>
                 </div>
-                <div id="car-dash-3d-bars" class="car-3d-mini-bars"></div>
+                <small id="car-3d-spec-tag" class="muted" style="display:block;margin:-4px 0 2px;font-size:0.68rem;">Race Garage · Drag to orbit 3D Campus</small>
+                <div class="car-dash-3d-wrap car-dash-3d-hero">
+                  <canvas id="car-dash-3d-canvas" aria-label="Interactive 3D Team HQ Campus"></canvas>
+                  <div id="car-livery-editor" class="car-livery-editor hidden">
+                    <div class="car-liv-colors">
+                      <label>Main <input type="color" id="liv-main" value="#e10600"></label>
+                      <label>Sec <input type="color" id="liv-sec" value="#111622"></label>
+                      <label>Acc <input type="color" id="liv-acc" value="#facc15"></label>
+                      <label>Pop <input type="color" id="liv-pop" value="#ffffff"></label>
+                      <label>Det <input type="color" id="liv-det" value="#252c38"></label>
+                    </div>
+                    <div class="car-liv-opts">
+                      <select id="liv-style">
+                        <option value="two-tone">Two-Tone</option>
+                        <option value="modern">Modern</option>
+                        <option value="racing-stripe">Racing Stripe</option>
+                        <option value="chevron">Chevron</option>
+                        <option value="classic">Classic</option>
+                      </select>
+                      <select id="liv-era">
+                        <option value="2020s">2020s Chassis</option>
+                        <option value="2010s">2010s Hybrid</option>
+                        <option value="2000s">2000s V10</option>
+                        <option value="1990s">1990s Airbox</option>
+                        <option value="1980s">1980s Turbo</option>
+                        <option value="1970s">1970s Wedge</option>
+                        <option value="1960s">1960s Cigar</option>
+                        <option value="1950s">1950s Torpedo</option>
+                      </select>
+                      <button type="button" id="car-livery-save-btn" class="car-btn-xs car-btn-red"><i class="fas fa-check"></i> Save Livery</button>
+                    </div>
+                  </div>
+                  <div id="car-dash-3d-bars" class="car-3d-mini-bars"></div>
+                </div>
+              </div>
+
+              <div class="car-panel car-lineup-compact-panel">
+                <div class="car-panel-head"><span><i class="fas fa-helmet-safety"></i> ACTIVE RACE LINEUP &amp; TRAINING</span><small>Car #1 · Car #2 · Reserve</small></div>
+                <div id="car-dash-lineup" class="car-lineup-grid"></div>
               </div>
             </div>
 
-            <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-map-marked-alt"></i> NEXT GRAND PRIX</span><small id="car-next-gp-sub">—</small></div>
-              <div id="car-next-gp-card" class="car-next-gp-box"></div>
-            </div>
+            <!-- RIGHT COLUMN: Next GP + 3D Track Hologram + Tabbed Ops/Inbox -->
+            <div class="car-dash-right-col">
+              <div class="car-panel car-nextgp-panel">
+                <div class="car-panel-head"><span><i class="fas fa-map-marked-alt"></i> NEXT GRAND PRIX · 3D HOLOGRAM</span><small id="car-next-gp-sub">—</small></div>
+                <canvas id="car-next-gp-3d" class="car-track-holo-canvas" aria-label="3D Circuit Hologram"></canvas>
+                <div id="car-next-gp-card" class="car-next-gp-box"></div>
+              </div>
 
-            <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-clipboard-list"></i> TEAM OPERATIONS BOARD &amp; SILLY SEASON</span><small id="car-ops-goal-pill">Board Target</small></div>
-              <div id="car-ops-board" class="car-ops-board"></div>
-              <div class="car-subhead" style="margin-top:8px;"><i class="fas fa-comments"></i> SILLY SEASON RUMOUR MILL</div>
-              <div id="car-silly-rumours" class="car-rumour-list"></div>
-            </div>
-
-            <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-envelope-open-text"></i> PADDOCK INBOX &amp; SPONSORS</span></div>
-              <ul id="car-inbox-list" class="car-inbox-list"></ul>
-              <div class="car-subhead" style="margin-top:8px;"><i class="fas fa-handshake"></i> ACTIVE SPONSORS &amp; BOARD TARGET</div>
-              <div id="car-dash-sponsors" class="car-spon-mini"></div>
+              <div class="car-panel car-dash-feed-panel">
+                <div class="car-panel-head">
+                  <div class="car-subtabs" role="tablist">
+                    <button type="button" class="car-btn-xs car-btn-red active" data-dash-sub="inbox"><i class="fas fa-envelope"></i> Inbox &amp; Sponsors</button>
+                    <button type="button" class="car-btn-xs" data-dash-sub="ops"><i class="fas fa-clipboard-list"></i> Ops &amp; Rumours</button>
+                  </div>
+                  <small id="car-ops-goal-pill">Board Target</small>
+                </div>
+                <div id="car-dash-sub-inbox" class="car-subpane active">
+                  <ul id="car-inbox-list" class="car-inbox-list"></ul>
+                  <div class="car-subhead" style="margin-top:4px;"><i class="fas fa-handshake"></i> ACTIVE SPONSORS</div>
+                  <div id="car-dash-sponsors" class="car-spon-mini"></div>
+                </div>
+                <div id="car-dash-sub-ops" class="car-subpane">
+                  <div id="car-ops-board" class="car-ops-board"></div>
+                  <div class="car-subhead" style="margin-top:6px;"><i class="fas fa-comments"></i> SILLY SEASON RUMOURS</div>
+                  <div id="car-silly-rumours" class="car-rumour-list"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -306,16 +330,19 @@
           </div>
         </div>
 
-        <!-- TAB 4: CAR R&D, FIA ATR WIND TUNNEL & FACTORY -->
+        <!-- TAB 4: CAR R&D 3D X-RAY LAB & FIA ATR WIND TUNNEL -->
         <div id="car-tab-rd" class="car-tab-pane">
           <div id="car-rd-atr-strip" class="car-atr-strip"></div>
-          <div class="car-two-col">
-            <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-cogs"></i> 6-COMPONENT F1 CAR DEVELOPMENT &amp; SPARE PARTS</span><small id="car-rd-slots-label">0 / 1 Active</small></div>
-              <div id="car-rd-active-list" class="car-stack-list"></div>
+          <div class="car-two-col car-rd-lab-grid">
+            <div class="car-panel car-rd-left-3d">
+              <div class="car-panel-head">
+                <span><i class="fas fa-cube"></i> 3D X-RAY CAR BLUEPRINT LAB</span>
+                <small id="car-rd-3d-badge" style="color:#38bdf8;">HOVER OR CLICK ANY BLUEPRINT</small>
+              </div>
+              <canvas id="car-rd-3d-canvas" class="car-rd-3d-canvas" aria-label="Interactive 3D Car R&D X-Ray Lab"></canvas>
               <div id="car-atr-alloc-box" class="car-atr-alloc">
                 <div class="car-atr-alloc-head">
-                  <span><i class="fas fa-wind"></i> ALLOCATE ATR HOURS TO NEXT PACKAGE</span>
+                  <span><i class="fas fa-wind"></i> ALLOCATE ATR HOURS</span>
                   <strong id="car-atr-est-lbl" style="color:#4ade80;">Est. Correlation: 84% · Gain ×1.00</strong>
                 </div>
                 <div class="car-atr-sliders">
@@ -323,17 +350,90 @@
                   <label>CFD Items: <b id="car-atr-cfd-val">300</b><input type="range" id="car-atr-cfd-slider" min="0" max="1000" step="50" value="300"></label>
                 </div>
               </div>
-              <div id="car-rd-parts-grid" class="car-rd-grid"></div>
-              <div class="car-subhead"><i class="fas fa-forward"></i> NEXT-SEASON REGULATION SPEC RESEARCH ($3.8M · CARRIES OVER!)</div>
-              <div id="car-nextgen-grid" class="car-nextgen-grid"></div>
+              <div id="car-rd-active-list" class="car-stack-list"></div>
+            </div>
+
+            <div class="car-panel car-rd-right-panel">
+              <div class="car-panel-head">
+                <div class="car-subtabs" role="tablist">
+                  <button type="button" class="car-btn-xs car-btn-red active" data-rd-sub="parts"><i class="fas fa-cogs"></i> 6-Part Blueprints</button>
+                  <button type="button" class="car-btn-xs" data-rd-sub="grid"><i class="fas fa-chart-bar"></i> Grid &amp; Correlation</button>
+                  <button type="button" class="car-btn-xs" data-rd-sub="pu"><i class="fas fa-bolt"></i> PU Pool &amp; Next-Gen</button>
+                </div>
+                <small id="car-rd-slots-label">0 / 1 Active</small>
+              </div>
+              <div id="car-rd-sub-parts" class="car-subpane active">
+                <div id="car-rd-parts-grid" class="car-rd-grid"></div>
+              </div>
+              <div id="car-rd-sub-grid" class="car-subpane">
+                <div id="car-rd-comparison" class="car-comp-bars"></div>
+                <div class="car-subhead"><i class="fas fa-flask"></i> WIND-TUNNEL TRACK CORRELATION LOG</div>
+                <div id="car-rd-history" class="car-stack-list"></div>
+              </div>
+              <div id="car-rd-sub-pu" class="car-subpane">
+                <div class="car-subhead" style="margin-top:0;"><i class="fas fa-battery-three-quarters"></i> FIA POWER UNIT &amp; GEARBOX POOL (4 ICE · 3 ERS · 4 GBX)</div>
+                <div id="car-pu-pool" class="car-pu-grid"></div>
+                <div class="car-subhead"><i class="fas fa-forward"></i> NEXT-SEASON REGULATION SPEC RESEARCH ($3.8M · CARRIES OVER!)</div>
+                <div id="car-nextgen-grid" class="car-nextgen-grid"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW TAB: TEAM ANALYTICS WAR ROOM -->
+        <div id="car-tab-analytics" class="car-tab-pane">
+          <div class="car-an-grid">
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-chart-line"></i> WCC POINTS &amp; BOARD CONFIDENCE</span><small>Round-by-Round</small></div>
+              <canvas id="car-an-pts-canvas" class="car-an-canvas"></canvas>
             </div>
             <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-chart-bar"></i> CONSTRUCTOR CAR PERFORMANCE RANKING</span><small>Aero · Chassis · Power · Tyre Care</small></div>
-              <div id="car-rd-comparison" class="car-comp-bars"></div>
-              <div class="car-subhead"><i class="fas fa-flask"></i> WIND-TUNNEL TRACK CORRELATION LOG</div>
-              <div id="car-rd-history" class="car-stack-list"></div>
-              <div class="car-subhead"><i class="fas fa-battery-three-quarters"></i> FIA POWER UNIT &amp; GEARBOX POOL (4 ICE · 3 ERS · 4 GBX)</div>
-              <div id="car-pu-pool" class="car-pu-grid"></div>
+              <div class="car-panel-head"><span><i class="fas fa-coins"></i> FIA COST CAP BURN vs. CAR OVR</span><small>$135M Ceiling</small></div>
+              <canvas id="car-an-cap-canvas" class="car-an-canvas"></canvas>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-user-friends"></i> TEAMMATE H2H &amp; R&amp;D ROI</span><small>Salary Efficiency · Correlation</small></div>
+              <div id="car-an-h2h"></div>
+              <div id="car-an-roi" style="margin-top:6px;"></div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-stopwatch"></i> NEXT GP F1DB STRATEGY CURVES (888K LAPS)</span><small>1-Stop vs 2-Stop vs 3-Stop</small></div>
+              <canvas id="car-an-strat-canvas" class="car-an-canvas car-an-canvas-sm"></canvas>
+              <div id="car-an-strat-list" class="car-strat-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW TAB: FIA STEWARDS' ROOM, 12-PT SUPER LICENCE, PU SUPPLIERS & F1 COMMISSION -->
+        <div id="car-tab-stewards" class="car-tab-pane">
+          <div class="car-two-col car-stewards-grid">
+            <div class="car-panel">
+              <div class="car-panel-head">
+                <div class="car-subtabs">
+                  <button type="button" class="car-btn-xs car-btn-red active" data-stew-sub="hearings"><i class="fas fa-gavel"></i> Stewards' Summons</button>
+                  <button type="button" class="car-btn-xs" data-stew-sub="pu"><i class="fas fa-bolt"></i> PU Suppliers</button>
+                  <button type="button" class="car-btn-xs" data-stew-sub="commission"><i class="fas fa-landmark"></i> F1 Commission</button>
+                </div>
+                <a href="/f1db" target="_blank" class="car-btn-xs car-btn-gold">11,919 FIA Docs ↗</a>
+              </div>
+              <div id="car-stew-sub-hearings" class="car-subpane active">
+                <div id="car-stewards-pending"></div>
+              </div>
+              <div id="car-stew-sub-pu" class="car-subpane">
+                <div id="car-pu-contracts-grid" class="car-rd-grid"></div>
+              </div>
+              <div id="car-stew-sub-commission" class="car-subpane">
+                <div id="car-commission-list" class="car-stack-list"></div>
+              </div>
+            </div>
+            <div class="car-panel">
+              <div class="car-panel-head"><span><i class="fas fa-id-card"></i> FIA 12-POINT SUPER LICENCE TRACKER</span><small>12 Pts = Automatic 1-Race Ban</small></div>
+              <div class="car-table-scroll car-flex-scroll">
+                <table class="car-table">
+                  <thead><tr><th>Driver</th><th>Team</th><th>Penalty Points</th><th>Status</th></tr></thead>
+                  <tbody id="car-licence-tbody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -991,6 +1091,7 @@
 <script src="/static/js/f1_race_analytics.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_custom_season.js?v={{ asset_v }}"></script>
 <script src="/static/js/career_hq_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/career_analytics.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_profile.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
 <script src="/static/js/career.js?v={{ asset_v }}"></script>

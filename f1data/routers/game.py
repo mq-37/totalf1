@@ -95,6 +95,13 @@ def api_sim_driver_dna(drivers: str = Query("")):
     return {"ok": True, "count": len(dna), "driver_dna": dna}
 
 
+@router.get("/api/dialogue/voice-pack")
+def api_dialogue_voice_pack():
+    """Return FIA-transcript-grounded driver speech signatures, F1 radio tropes & banter modes."""
+    from ..paddock_dialogue import get_voice_pack_payload
+    return {"ok": True, **get_voice_pack_payload()}
+
+
 @router.get("/api/tts/status")
 def api_tts_status():
     """Return live status of the Hybrid Gemini TTS + Neural Edge-TTS broadcast voice engine."""

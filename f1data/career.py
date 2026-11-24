@@ -450,11 +450,16 @@ def _default_staff_for_team(car_ovr: float) -> dict[str, dict[str, Any]]:
 
 
 def _spawn_dilemma(state: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from .paddock_dialogue import TROPE_DILEMMAS
+        all_dilemmas = list(DILEMMA_TEMPLATES) + list(TROPE_DILEMMAS)
+    except Exception:
+        all_dilemmas = list(DILEMMA_TEMPLATES)
     seen = set(state.get("seen_dilemmas") or [])
-    pool = [d for d in DILEMMA_TEMPLATES if d["id"] not in seen]
+    pool = [d for d in all_dilemmas if d["id"] not in seen]
     if not pool:
         state["seen_dilemmas"] = []
-        pool = list(DILEMMA_TEMPLATES)
+        pool = list(all_dilemmas)
     picked = random.choice(pool)
     state.setdefault("seen_dilemmas", []).append(picked["id"])
     return dict(picked, round=state.get("current_round", 1))
@@ -527,6 +532,8 @@ def _ensure_career_v2(state: dict[str, Any]) -> dict[str, Any]:
         if not d.get("hero_color"):
             d["hero_color"] = team_colors.get(d.get("team_id")) or "#64748b"
     _ensure_rd_v3(state)
+    from .career_extras import ensure_career_extras
+    ensure_career_extras(state)
     pt["car_overall"] = _compute_car_overall(pt, state.get("staff"))
     return state
 
@@ -2378,8 +2385,13 @@ def commit_race_result(
         if fastest_lap_driver_id and state["drivers"].get(fastest_lap_driver_id, {}).get("clean_name") == nm:
             rec["fl"] += 1
 
-    # Spawn contextual Post-Race Press Conference prompt!
+    # Spawn contextual Post-Race Press Conference prompt + Career Analytics + FIA Stewards/Licence!
     state["pending_media"] = _build_post_race_media(state, cal_item, player_finishes, wcc_sorted, p_wcc_pos, bool(telem.get("is_wet")))
+    from .career_extras import record_analytics_snapshot, maybe_spawn_stewards_hearing
+    prev_quali_grid = (state.get("pending_quali") or {}).get("grid") if isinstance(state.get("pending_quali"), dict) else None
+    record_analytics_snapshot(state, cal_item, player_finishes, prev_quali_grid, wcc_sorted, pt, telem)
+    maybe_spawn_stewards_hearing(state, cal_item, player_finishes, pt, _add_inbox)
+    state["parc_ferme_locked"] = False
 
     state["weekend_setup"] = None
     # Spawn a fresh interactive Paddock Decision if none is pending!
@@ -2819,6 +2831,8 @@ def serialize_career_payload(
         "max_rd_slots": 2 if pt["facilities"].get("cfd_factory", 1) >= 3 else 1,
         "car_blueprints": CAR_BLUEPRINTS,
         "rd_parts": RD_PARTS,
+        "pu_suppliers": __import__("f1data.career_extras", fromlist=["PU_SUPPLIERS"]).PU_SUPPLIERS,
+        "max_player_penalty_pts": max((int(state["drivers"].get(did, {}).get("penalty_points") or 0) for did in pt.get("driver_ids") or []), default=0),
         **extra_meta,
     }
     if include_static:

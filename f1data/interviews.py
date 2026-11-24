@@ -200,26 +200,37 @@ def _build_driver_interview(
     }
 
     qas: list[dict[str, str]] = []
+    drv_name = str(drv.get("name") or "")
+    try:
+        from .paddock_dialogue import get_driver_voice_line
+    except Exception:
+        get_driver_voice_line = None
 
-    # Q1: Race Outcome Headline Question (tailored to what actually happened!)
+    # Q1: Race Outcome Headline Question (tailored to what actually happened + real driver voice signature!)
     if dnf:
         q1 = f"A bitter early end to your {circuit_name} Grand Prix with a {stint.get('dnfReason') or 'technical'} retirement — how are you feeling right now?"
-        a1 = (
+        sig = get_driver_voice_line(drv_name, "frustrated", seed=f"{circuit_name}|{fin}") if get_driver_voice_line else None
+        a1 = sig or (
             f"Gutted, honestly. We were working hard to build rhythm before it let go. "
             f"{'At least the pace felt promising early on.' if peak_conf >= 65 else 'It was a tough weekend from the start, so we reset and come back stronger.'}"
         )
     elif fin == 1:
         q1 = f"Grand Prix Winner at {circuit_name}! Starting P{grid_pos} and taking the chequered flag first — how special does that feel?"
-        a1 = _persona_voice(persona, "elated", ctx)
+        sig = get_driver_voice_line(drv_name, "win", seed=f"{circuit_name}|{fin}") if get_driver_voice_line else None
+        a1 = f"{sig} ({_persona_voice(persona, 'elated', ctx)})" if sig and len(sig) < 95 else (sig or _persona_voice(persona, "elated", ctx))
     elif gain >= 4:
         q1 = f"Driver of the Day contender! You surged {gain} places from P{grid_pos} to P{fin} — when did you feel the race swinging your way?"
-        a1 = _persona_voice(persona, mood, ctx)
+        sig = get_driver_voice_line(drv_name, "overtake", seed=f"{circuit_name}|{gain}") if get_driver_voice_line else None
+        a1 = sig or _persona_voice(persona, mood, ctx)
     elif gain <= -4:
         q1 = f"You started P{grid_pos} but slipped back to P{fin} by the flag — where did the race get away from you?"
-        a1 = _persona_voice(persona, mood, ctx)
+        sig = get_driver_voice_line(drv_name, "frustrated", seed=f"{circuit_name}|{gain}") if get_driver_voice_line else None
+        a1 = sig or _persona_voice(persona, mood, ctx)
     else:
         q1 = f"P{fin} at the chequered flag here at {circuit_name} — does that match what you expected coming into today?"
-        a1 = _persona_voice(persona, mood, ctx)
+        sit = "win" if fin <= 3 else ("frustrated" if mood in ("frustrated", "shaken") else "overtake")
+        sig = get_driver_voice_line(drv_name, sit, seed=f"{circuit_name}|{fin}") if (get_driver_voice_line and (fin <= 3 or mood in ("frustrated", "shaken"))) else None
+        a1 = sig or _persona_voice(persona, mood, ctx)
     qas.append({"q": q1, "a": a1, "topic": "Race Outcome"})
 
     # Q2: Specific Key Moment Question (Mistake, Pit Delay, Overtakes, Weather, or Confidence Swing!)

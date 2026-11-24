@@ -49,6 +49,67 @@
     return Object.assign({}, base, { chemistry: 66 + (Math.abs(h) % 16) });
   }
 
+  let _voicePack = null;
+  let _voicePackLoading = false;
+  function ensureVoicePack() {
+    if (_voicePack || _voicePackLoading || typeof fetch !== "function") return;
+    _voicePackLoading = true;
+    fetch("/api/dialogue/voice-pack")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.drivers) _voicePack = d; })
+      .catch(() => {})
+      .finally(() => { _voicePackLoading = false; });
+  }
+
+  function getBanterMode() {
+    try { return localStorage.getItem("traf1_banter_mode") || "authentic"; } catch (_) { return "authentic"; }
+  }
+  function setBanterMode(mode) {
+    const m = ["strict", "authentic", "spicy"].includes(mode) ? mode : "authentic";
+    try { localStorage.setItem("traf1_banter_mode", m); } catch (_) {}
+    return m;
+  }
+
+  function _normDrvName(raw) {
+    return String(raw || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+[a-z]{3}$/, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function pickDriverSignature(fullName, sit) {
+    const mode = getBanterMode();
+    if (mode === "strict" || !_voicePack || !_voicePack.drivers) return null;
+    const nk = _normDrvName(fullName);
+    let prof = _voicePack.drivers[nk];
+    if (!prof && nk.includes(" ")) {
+      const last = nk.split(" ").pop();
+      const k = Object.keys(_voicePack.drivers).find((x) => x.endsWith(" " + last));
+      if (k) prof = _voicePack.drivers[k];
+    }
+    if (!prof || !Array.isArray(prof[sit]) || !prof[sit].length) return null;
+    const prob = mode === "spicy" ? 0.82 : 0.56;
+    return Math.random() < prob ? pick(prof[sit]) : null;
+  }
+
+  function pickTrope(key, drv, eng, rival) {
+    const mode = getBanterMode();
+    if (mode === "strict" || !_voicePack || !_voicePack.tropes) return null;
+    const list = _voicePack.tropes[key];
+    if (!Array.isArray(list) || !list.length) return null;
+    const item = pick(list);
+    const fmt = (s) => String(s || "").replace(/\{rival\}/g, rival || "the car ahead").replace(/\bENG\b/g, eng.short).replace(/\bDRV\b/g, drv);
+    return {
+      speaker: item.speaker === "ENG" ? eng.short : (item.speaker === "DRV" ? drv : item.speaker),
+      to: item.speaker === "ENG" ? drv : eng.short,
+      text: fmt(item.text),
+      engReply: item.engReply ? fmt(item.engReply) : "",
+    };
+  }
+
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
   function isClassicNoRadioEra(car, ctx) {
@@ -60,6 +121,7 @@
   }
 
   function buildMessage(type, car, ctx) {
+    ensureVoicePack();
     const eng = car.engineer || { name: "Race Engineer", short: "ENG", personality: "calm" };
     const drv = car.code3 || "DRV";
     const fullName = car.name || car.cleanName || drv;
@@ -69,6 +131,22 @@
     const dna = (car && car.dna) || (ctx && ctx.dna) || {};
     const rArch = dna.radio_archetype || "rhythmic_strategist";
     const noRadio = isClassicNoRadioEra(car, ctx);
+    const banterMode = getBanterMode();
+
+    // New proactive engineer & classic F1 trope radio types
+    if (!noRadio && (type === "proactive_undercut" || type === "give_place_back" || type === "we_are_checking" || type === "pit_confusion")) {
+      const tr = pickTrope(type, drv, eng, rival);
+      if (tr) {
+        return {
+          speaker: tr.speaker,
+          to: tr.to,
+          text: tr.text,
+          engReply: tr.engReply,
+          tone: type === "proactive_undercut" ? "win" : "warn",
+          category: "strategy",
+        };
+      }
+    }
 
     // Pre-1985 Authentic Pit-Wall Chalkboard & Marshal Channel for non-mechanical events!
     if (noRadio && !String(type).startsWith("comp_")) {
@@ -96,6 +174,7 @@
 
     switch (type) {
       case "overtake": {
+        const sigOvt = pickDriverSignature(fullName, "overtake");
         const byArch = {
           clinical_perfectionist: [
             `Got ${rival}. Front-left was graining slightly in the wake — give me Diff Entry +1 now we have clean air.`,
@@ -121,13 +200,18 @@
         return {
           speaker: drv,
           to: eng.short,
-          text: pick(byArch[rArch] || byArch.rhythmic_strategist),
+          text: sigOvt || pick(byArch[rArch] || byArch.rhythmic_strategist),
           engReply: `${eng.short}: Copy ${drv}, clean move. ${conf >= 75 ? "Push now, clean air ahead — Strat Mode 4." : "Manage rear temps, Target +1."}`,
           tone: "win",
           category: "race",
         };
       }
       case "tyre_cliff": {
+        if (banterMode !== "strict" && Math.random() < (banterMode === "spicy" ? 0.45 : 0.22)) {
+          const bluff = pickTrope("tyre_bluff", drv, eng, rival);
+          if (bluff) return { speaker: bluff.speaker, to: bluff.to, text: bluff.text, engReply: bluff.engReply, tone: "warn", category: "strategy" };
+        }
+        const sigTyre = pickDriverSignature(fullName, "tyre");
         const byArch = {
           clinical_perfectionist: `${eng.short}, rear surface temp is spiked and front-left is graining in mid-speed — two clicks front wing on the stop.`,
           rhythmic_strategist: `${eng.short}, these tyres are gone mate — zero rear traction on exit. Check Plan B window.`,
@@ -138,13 +222,24 @@
         return {
           speaker: drv,
           to: eng.short,
-          text: byArch[rArch] || byArch.rhythmic_strategist,
+          text: sigTyre || byArch[rArch] || byArch.rhythmic_strategist,
           engReply: `${eng.short}: Copy ${drv}, box this lap — box opposite ${rival} if they stay out. Confirm pit confirm button.`,
           tone: "warn",
           category: "strategy",
         };
       }
-      case "mistake":
+      case "mistake": {
+        const sigFrust = pickDriverSignature(fullName, "frustrated");
+        if (sigFrust && banterMode !== "strict") {
+          return {
+            speaker: drv,
+            to: eng.short,
+            text: sigFrust,
+            engReply: `${eng.short}: Copy ${drv}, shake it off — B-Bal +1% forward and focus on the next apex.`,
+            tone: "warn",
+            category: "race",
+          };
+        }
         return {
           speaker: eng.short,
           to: drv,
@@ -154,7 +249,9 @@
           tone: "warn",
           category: "race",
         };
-      case "confidence_zone":
+      }
+      case "confidence_zone": {
+        const sigWin = pickDriverSignature(fullName, "win");
         return {
           speaker: eng.short,
           to: drv,
@@ -164,10 +261,11 @@
                 `Hammer time ${drv}! Purple sectors — Strat Mode 4, keep hitting those apexes!`,
                 `Mega stint ${drv}, fastest car on track! Target +2 on Plan A, gap building nicely.`,
               ]),
-          engReply: rArch === "stoic_minimalist" ? `${drv}: Copy. Understood.` : "",
+          engReply: sigWin ? `${drv}: ${sigWin}` : (rArch === "stoic_minimalist" ? `${drv}: Copy. Understood.` : ""),
           tone: "win",
           category: "race",
         };
+      }
       case "slow_pit":
         return {
           speaker: eng.short,
@@ -609,5 +707,8 @@
   global.F1RadioEngine = {
     assignEngineer,
     createRadioController,
+    getBanterMode,
+    setBanterMode,
+    ensureVoicePack,
   };
 })(window);

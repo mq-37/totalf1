@@ -1019,3 +1019,58 @@ def get_race_weekend_dossier(year: int, round_num: int, f1db_path: str | Path | 
         }
     finally:
         con.close()
+
+
+def get_what_if_gp_packet(year: int, round_num: int, f1db_path: str | Path | None = None) -> dict[str, Any] | None:
+    """
+    Build a ready-to-race Historical 'What-If' Grand Prix packet from `data/f1db.sqlite`
+    for ANY real F1 race (1950-2026): real qualifying/starting grid, drivers, constructors,
+    local TRAF1 circuit_id, era key, and historical incident profile.
+    """
+    dossier = get_race_weekend_dossier(year, round_num, f1db_path)
+    if not dossier or not dossier.get("race"):
+        return None
+    race = dossier["race"]
+    f1db_cid = str(race.get("circuitId") or "")
+    local_cid = F1DB_TO_LOCAL_CIRCUIT.get(f1db_cid, f1db_cid.replace("-", "_"))
+
+    # Prefer real Qualifying order, fall back to Race Results grid/finish order
+    source_rows = dossier.get("qualifying") or dossier.get("results") or []
+    grid = []
+    seen = set()
+    for idx, r in enumerate(source_rows, 1):
+        did = r.get("driverId")
+        if not did or did in seen:
+            continue
+        seen.add(did)
+        dname = str(r.get("driverName") or did.replace("-", " ").title())
+        abbr = str(r.get("driverAbbr") or dname[:3]).upper()[:3]
+        cname = str(r.get("constructorName") or "Constructor")
+        grid.append({
+            "pos": len(grid) + 1,
+            "driverId": did,
+            "name": dname,
+            "code3": abbr,
+            "team": cname,
+            "qualiTime": r.get("q3") or r.get("time") or "",
+        })
+        if len(grid) >= 22:
+            break
+
+    from .era_rules import era_key_for_year, get_era_rules
+    era_k = era_key_for_year(int(year))
+    return {
+        "year": int(year),
+        "round": int(round_num),
+        "officialName": race.get("officialName") or f"{year} {race.get('grandPrixName') or 'Grand Prix'}",
+        "date": race.get("date"),
+        "f1dbCircuitId": f1db_cid,
+        "circuitId": local_cid,
+        "circuitName": race.get("circuitName") or local_cid,
+        "laps": int(race.get("laps") or 55),
+        "eraKey": era_k,
+        "eraRules": get_era_rules(int(year)),
+        "historicalSafetyCars": len(dossier.get("safetyCars") or []),
+        "historicalRedFlags": len(dossier.get("redFlags") or []),
+        "grid": grid,
+    }

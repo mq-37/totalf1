@@ -1156,6 +1156,8 @@
       else if (fs.safetyCarLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
       else if (fs.vscLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> VSC`; }
       else if (fs.yellowSector > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = fs.yellowLevel === 2 ? `<i class="fas fa-exclamation-triangle"></i> DBL YELLOW S${fs.yellowSector}` : `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
+      else if (fs.cars.some((c) => !c.dnf && (c.meatballFlag || c.wingDamaged))) { flagEl.className = "sim-flag-pill"; flagEl.style.background = "rgba(248,250,252,.22)"; flagEl.style.borderColor = "#f8fafc"; flagEl.style.color = "#f8fafc"; flagEl.innerHTML = `<i class="fas fa-flag"></i> WHITE FLAG · SLOW CAR`; }
+      else if ((fs.debrisZones && fs.debrisZones.length > 0) || (fs.wetness >= 18 && fs.wetness <= 45)) { flagEl.className = "sim-flag-pill"; flagEl.style.background = "repeating-linear-gradient(90deg, rgba(250,204,21,.28) 0 8px, rgba(239,68,68,.28) 8px 16px)"; flagEl.style.borderColor = "#facc15"; flagEl.style.color = "#fef08a"; flagEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> SLIPPERY SURFACE`; }
       else if (fs.drsEnabled) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN · DRS ON`; }
       else { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN FLAG`; }
     }
@@ -1993,8 +1995,13 @@
 
         if (car.lap >= fs.totalLaps || fs.chequeredFlag) {
           const completedLaps = Math.min(fs.totalLaps, car.lap);
-          if (completedLaps >= fs.totalLaps && !hasSatisfiedTwoCompoundRule(car, era)) {
-            car.timePenaltyS = (car.timePenaltyS || 0) + 20;
+          if (completedLaps >= fs.totalLaps && !hasSatisfiedTwoCompoundRule(car, era) && !fs.redFlagUsed) {
+            // Authentic FIA Sporting Regs Art. 30.5m: Failure to use 2 dry compounds in a dry GP = DSQ!
+            car.dsq = true;
+            car.dnf = true;
+            car.dnfReason = "DSQ (2-Compound Rule Art. 30.5m)";
+            addCommentary(fs.totalLaps, `⬛ FIA DSQ: ${car.card.clean_name} disqualified for failing to use 2 dry tyre compounds (Art. 30.5m)!`, "warn");
+            if (!fastMode) showStewardsBanner("⬛ FIA BLACK FLAG · DSQ (ART. 30.5m)", `${car.card.clean_name} — Failed to run 2 dry compounds!`, "penalty");
           }
           car.finishedRace = true;
           car.finishLaps = completedLaps;
@@ -2210,6 +2217,49 @@
             if (fs.radio && !fastMode && front.pos <= 10) {
               fs.radio.emit("team_order", { idx: front.idx, code3: front.card.code3, name: front.card.clean_name, color: front.card.hero_color, engineer: front.engineer, dna: front.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: front.lap }, { lap: leaderLap + 1, rival: back.card.clean_name });
             }
+          }
+        }
+      }
+    }
+
+    // FIA Art. 33.3: Leaving the Track & Gaining a Lasting Advantage (Voluntary Give-Back vs +5s Penalty!)
+    if (fs.safetyCarLaps === 0 && fs.vscLaps === 0 && !fs.chequeredFlag && leaderLap >= 2 && leaderLap < fs.totalLaps - 1 && Math.random() < 0.0022 * (fs.chaosMult || 1)) {
+      const candIdx = 1 + Math.floor(Math.random() * Math.min(9, Math.max(1, sortedNow.length - 1)));
+      const passer = sortedNow[candIdx - 1], victim = sortedNow[candIdx];
+      if (passer && victim && !passer.dnf && !victim.dnf && passer.inPit <= 0 && victim.inPit <= 0) {
+        const gS = (passer.totalProg - victim.totalProg) * fs.circuit.base_lap_s;
+        if (gS > 0.05 && gS < 0.65) {
+          const willYield = (passer.composure || 70) >= (passer.aggression || 68) - 4;
+          if (willYield) {
+            passer.totalProg -= (gS + 0.18) / fs.circuit.base_lap_s;
+            addCommentary(leaderLap + 1, `⚖️ FIA ART. 33.3: ${passer.card.clean_name} ran off-track overtaking ${victim.card.clean_name} — voluntarily hands the place back!`, "info");
+            if (fs.radio && !fastMode) {
+              fs.radio.emit("give_place_back", { idx: passer.idx, code3: passer.card.code3, name: passer.card.clean_name, color: passer.card.hero_color, engineer: passer.engineer, dna: passer.dna, lap: passer.lap }, { lap: leaderLap + 1, rival: victim.card.clean_name });
+            }
+          } else {
+            passer.unservedPenaltyS = (passer.unservedPenaltyS || 0) + 5;
+            passer.timePenaltyS = (passer.timePenaltyS || 0) + 5;
+            if (!fastMode) {
+              showStewardsBanner("⚖️ FIA STEWARDS · +5s (ART. 33.3)", `${passer.card.clean_name} — Leaving Track & Gaining Advantage vs ${victim.card.code3}`, "penalty");
+              playSfx("radioAlert");
+            }
+            addCommentary(leaderLap + 1, `⚖️ FIA PENALTY: +5s for ${passer.card.clean_name} — Leaving the track & gaining an advantage over ${victim.card.clean_name}!`, "warn");
+          }
+        }
+      }
+    }
+
+    // Proactive Accented Race Engineer Undercut Radio Call (when clean-air pit window opens!)
+    if (!fastMode && fs.radio && fs.safetyCarLaps === 0 && leaderLap >= 4 && leaderLap < fs.totalLaps - 3 && Math.random() < 0.003) {
+      const foc = fs.cars[fs.focusIdx];
+      const rankFoc = sortedNow.findIndex((c) => c === foc);
+      if (foc && !foc.dnf && foc.inPit <= 0 && foc.tyreLife < 58 && rankFoc > 0 && rankFoc <= 8) {
+        const target = sortedNow[rankFoc - 1];
+        const gapT = (target.totalProg - foc.totalProg) * fs.circuit.base_lap_s;
+        if (gapT < 2.2 && ENG && ENG.computePitRejoin) {
+          const rejoin = ENG.computePitRejoin(fs.cars, foc, fs.circuit, fs.circuit.pit_loss_s || 22);
+          if (rejoin.cleanAir) {
+            fs.radio.emit("proactive_undercut", { idx: foc.idx, code3: foc.card.code3, name: foc.card.clean_name, color: foc.card.hero_color, engineer: foc.engineer, dna: foc.dna, lap: foc.lap }, { lap: leaderLap + 1, rival: target.card.clean_name });
           }
         }
       }
@@ -3402,6 +3452,34 @@
       } else if (ev.key === "Escape") {
         toggleSetupDrawer(false);
         toggleRadioDrawer(false);
+      }
+    });
+
+    // Historical "What-If" Real F1DB Grand Prix Launcher (1950-2026)
+    getEl("fsim-whatif-launch")?.addEventListener("click", async () => {
+      const val = getEl("fsim-whatif-sel")?.value || "";
+      if (!val.includes(":")) { showToast("Select a Historical Grand Prix first!", "warn"); return; }
+      const [yr, rnd] = val.split(":");
+      try {
+        const res = await fetch(`/api/f1db/what-if/${encodeURIComponent(yr)}/${encodeURIComponent(rnd)}`);
+        if (!res.ok) { showToast("Historical GP not found in F1DB", "warn"); return; }
+        const pkt = await res.json();
+        const deckSel = getEl("fsim-deck-sel");
+        if (deckSel) {
+          const optVal = `season:${pkt.year}`;
+          if ([...deckSel.options].some((o) => o.value === optVal)) deckSel.value = optVal;
+        }
+        const cirSel = getEl("fsim-circuit-sel");
+        if (cirSel && [...cirSel.options].some((o) => o.value === pkt.circuitId)) cirSel.value = pkt.circuitId;
+        const eraSel = getEl("fsim-era-sel");
+        if (eraSel && [...eraSel.options].some((o) => o.value === pkt.eraKey)) eraSel.value = pkt.eraKey;
+        const modeSel = getEl("fsim-mode-sel");
+        if (modeSel) modeSel.value = "single";
+        toggleSetupDrawer(false);
+        showToast(`🕰️ Loaded ${pkt.officialName} (${pkt.grid.length} real drivers · ${pkt.eraKey} rules)!`, "win");
+        startNewBroadcast();
+      } catch (e) {
+        showToast("What-If GP load error: " + e.message, "warn");
       }
     });
 

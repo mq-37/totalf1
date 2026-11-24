@@ -560,45 +560,111 @@ body.sim-cockpit-active .car-race-view { flex: 1 1 0; min-height: 0; display: fl
 }
 .car-garage-top { display: flex; justify-content: space-between; align-items: center; font-family: 'Orbitron', sans-serif; font-size: 0.78rem; color: #fff; }
 
-/* Pillar 3: One-Screen Zero-Scroll Career HQ & Qualifying Desktop App Ergonomics */
-@media (min-width: 1180px) and (min-height: 740px) {
+/* Pillar 3 + Zero-Scroll Full-Viewport 3D Career Game OS */
+.car-banter-sel {
+  padding: 5px 8px; border-radius: 7px; background: #0f172a; border: 1px solid var(--edge-hi);
+  color: #fde047; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+}
+.car-subtabs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.car-subpane { display: none; min-height: 0; }
+.car-subpane.active { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; gap: 6px; }
+.car-alert-strip { display: flex; flex-direction: column; gap: 5px; flex: 0 0 auto; }
+.car-dash-zero-scroll { display: grid; grid-template-columns: 1.38fr 0.92fr; gap: 10px; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.car-dash-left-col, .car-dash-right-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+.car-3d-hero-panel { flex: 1.35 1 0; min-height: 0; overflow: hidden; }
+.car-dash-3d-hero { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.car-dash-3d-hero #car-dash-3d-canvas { flex: 1 1 0; min-height: 180px; width: 100%; height: 100% !important; display: block; border-radius: 9px; }
+.car-lineup-compact-panel { flex: 0 0 auto; }
+.car-nextgp-panel { flex: 0 0 auto; }
+.car-track-holo-canvas { width: 100%; height: 106px; display: block; border-radius: 8px; background: radial-gradient(circle at 50% 60%, rgba(14,165,233,0.14), rgba(2,6,23,0.92)); border: 1px solid rgba(56,189,248,0.28); }
+.car-dash-feed-panel { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.car-rd-lab-grid { flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-columns: 0.95fr 1.25fr; }
+.car-rd-left-3d, .car-rd-right-panel { min-height: 0; overflow: hidden; }
+.car-rd-3d-canvas { width: 100%; flex: 1 1 0; min-height: 170px; border-radius: 9px; border: 1px solid rgba(56,189,248,0.32); display: block; }
+.car-an-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.car-an-grid .car-panel { min-height: 0; overflow: hidden; }
+.car-an-canvas { width: 100%; flex: 1 1 0; min-height: 120px; border-radius: 8px; border: 1px solid var(--edge); display: block; }
+.car-an-canvas-sm { max-height: 135px; }
+.car-h2h-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.8rem; }
+.car-h2h-vs { font-family: 'Orbitron', sans-serif; font-size: 0.68rem; color: #f87171; padding: 2px 6px; border-radius: 999px; background: rgba(239,68,68,0.16); }
+.car-h2h-row { display: grid; grid-template-columns: 54px 1fr 54px; align-items: center; font-size: 0.74rem; padding: 2.5px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.car-h2h-row b:last-child { text-align: right; color: #7dd3fc; }
+.car-h2h-row b:first-child { color: #fde047; }
+.car-h2h-row span { text-align: center; color: #94a3b8; font-size: 0.7rem; }
+.car-roi-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; text-align: center; padding: 6px; border-radius: 8px; background: rgba(255,255,255,0.035); border: 1px solid var(--edge); }
+.car-roi-kpis small { display: block; font-size: 0.56rem; color: #94a3b8; font-weight: 800; }
+.car-roi-kpis b { font-family: 'Orbitron', sans-serif; font-size: 0.88rem; }
+.car-strat-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.7rem; color: #cbd5e1; margin-bottom: 4px; }
+.car-strat-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 0.72rem; padding: 4px 7px; border-radius: 6px; background: rgba(255,255,255,0.035); border: 1px solid var(--edge); margin-bottom: 3px; }
+.car-strat-row.is-best { border-color: #22c55e; background: rgba(34,197,94,0.11); }
+.car-stewards-grid { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.car-steward-doc { padding: 11px; border-radius: 10px; background: linear-gradient(165deg, rgba(225,6,0,0.14), rgba(2,6,23,0.92)); border: 1.5px solid rgba(239,68,68,0.55); display: flex; flex-direction: column; gap: 7px; }
+.car-sd-head { display: flex; justify-content: space-between; align-items: center; font-family: 'Orbitron', sans-serif; font-size: 0.74rem; color: #fca5a5; }
+.car-sd-badge { font-size: 0.66rem; padding: 2px 7px; border-radius: 999px; background: rgba(250,204,21,0.18); color: #fde047; }
+.car-sd-body { font-size: 0.78rem; color: #e2e8f0; display: flex; flex-direction: column; gap: 4px; }
+.car-sd-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.car-lic-bar { display: inline-block; width: 62px; height: 6px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-right: 6px; vertical-align: middle; }
+.car-lic-bar i { display: block; height: 100%; }
+.car-lic-pill { font-size: 0.62rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; }
+.car-lic-pill.risk-clean { background: rgba(34,197,94,0.16); color: #86efac; }
+.car-lic-pill.risk-watch { background: rgba(245,158,11,0.18); color: #fde047; }
+.car-lic-pill.risk-critical, .car-lic-pill.risk-ban { background: rgba(239,68,68,0.25); color: #fca5a5; }
+.car-fac-card.is-active-pu { border-color: #22c55e; background: rgba(34,197,94,0.1); }
+.car-flex-scroll { flex: 1 1 0; min-height: 0; max-height: none !important; overflow-y: auto; }
+
+@media (min-width: 1024px) and (min-height: 680px) {
+  html:has(body.car-hq-active:not(.sim-cockpit-active)),
   body.car-hq-active:not(.sim-cockpit-active) {
     height: 100dvh;
     max-height: 100dvh;
-    overflow: hidden;
+    overflow: hidden !important;
     display: flex;
     flex-direction: column;
   }
-  body.car-hq-active:not(.sim-cockpit-active) .site-header {
-    height: clamp(36px, 4.2dvh, 44px);
-    min-height: 0;
-    padding: 0;
+  /* Auto-collapse top website navbar for true 100% immersive full-screen game shell (toggleable via #car-site-nav-toggle!) */
+  body.car-hq-active:not(.sim-cockpit-active):not(.car-site-nav-open) .site-header {
+    display: none !important;
   }
-  body.car-hq-active:not(.sim-cockpit-active) .header-inner { height: 100%; padding: 0 14px; flex-wrap: nowrap; }
+  body.car-hq-active.car-site-nav-open:not(.sim-cockpit-active) .site-header {
+    height: 40px; min-height: 0; padding: 0;
+  }
+  body.car-hq-active.car-site-nav-open:not(.sim-cockpit-active) .header-inner { height: 100%; padding: 0 14px; flex-wrap: nowrap; }
   body.car-hq-active:not(.sim-cockpit-active) .site-footer { display: none !important; }
   body.car-hq-active:not(.sim-cockpit-active) .main-content {
     flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: 0; overflow: hidden;
   }
   body.car-hq-active:not(.sim-cockpit-active) .container {
-    max-width: 1680px; width: 100%; flex: 1 1 0; min-height: 0;
-    padding: 8px 14px; display: flex; flex-direction: column; overflow: hidden;
+    max-width: 1920px; width: 100%; flex: 1 1 0; min-height: 0;
+    padding: 6px 10px; display: flex; flex-direction: column; overflow: hidden;
   }
   body.car-hq-active:not(.sim-cockpit-active) .car-app,
   body.car-hq-active:not(.sim-cockpit-active) .car-hq {
-    flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden;
+    flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
   }
-  body.car-hq-active:not(.sim-cockpit-active) .car-topbar { padding: 7px 12px; gap: 8px; flex: 0 0 auto; }
+  body.car-hq-active:not(.sim-cockpit-active) .car-topbar { padding: 6px 10px; gap: 8px; flex: 0 0 auto; }
   body.car-hq-active:not(.sim-cockpit-active) .car-shell {
-    flex: 1 1 0; min-height: 0; align-items: stretch; overflow: hidden;
+    flex: 1 1 0; min-height: 0; align-items: stretch; overflow: hidden; grid-template-columns: 190px minmax(0, 1fr); gap: 8px;
   }
-  body.car-hq-active:not(.sim-cockpit-active) .car-nav { overflow-y: auto; scrollbar-width: thin; }
+  body.car-hq-active:not(.sim-cockpit-active) .car-nav { overflow-y: auto; scrollbar-width: thin; padding: 6px; gap: 3px; }
+  body.car-hq-active:not(.sim-cockpit-active) .car-nav-btn { padding: 7px 9px; font-size: 0.78rem; }
   body.car-hq-active:not(.sim-cockpit-active) .car-stage {
-    min-height: 0; overflow-y: auto; scrollbar-width: thin; padding-right: 2px;
+    min-height: 0; display: flex; flex-direction: column; overflow: hidden;
   }
-  body.car-hq-active:not(.sim-cockpit-active) #car-dash-3d-canvas { height: clamp(138px, 18dvh, 178px); }
-  body.car-hq-active:not(.sim-cockpit-active) .car-dash-gps-mini { height: clamp(104px, 13dvh, 132px); }
-  body.car-hq-active:not(.sim-cockpit-active) .car-inbox-list { max-height: clamp(120px, 16dvh, 210px); }
-  .car-quali-panel { height: calc(100dvh - 58px); max-height: calc(100dvh - 58px); }
+  body.car-hq-active:not(.sim-cockpit-active) .car-tab-pane.active {
+    flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; gap: 8px;
+  }
+  body.car-hq-active:not(.sim-cockpit-active) .car-tab-pane.active > .car-panel,
+  body.car-hq-active:not(.sim-cockpit-active) .car-tab-pane.active > .car-two-col,
+  body.car-hq-active:not(.sim-cockpit-active) .car-tab-pane.active > .car-standings-grid {
+    flex: 1 1 0; min-height: 0; overflow: hidden;
+  }
+  body.car-hq-active:not(.sim-cockpit-active) .car-two-col > .car-panel,
+  body.car-hq-active:not(.sim-cockpit-active) .car-standings-grid > .car-panel {
+    min-height: 0; overflow-y: auto; scrollbar-width: thin;
+  }
+  body.car-hq-active:not(.sim-cockpit-active) .car-dash-gps-mini { display: none; }
+  body.car-hq-active:not(.sim-cockpit-active) .car-inbox-list { flex: 1 1 0; min-height: 80px; max-height: none; overflow-y: auto; }
+  .car-quali-panel { height: calc(100dvh - 20px); max-height: calc(100dvh - 20px); }
   .car-quali-card { height: 100%; max-height: 100%; overflow: hidden; }
   .car-q-grid-wrap { flex: 1 1 0; min-height: 160px; overflow-y: auto; scrollbar-width: thin; }
 }

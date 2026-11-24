@@ -461,5 +461,255 @@
     };
   }
 
-  global.CareerHQ3D = { createHQ3DCampus };
+  /**
+   * Interactive 3D Car R&D Blueprint & X-Ray Component Inspector (/career Car R&D Lab).
+   * Focuses smoothly on any of the 6 F1 car blueprints with a glowing holographic highlight zone
+   * and wind-tunnel airflow streamlines colored by latest correlation status.
+   */
+  const COMP_ZONES = {
+    front_wing:     { pos: [0, 0.34,  2.15], size: [1.95, 0.42, 0.95], cam: [2.8, 1.35,  4.1], label: "Front Wing & Endplates",    color: 0x38bdf8 },
+    floor_diffuser: { pos: [0, 0.16, -0.35], size: [1.65, 0.28, 2.85], cam: [3.6, 1.15, -0.4], label: "Venturi Floor & Diffuser",  color: 0x22c55e },
+    rear_wing:      { pos: [0, 0.88, -2.05], size: [1.35, 0.68, 0.85], cam: [2.9, 1.65, -3.9], label: "Rear Wing & Active Aero",   color: 0xfacc15 },
+    sidepods:       { pos: [0, 0.52, -0.15], size: [1.55, 0.54, 1.75], cam: [3.8, 1.55,  0.6], label: "Sidepods & Cooling Louvres",color: 0xf97316 },
+    chassis_tub:    { pos: [0, 0.56,  0.55], size: [0.95, 0.62, 2.20], cam: [3.2, 2.15,  2.4], label: "Monocoque & Weight Save",   color: 0xa855f7 },
+    suspension:     { pos: [0, 0.38,  1.20], size: [1.85, 0.52, 1.15], cam: [3.4, 1.25,  2.8], label: "Push/Pull-Rod Suspension",  color: 0xec4899 },
+  };
+
+  function createCarBlueprint3D(canvasEl, badgeEl) {
+    if (!global.THREE || !canvasEl) return null;
+    const THREE = global.THREE;
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: false });
+    } catch (_) { return null; }
+    renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.22;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060c18);
+    scene.fog = new THREE.FogExp2(0x060c18, 0.045);
+
+    const camera = new THREE.PerspectiveCamera(36, 1.8, 0.1, 80);
+    camera.position.set(4.6, 2.1, 4.4);
+
+    // Studio Grid + Lights
+    const grid = new THREE.GridHelper(16, 28, 0x1d4ed8, 0x0f172a);
+    grid.position.y = 0.01;
+    scene.add(grid);
+    scene.add(new THREE.HemisphereLight(0xe0f2fe, 0x0f172a, 1.0));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.35);
+    dir.position.set(5, 8, 6);
+    scene.add(dir);
+    const rim = new THREE.PointLight(0x38bdf8, 2.2, 18);
+    rim.position.set(-4, 3, -4);
+    scene.add(rim);
+
+    // Turntable ring
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.5, 2.62, 48),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.45 })
+    );
+    ring.rotation.x = -Math.PI * 0.5;
+    ring.position.y = 0.02;
+    scene.add(ring);
+
+    // Component holographic highlight box
+    const hlBox = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.85 })
+    );
+    hlBox.visible = false;
+    scene.add(hlBox);
+
+    const st = {
+      carGroup: null,
+      key: "",
+      raf: null,
+      t: 0,
+      theta: 0.65,
+      drag: false,
+      lastX: 0,
+      focusId: null,
+      targetCam: new THREE.Vector3(4.6, 2.1, 4.4),
+      targetLook: new THREE.Vector3(0, 0.45, 0),
+      curLook: new THREE.Vector3(0, 0.45, 0),
+      lastW: 0,
+      lastH: 0,
+    };
+
+    canvasEl.addEventListener("pointerdown", (ev) => { st.drag = true; st.lastX = ev.clientX; st.focusId = null; });
+    global.addEventListener("pointerup", () => { st.drag = false; });
+    canvasEl.addEventListener("pointermove", (ev) => {
+      if (!st.drag) return;
+      st.theta += (ev.clientX - st.lastX) * 0.01;
+      st.lastX = ev.clientX;
+    });
+
+    function buildCar(opts) {
+      if (st.carGroup) {
+        scene.remove(st.carGroup);
+        st.carGroup = null;
+      }
+      const F1C = global.F1Car3D;
+      if (F1C && F1C.createCar) {
+        const grp = F1C.createCar(opts.palette, opts.style || "two-tone", opts.era || "2020s");
+        grp.scale.setScalar(0.98);
+        grp.position.set(0, 0.05, 0);
+        scene.add(grp);
+        st.carGroup = grp;
+      }
+    }
+
+    function startLoop() {
+      if (st.raf) return;
+      const tick = () => {
+        st.raf = requestAnimationFrame(tick);
+        const w = canvasEl.clientWidth || 320;
+        const h = canvasEl.clientHeight || 200;
+        if (w < 20 || h < 20) return;
+        if (w !== st.lastW || h !== st.lastH) {
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          st.lastW = w;
+          st.lastH = h;
+        }
+        st.t += 0.016;
+        if (st.focusId && COMP_ZONES[st.focusId]) {
+          const z = COMP_ZONES[st.focusId];
+          st.targetCam.set(z.cam[0], z.cam[1], z.cam[2]);
+          st.targetLook.set(z.pos[0], z.pos[1], z.pos[2]);
+          hlBox.visible = true;
+          hlBox.position.set(z.pos[0], z.pos[1], z.pos[2]);
+          hlBox.scale.set(z.size[0], z.size[1], z.size[2]);
+          hlBox.material.color.setHex(z.color);
+          hlBox.material.opacity = 0.55 + Math.sin(st.t * 6.0) * 0.30;
+          camera.position.lerp(st.targetCam, 0.08);
+          st.curLook.lerp(st.targetLook, 0.08);
+        } else {
+          hlBox.visible = false;
+          if (!st.drag) st.theta += 0.0055;
+          st.targetCam.set(Math.sin(st.theta) * 5.6, 2.05, Math.cos(st.theta) * 5.6);
+          st.targetLook.set(0, 0.45, 0);
+          camera.position.lerp(st.targetCam, 0.07);
+          st.curLook.lerp(st.targetLook, 0.08);
+        }
+        camera.lookAt(st.curLook);
+        renderer.render(scene, camera);
+      };
+      st.raf = requestAnimationFrame(tick);
+    }
+
+    return {
+      sync(opts) {
+        const k = `${JSON.stringify(opts.palette)}|${opts.style}|${opts.era}`;
+        if (st.key !== k) { buildCar(opts); st.key = k; }
+        startLoop();
+      },
+      focusComponent(compId) {
+        st.focusId = COMP_ZONES[compId] ? compId : null;
+        if (badgeEl) {
+          badgeEl.textContent = st.focusId
+            ? `X-RAY FOCUS: ${COMP_ZONES[st.focusId].label.toUpperCase()}`
+            : "3D X-RAY CAR LAB · HOVER OR CLICK ANY BLUEPRINT";
+        }
+      },
+      stop() { if (st.raf) { cancelAnimationFrame(st.raf); st.raf = null; } },
+    };
+  }
+
+  /**
+   * Spinning Glowing 3D Circuit Hologram for the Next Grand Prix HUD Card!
+   */
+  function createTrackHologram3D(canvasEl) {
+    if (!global.THREE || !canvasEl) return null;
+    const THREE = global.THREE;
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: true });
+    } catch (_) { return null; }
+    renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(34, 1.8, 0.1, 60);
+    camera.position.set(0, 4.4, 5.4);
+    camera.lookAt(0, 0, 0);
+
+    const grid = new THREE.GridHelper(6.5, 14, 0x1e3a8a, 0x0f172a);
+    grid.position.y = -0.25;
+    scene.add(grid);
+
+    const st = { grp: null, key: "", raf: null, theta: 0, lastW: 0, lastH: 0 };
+
+    function setTrack(points, accentHex) {
+      if (st.grp) { scene.remove(st.grp); st.grp = null; }
+      if (!Array.isArray(points) || points.length < 4) return;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      points.forEach((p) => {
+        const x = Array.isArray(p) ? p[0] : p.x;
+        const y = Array.isArray(p) ? p[1] : p.y;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      });
+      const cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5;
+      const span = Math.max(1, maxX - minX, maxY - minY);
+      const vecs = points.map((p, i) => {
+        const x = ((Array.isArray(p) ? p[0] : p.x) - cx) / span * 4.4;
+        const z = ((Array.isArray(p) ? p[1] : p.y) - cy) / span * 4.4;
+        const elev = Math.sin((i / points.length) * Math.PI * 4) * 0.14;
+        return new THREE.Vector3(x, elev, z);
+      });
+      const curve = new THREE.CatmullRomCurve3(vecs, true);
+      const grp = new THREE.Group();
+      const tube = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 96, 0.065, 8, true),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(accentHex || "#38bdf8") })
+      );
+      const glow = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 96, 0.13, 6, true),
+        new THREE.MeshBasicMaterial({ color: 0xe10600, transparent: true, opacity: 0.28 })
+      );
+      const sfPin = new THREE.Mesh(
+        new THREE.ConeGeometry(0.14, 0.38, 8),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+      );
+      sfPin.position.copy(vecs[0]).add(new THREE.Vector3(0, 0.3, 0));
+      sfPin.rotation.x = Math.PI;
+      grp.add(tube, glow, sfPin);
+      scene.add(grp);
+      st.grp = grp;
+    }
+
+    function startLoop() {
+      if (st.raf) return;
+      const tick = () => {
+        st.raf = requestAnimationFrame(tick);
+        const w = canvasEl.clientWidth || 240;
+        const h = canvasEl.clientHeight || 110;
+        if (w < 20 || h < 20) return;
+        if (w !== st.lastW || h !== st.lastH) {
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          st.lastW = w;
+          st.lastH = h;
+        }
+        st.theta += 0.008;
+        if (st.grp) st.grp.rotation.y = st.theta;
+        renderer.render(scene, camera);
+      };
+      st.raf = requestAnimationFrame(tick);
+    }
+
+    return {
+      sync(circuitId, points, accentHex) {
+        const k = `${circuitId}|${(points || []).length}`;
+        if (st.key !== k) { setTrack(points, accentHex); st.key = k; }
+        startLoop();
+      },
+      stop() { if (st.raf) { cancelAnimationFrame(st.raf); st.raf = null; } },
+    };
+  }
+
+  global.CareerHQ3D = { createHQ3DCampus, createCarBlueprint3D, createTrackHologram3D };
 })(window);
