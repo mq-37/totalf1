@@ -162,18 +162,21 @@ async def _batch_render(
 
                 written = 0
                 rendered_unique = 0
-                render_cache: dict[str, bytes] = {}
+                render_cache: dict[str, str] = {}
+                manifest: dict[str, str] = {}
                 presets = [p.strip() for p in preset.split(",") if p.strip()]
                 multi = len(presets) > 1
                 for name, slug, pal, style_name, era_or_year, finish_name in teams:
                     bucket = _chassis_bucket(era_or_year)
                     for pr in presets:
+                        sfx = f"-{pr}" if multi else suffix
+                        target_slug = f"{slug}{sfx}"
                         cache_key = json.dumps(
                             [bucket, pr, width, height, style_name, finish_name, pal],
                             sort_keys=True,
                         )
-                        png_bytes = render_cache.get(cache_key)
-                        if png_bytes is None:
+                        canon_slug = render_cache.get(cache_key)
+                        if canon_slug is None:
                             expr = (
                                 f"window.renderLiveryPng({json.dumps(pal)}, {json.dumps(pr)}, "
                                 f"{width}, {height}, {json.dumps(style_name)}, {json.dumps(era_or_year)}, {json.dumps(finish_name)})"
@@ -183,11 +186,19 @@ async def _batch_render(
                             if not isinstance(val, str) or not val.startswith("data:image/png;base64,"):
                                 raise RuntimeError(f"Failed rendering {name} ({pr}, {era_or_year}): {r}")
                             png_bytes = base64.b64decode(val.split(",", 1)[1])
-                            render_cache[cache_key] = png_bytes
+                            (out_dir / f"{target_slug}.png").write_bytes(png_bytes)
+                            render_cache[cache_key] = target_slug
+                            canon_slug = target_slug
                             rendered_unique += 1
-                        sfx = f"-{pr}" if multi else suffix
-                        (out_dir / f"{slug}{sfx}.png").write_bytes(png_bytes)
+                        manifest[target_slug] = canon_slug
                         written += 1
+
+                if not multi and not suffix:
+                    # Merge into existing manifest if --team filtered, else write fresh
+                    mpath = out_dir / "manifest.json"
+                    existing = json.loads(mpath.read_text(encoding="utf-8")) if mpath.exists() else {}
+                    existing.update(manifest)
+                    mpath.write_text(json.dumps(dict(sorted(existing.items())), indent=2), encoding="utf-8")
 
                 reader_task.cancel()
                 return written, rendered_unique

@@ -18,19 +18,19 @@ _car_layers = None
 @router.get("/dev/car-composition", response_class=HTMLResponse)
 async def car_composition_page(request: Request):
     """Side-by-side grid overlay: real F1 reference vs live front-view SVG."""
-    return srv.templates.TemplateResponse("car_composition.html", {"request": request})
+    return srv.render_template(request, "car_composition.html", {})
 
 @router.get("/dev/car-composition-v2", response_class=HTMLResponse)
 async def car_composition_v2_page(request: Request):
     """Photo-based front silhouette v2 vs photo + unchanged v1."""
-    return srv.templates.TemplateResponse("car_composition_v2.html", {"request": request})
+    return srv.render_template(request, "car_composition_v2.html", {})
 
 
 @router.get("/dev/car-liveries", response_class=HTMLResponse)
 async def car_liveries_page(request: Request):
     """3D studio car renders, one 5-colour livery per team."""
     import re as _re
-    from ..f1_car_palettes import load_palettes, infer_livery_style, infer_team_era
+    from ..f1_car_palettes import load_palettes, infer_livery_style, infer_team_era, find_car_png_slug
 
     def slugify(name: str) -> str:
         return _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
@@ -39,14 +39,14 @@ async def car_liveries_page(request: Request):
     teams = [
         {
             "name": name,
-            "slug": slugify(name),
+            "slug": find_car_png_slug(name) or slugify(name),
             "palette": pal,
             "style": infer_livery_style(name),
             "era": infer_team_era(name, team_years_map=year_map),
         }
         for name, pal in load_palettes().items()
     ]
-    return srv.templates.TemplateResponse("car_liveries.html", {"request": request, "teams": teams})
+    return srv.render_template(request, "car_liveries.html", { "teams": teams})
 
 
 @router.get("/dev/car-3d", response_class=HTMLResponse)
@@ -67,10 +67,7 @@ async def car_3d_studio_page(request: Request, team: Optional[str] = None, era: 
     ]
     selected = team if (team and team in palettes) else ("McLaren Mercedes" if "McLaren Mercedes" in palettes else (team_list[0]["name"] if team_list else "Ferrari"))
     selected_era = era if (era and era in CAR_ERAS) else infer_team_era(selected, team_years_map=year_map)
-    return srv.templates.TemplateResponse(
-        "car_3d.html",
-        {
-            "request": request,
+    return srv.render_template(request, "car_3d.html", {
             "teams": team_list,
             "selected_team": selected,
             "selected_era": selected_era,
@@ -83,7 +80,7 @@ async def car_3d_studio_page(request: Request, team: Optional[str] = None, era: 
 @router.get("/dev/car-render-harness", response_class=HTMLResponse)
 async def car_render_harness_page(request: Request):
     """Minimal headless WebGL harness for batch-rendering transparent 3D car PNGs."""
-    return srv.templates.TemplateResponse("car_render_harness.html", {"request": request})
+    return srv.render_template(request, "car_render_harness.html", {})
 
 
 

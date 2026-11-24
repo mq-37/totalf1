@@ -50,6 +50,10 @@ def _connect(base_dir: Path) -> sqlite3.Connection:
             created_at REAL NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ladder_history_save_season
+        ON ladder_history(save_id, season DESC)
+    """)
     conn.commit()
     return conn
 

@@ -4,15 +4,20 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from pathlib import Path
 import re
+import sqlite3
+import time
 from typing import Optional
 
 from fastapi import FastAPI, Request, Query, Form, UploadFile, File, HTTPException
 import logging
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
 from .db import Database
+
+_SERVER_START_TS = time.time()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DB = BASE_DIR / "data" / "f1.sqlite"
@@ -42,21 +47,84 @@ def _ensure_db_initialized(db_path: Path) -> None:
         _INITIALIZED_DB_PATHS.add(key)
 
 
+def _ensure_infra_db_optimizations() -> None:
+    """Ensure SQLite WAL mode & hot indexes across local databases (safe & idempotent)."""
+    f1db_p = BASE_DIR / "data" / "f1db.sqlite"
+    if f1db_p.exists():
+        try:
+            con = sqlite3.connect(str(f1db_p))
+            mode = con.execute("PRAGMA journal_mode").fetchone()[0]
+            if str(mode).lower() != "wal":
+                con.execute("PRAGMA journal_mode=WAL")
+            con.close()
+        except Exception:
+            pass
+    ladder_p = BASE_DIR / "data" / "ladder_saves.sqlite"
+    if ladder_p.exists():
+        try:
+            con = sqlite3.connect(str(ladder_p))
+            con.execute("CREATE INDEX IF NOT EXISTS idx_ladder_history_save_season ON ladder_history(save_id, season DESC)")
+            con.commit()
+            con.close()
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     _ensure_db_initialized(Path(DATA_DB))
+    _ensure_infra_db_optimizations()
+    # Warm in-memory indices so first user request is instant
+    try:
+        from . import rating_engine as _re
+        _re._get_index()
+    except Exception:
+        pass
+    try:
+        from . import f1_car_palettes as _fcp
+        _fcp.load_png_manifest()
+    except Exception:
+        pass
     yield
 
 
 app = FastAPI(title="Local F1 Data", lifespan=_lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=800)
+
+
+@app.get("/static/cars/png/{slug}.png")
+def serve_deduped_car_png(slug: str, request: Request):
+    """Serve any of the 1,231 logical team/year car slugs from the deduplicated 241 canonical PNGs."""
+    from .f1_car_palettes import CAR_PNG_DIR, load_png_manifest
+    safe = re.sub(r"[^a-z0-9\-]+", "", slug.lower())
+    manifest = load_png_manifest()
+    canon = manifest.get(safe, safe)
+    target = (CAR_PNG_DIR / f"{canon}.png").resolve()
+    try:
+        target.relative_to(CAR_PNG_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Car icon not found")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Car icon not found")
+    cc = "public, max-age=31536000, immutable" if request.query_params.get("v") else "public, max-age=86400"
+    return FileResponse(str(target), media_type="image/png", headers={"Cache-Control": cc})
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # Only expose public flag assets under /data/flags (never mount root data/ with SQLite DBs)
 _FLAGS_DIR = BASE_DIR / "data" / "flags"
 if _FLAGS_DIR.exists():
     app.mount("/data/flags", StaticFiles(directory=str(_FLAGS_DIR)), name="data_flags")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-ASSET_VERSION = "20261124l"
+ASSET_VERSION = "20261124m"
 templates.env.globals["asset_v"] = ASSET_VERSION
+
+
+def render_template(request: Request, name: str, context: dict | None = None, **kwargs):
+    """Starlette 0.36+ non-deprecated TemplateResponse wrapper."""
+    ctx = dict(context or {})
+    ctx.pop("request", None)
+    return templates.TemplateResponse(request, name, ctx, **kwargs)
 
 
 @app.middleware("http")
@@ -66,13 +134,57 @@ async def _db_session_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         p = request.url.path
-        if p.startswith("/static/js/") or p.startswith("/static/css/"):
-            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        if p.startswith("/static/"):
+            if request.query_params.get("v"):
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            elif p.startswith("/static/vendor/") or p.startswith("/static/cars/png/"):
+                response.headers["Cache-Control"] = "public, max-age=86400"
+            elif p.startswith("/static/js/") or p.startswith("/static/css/"):
+                response.headers["Cache-Control"] = "no-cache, must-revalidate"
         return response
     finally:
         _REQUEST_DBS.reset(token)
         for conn in bucket.values():
             conn.close()
+
+
+@app.get("/api/health")
+def api_health():
+    """Infrastructure health, SQLite WAL/index diagnostics & warm-cache status."""
+    from . import f1_car_palettes as _fcp
+    from . import rating_engine as _re
+    dbs = {}
+    for fname in ("f1.sqlite", "f1db.sqlite", "fia_docs.sqlite", "career_saves.sqlite", "ladder_saves.sqlite"):
+        p = BASE_DIR / "data" / fname
+        if not p.exists():
+            dbs[fname] = {"exists": False}
+            continue
+        try:
+            con = sqlite3.connect(str(p))
+            jm = con.execute("PRAGMA journal_mode").fetchone()[0]
+            tbls = con.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
+            idxs = con.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index'").fetchone()[0]
+            con.close()
+            dbs[fname] = {
+                "exists": True,
+                "size_mb": round(p.stat().st_size / (1024 * 1024), 2),
+                "journal_mode": jm,
+                "tables": tbls,
+                "indexes": idxs,
+            }
+        except Exception as exc:
+            dbs[fname] = {"exists": True, "error": str(exc)}
+    manifest = _fcp.load_png_manifest()
+    return JSONResponse({
+        "ok": True,
+        "uptime_s": round(time.time() - _SERVER_START_TS, 1),
+        "asset_version": ASSET_VERSION,
+        "gzip_enabled": True,
+        "rating_engine_warm": _re._CACHE is not None,
+        "car_png_manifest_aliases": len(manifest),
+        "car_png_unique_files": len(set(manifest.values())) if manifest else len(list(_fcp.CAR_PNG_DIR.glob("*.png"))),
+        "databases": dbs,
+    })
 
 
 @app.get("/data/driver_images/{filename:path}")
@@ -409,8 +521,8 @@ def _career_base_dir() -> Path:
     return BASE_DIR
 
 
-# Mount modular APIRouters (keeping f1data.server:app as single ASGI entrypoint)
-from .routers import archive as _r_archive, cards as _r_cards, career as _r_career, dev as _r_dev, f1db as _r_f1db, game as _r_game, ladder as _r_ladder
+# Mount modular APIRouters (game before career to prevent circular imports)
+from .routers import archive as _r_archive, cards as _r_cards, game as _r_game, career as _r_career, dev as _r_dev, f1db as _r_f1db, ladder as _r_ladder
 app.include_router(_r_archive.router)
 app.include_router(_r_cards.router)
 app.include_router(_r_game.router)

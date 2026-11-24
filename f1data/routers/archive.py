@@ -270,9 +270,7 @@ async def home(request: Request):
             champion_team = row["team"]
             champion_driver = row["driver"]
     champion_slug = srv._find_slug_cached(champion_team)
-    return srv.templates.TemplateResponse(
-        "index.html",
-        {"request": request, "seasons": seasons, "latest": latest,
+    return srv.render_template(request, "index.html", { "seasons": seasons, "latest": latest,
          "champion_team": champion_team, "champion_driver": champion_driver,
          "champion_slug": champion_slug,
          "champion_color": srv.get_team_colors(champion_team).get("primary", "#d9a441") if champion_team else "#d9a441"},
@@ -290,10 +288,7 @@ async def race_calendar_page(request: Request):
         if local_races:
             season, races = local_season, local_races
             calendar_source = "local"
-    return srv.templates.TemplateResponse(
-        "race_calendar.html",
-        {
-            "request": request,
+    return srv.render_template(request, "race_calendar.html", {
             "season": season or srv.CURRENT_SEASON,
             "races": races,
             "calendar_source": calendar_source,
@@ -347,19 +342,19 @@ async def team_colors_page(request: Request):
             "slug": srv._slugify_name(t),
             "car_slug": _find_car_png_slug(t, year=y_max),
         })
-    return srv.templates.TemplateResponse("team_colors.html", {"request": request, "teams": payload})
+    return srv.render_template(request, "team_colors.html", { "teams": payload})
 
 @router.get("/races/{year}", response_class=HTMLResponse)
 async def races_page(year: int, request: Request):
     db = srv.get_db()
     rows = db.list_races(year)
-    return srv.templates.TemplateResponse("races.html", {"request": request, "year": year, "rows": rows})
+    return srv.render_template(request, "races.html", { "year": year, "rows": rows})
 
 @router.get("/drivers/{year}", response_class=HTMLResponse)
 async def drivers_page(year: int, request: Request):
     db = srv.get_db()
     rows = db.list_driver_standings(year)
-    return srv.templates.TemplateResponse("drivers.html", {"request": request, "year": year, "rows": rows})
+    return srv.render_template(request, "drivers.html", { "year": year, "rows": rows})
 
 @router.get("/teams/{year}", response_class=HTMLResponse)
 async def teams_page(year: int, request: Request):
@@ -367,16 +362,14 @@ async def teams_page(year: int, request: Request):
     rows = db.list_team_standings(year)
     from ..f1_car_palettes import find_car_png_slug
     car_slugs = {r["team"]: find_car_png_slug(r["team"], year=year) for r in rows if r["team"]}
-    return srv.templates.TemplateResponse(
-        "teams.html",
-        {"request": request, "year": year, "rows": rows, "car_slugs": car_slugs},
+    return srv.render_template(request, "teams.html", { "year": year, "rows": rows, "car_slugs": car_slugs},
     )
 
 @router.get("/awards/{year}", response_class=HTMLResponse)
 async def awards_page(year: int, request: Request):
     db = srv.get_db()
     rows = db.list_fastest_laps(year)
-    return srv.templates.TemplateResponse("awards.html", {"request": request, "year": year, "rows": rows})
+    return srv.render_template(request, "awards.html", { "year": year, "rows": rows})
 
 @router.get("/analytics", response_class=HTMLResponse)
 async def analytics_home(request: Request, year: Optional[int] = None):
@@ -393,9 +386,7 @@ async def analytics_home(request: Request, year: Optional[int] = None):
         "fastest": db.fastest_lap_leaders_by_year(year) if year else [],
         "team_points": db.points_by_team_year(year) if year else [],
     }
-    return srv.templates.TemplateResponse(
-        "analytics.html",
-        {"request": request, "seasons": seasons, "year": year, **data},
+    return srv.render_template(request, "analytics.html", { "seasons": seasons, "year": year, **data},
     )
 
 @router.get("/analytics/overall", response_class=HTMLResponse)
@@ -407,7 +398,7 @@ async def analytics_overall(request: Request):
         "constructor_champions": db.constructor_champions(),
         "team_totals": db.team_total_points_overall(),
     }
-    return srv.templates.TemplateResponse("analytics_overall.html", {"request": request, **data})
+    return srv.render_template(request, "analytics_overall.html", { **data})
 
 @router.get("/analytics/season", response_class=HTMLResponse)
 async def analytics_season(request: Request, year: Optional[int] = None):
@@ -452,7 +443,7 @@ async def analytics_season(request: Request, year: Optional[int] = None):
         "team_standings": db.list_team_standings(year) if year else [],
         "race_tabs": race_tabs,
     }
-    return srv.templates.TemplateResponse("analytics_season.html", {"request": request, **payload})
+    return srv.render_template(request, "analytics_season.html", { **payload})
 
 @router.get("/analytics/team", response_class=HTMLResponse)
 async def analytics_team(request: Request, team: Optional[str] = None):
@@ -465,7 +456,7 @@ async def analytics_team(request: Request, team: Optional[str] = None):
             "SELECT year, SUM(points) AS points FROM drivers_standings WHERE team=? GROUP BY year ORDER BY year",
             (selected,),
         ).fetchall()]
-    return srv.templates.TemplateResponse("analytics_team.html", {"request": request, "teams": teams, "team": selected, "seasons": seasons})
+    return srv.render_template(request, "analytics_team.html", { "teams": teams, "team": selected, "seasons": seasons})
 
 
 @router.get("/analytics/tracks", response_class=HTMLResponse)
@@ -485,10 +476,7 @@ async def analytics_tracks(request: Request, track: Optional[str] = None, top: i
     track_standings = []
     if selected_track:
         track_standings = db.per_track_standings(selected_track, limit=30)
-    return srv.templates.TemplateResponse(
-        "analytics_tracks.html",
-        {
-            "request": request,
+    return srv.render_template(request, "analytics_tracks.html", {
             "champions": champions,
             "track_championship_counts": track_championship_counts,
             "all_standings": all_standings,
@@ -504,7 +492,7 @@ async def analytics_tracks(request: Request, track: Optional[str] = None, top: i
 async def driver_search_page(request: Request, q: str | None = None):
     db = srv.get_db()
     results = db.search_drivers(q) if q else []
-    return srv.templates.TemplateResponse("driver_search.html", {"request": request, "q": q or "", "results": results})
+    return srv.render_template(request, "driver_search.html", { "q": q or "", "results": results})
 
 
 
@@ -523,10 +511,7 @@ async def driver_page(driver: str, request: Request):
     from ..f1_car_palettes import find_car_png_slug, infer_team_era
     car_era = infer_team_era(latest_team, year=latest_year, team_years_map=srv._team_peak_years_map(db)) if latest_team else "2020s"
     driver_cards = _build_driver_cards_bundle(db, name)
-    return srv.templates.TemplateResponse(
-        "driver.html",
-        {
-            "request": request,
+    return srv.render_template(request, "driver.html", {
             **data,
             "avatar": avatar,
             "team_defaults": team_defaults,
@@ -661,10 +646,7 @@ async def team_page(team: str, request: Request):
     car_palette = livery_spec["palette"]
     car_era = infer_team_era(name, year=target_year, team_years_map=year_map)
     team_cards = _build_team_cards_bundle(db, name)
-    return srv.templates.TemplateResponse(
-        "team.html",
-        {
-            "request": request,
+    return srv.render_template(request, "team.html", {
             **data,
             "car_slug": car_slug,
             "car_palette": car_palette,
@@ -683,7 +665,7 @@ async def driver_edit_row(year: int, position: int, request: Request):
     row = db.get_driver_standing(year, position)
     if not row:
         return HTMLResponse("Row not found", status_code=404)
-    return srv.templates.TemplateResponse("partials/driver_row_edit.html", {"request": request, "r": row})
+    return srv.render_template(request, "partials/driver_row_edit.html", { "r": row})
 
 @router.post("/drivers/{year}/edit/{position}", response_class=HTMLResponse)
 async def driver_save_row(year: int, position: int, request: Request,
@@ -695,7 +677,7 @@ async def driver_save_row(year: int, position: int, request: Request,
     r = next((rr for rr in rows if rr["position"] == position), None)
     if not r:
         return HTMLResponse("Row not found", status_code=404)
-    return srv.templates.TemplateResponse("partials/driver_row_view.html", {"request": request, "r": r})
+    return srv.render_template(request, "partials/driver_row_view.html", { "r": r})
 
 @router.get("/api/analytics/balance-audit", response_class=JSONResponse)
 async def api_balance_audit():
@@ -749,5 +731,5 @@ async def driver_row_view(year: int, position: int, request: Request):
     r = next((rr for rr in rows if rr["position"] == position), None)
     if not r:
         return HTMLResponse("Row not found", status_code=404)
-    return srv.templates.TemplateResponse("partials/driver_row_view.html", {"request": request, "r": r})
+    return srv.render_template(request, "partials/driver_row_view.html", { "r": r})
 

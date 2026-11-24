@@ -17,10 +17,7 @@ async def f1db_browser_page(request: Request):
     status = f1db.get_f1db_status(srv.DATA_DB)
     tables = f1db.list_tables(srv.DATA_DB)
     fia_status = fia_docs.get_fia_docs_status(srv.DATA_DB)
-    return srv.templates.TemplateResponse(
-        "f1db.html",
-        {
-            "request": request,
+    return srv.render_template(request, "f1db.html", {
             "status": status,
             "tables": tables,
             "fia_status": fia_status,

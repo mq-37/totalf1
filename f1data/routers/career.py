@@ -246,10 +246,7 @@ async def career_page(request: Request):
         if r["team"]
     ]
     payload = _career_payload(_career.load_career(srv._career_base_dir()), include_static=True)
-    return srv.templates.TemplateResponse(
-        "career.html",
-        {
-            "request": request,
+    return srv.render_template(request, "career.html", {
             "latest_year": latest,
             "starter_teams": teams_latest,
             "career_boot": payload,

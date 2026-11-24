@@ -252,7 +252,7 @@ async def cards_page(request: Request, year: Optional[int] = None):
         out.append({**r, "driver_image": img} if img else r)
     from ..f1_car_palettes import find_car_png_slug
     car_slugs = {r["team"]: find_car_png_slug(r["team"], year=sel) for r in out if r.get("team")}
-    return srv.templates.TemplateResponse("cards.html", {"request": request, "seasons": seasons, "year": sel, "ratings": out, "car_slugs": car_slugs})
+    return srv.render_template(request, "cards.html", { "seasons": seasons, "year": sel, "ratings": out, "car_slugs": car_slugs})
 
 @router.get("/api/ratings/decade/{decade}")
 def api_ratings_decade(decade: int):
@@ -275,7 +275,7 @@ async def cards_decade_page(request: Request, decade: Optional[int] = None):
         out.append({**r, "driver_image": img} if img else r)
     from ..f1_car_palettes import find_car_png_slug
     car_slugs = {r["team"]: find_car_png_slug(r["team"], year=sel) for r in out if r.get("team")}
-    return srv.templates.TemplateResponse("cards_decade.html", {"request": request, "decades": decades, "decade": sel, "ratings": out, "car_slugs": car_slugs})
+    return srv.render_template(request, "cards_decade.html", { "decades": decades, "decade": sel, "ratings": out, "car_slugs": car_slugs})
 
 @router.get("/cards/alltime", response_class=HTMLResponse)
 async def cards_alltime_page(request: Request):
@@ -300,9 +300,7 @@ async def cards_alltime_page(request: Request):
         out.append(r)
         total_points += float(r.get("points") or 0)
     car_slugs = {r["teams"][0]: r["car_png_slug"] for r in out if r.get("teams") and r.get("car_png_slug")}
-    return srv.templates.TemplateResponse(
-        "cards_alltime.html",
-        {"request": request, "ratings": out, "total_points_tally": round(total_points, 2), "car_slugs": car_slugs},
+    return srv.render_template(request, "cards_alltime.html", { "ratings": out, "total_points_tally": round(total_points, 2), "car_slugs": car_slugs},
     )
 
 

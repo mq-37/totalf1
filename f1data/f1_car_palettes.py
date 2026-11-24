@@ -11,6 +11,24 @@ from pathlib import Path
 
 PALETTES_PATH = Path(__file__).resolve().parent.parent / "data" / "team_car_palettes.json"
 CAR_PNG_DIR = Path(__file__).resolve().parent.parent / "static" / "cars" / "png"
+CAR_PNG_MANIFEST_PATH = CAR_PNG_DIR / "manifest.json"
+_PNG_MANIFEST_CACHE: dict[str, str] | None = None
+_PNG_MANIFEST_MTIME: float = 0.0
+
+
+def load_png_manifest() -> dict[str, str]:
+    """Load deduplicated car PNG alias map {logical_slug: canonical_png_slug}."""
+    global _PNG_MANIFEST_CACHE, _PNG_MANIFEST_MTIME
+    if not CAR_PNG_MANIFEST_PATH.exists():
+        return {}
+    mt = CAR_PNG_MANIFEST_PATH.stat().st_mtime
+    if _PNG_MANIFEST_CACHE is None or mt != _PNG_MANIFEST_MTIME:
+        try:
+            _PNG_MANIFEST_CACHE = json.loads(CAR_PNG_MANIFEST_PATH.read_text(encoding="utf-8"))
+            _PNG_MANIFEST_MTIME = mt
+        except Exception:
+            _PNG_MANIFEST_CACHE = {}
+    return _PNG_MANIFEST_CACHE or {}
 
 SLOT_ORDER = ("main", "secondary", "accent", "pop", "detail")
 
@@ -192,32 +210,39 @@ def find_slug(team_name: str | None) -> str | None:
     return best
 
 
+def _resolve_existing_slug(candidate: str, manifest: dict[str, str]) -> str | None:
+    if candidate in manifest:
+        return manifest[candidate]
+    if (CAR_PNG_DIR / f"{candidate}.png").exists():
+        return candidate
+    return None
+
+
 def find_car_png_slug(
     team_name: str | None,
     year: int | str | None = None,
     era: str | None = None,
 ) -> str | None:
-    """Return the exact-year (e.g. 'ferrari--2026', 'red-bull-racing-honda-rbpt--2024') or
-    decade-era ('ferrari--1950s') studio PNG slug when available.
+    """Return the canonical studio PNG slug for `(team, year)` or `(team, era)`.
 
-    Always checks exact season year first so every aero generation & year-specific livery
-    (e.g. 2024 vs 2025 vs 2026 Ferrari, 2014 vs 2017 vs 2024 vs 2026 Red Bull) displays its
-    exact faithful 3D chassis & livery!
+    Uses `static/cars/png/manifest.json` deduplication map when present so byte-identical
+    car renders share one cached PNG file on disk and in the browser.
     """
     base = find_slug(team_name)
     if not base:
         return None
+    manifest = load_png_manifest()
     if year is not None:
         try:
             y_int = int(str(year).strip()[:4])
-            year_slug = f"{base}--{y_int}"
-            if (CAR_PNG_DIR / f"{year_slug}.png").exists():
-                return year_slug
+            hit = _resolve_existing_slug(f"{base}--{y_int}", manifest)
+            if hit:
+                return hit
         except Exception:
             pass
     target_era = era or (era_for_year(year) if year is not None else None)
     if target_era:
-        era_slug = f"{base}--{target_era}"
-        if (CAR_PNG_DIR / f"{era_slug}.png").exists():
-            return era_slug
-    return base
+        hit = _resolve_existing_slug(f"{base}--{target_era}", manifest)
+        if hit:
+            return hit
+    return _resolve_existing_slug(base, manifest) or base

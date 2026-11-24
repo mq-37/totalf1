@@ -12,6 +12,13 @@ from ..db import Database
 
 router = APIRouter()
 
+_DECK_CACHE: dict[tuple[str, int, int, int], dict] = {}
+_DECK_CACHE_MAX = 64
+
+
+def clear_deck_cache() -> None:
+    _DECK_CACHE.clear()
+
 @router.get("/play", response_class=HTMLResponse)
 async def play_page(request: Request):
     db = srv.get_db()
@@ -19,10 +26,7 @@ async def play_page(request: Request):
     decades = sorted({(y // 10) * 10 for y in seasons}, reverse=True)
     from ..circuits import CIRCUITS
     from ..game import BATTLE_STATS, TRACK_DECK
-    return srv.templates.TemplateResponse(
-        "play.html",
-        {
-            "request": request,
+    return srv.render_template(request, "play.html", {
             "seasons": seasons,
             "decades": decades,
             "latest_year": seasons[0] if seasons else srv.CURRENT_SEASON,
@@ -304,10 +308,7 @@ async def full_sim_page(request: Request):
     from ..circuits import CIRCUITS
     from ..regulation_architect import get_grouped_formulas
     grp = get_grouped_formulas()
-    return srv.templates.TemplateResponse(
-        "full_sim.html",
-        {
-            "request": request,
+    return srv.render_template(request, "full_sim.html", {
             "seasons": seasons,
             "decades": decades,
             "latest_year": seasons[0] if seasons else srv.CURRENT_SEASON,
@@ -344,6 +345,13 @@ def api_game_deck(
     src = (source or "season").strip().lower()
     seasons_all = [r["year"] for r in db._conn.execute("SELECT year FROM seasons ORDER BY year").fetchall()]
     latest = seasons_all[-1] if seasons_all else srv.CURRENT_SEASON
+
+    sel_yr = year if year is not None else latest
+    sel_dec = decade if decade is not None else ((latest // 10) * 10)
+    cache_key = (src, int(sel_yr), int(sel_dec), int(limit))
+    cached = _DECK_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
 
     if src == "alltime":
         ratings = db.driver_alltime_ratings()
@@ -483,6 +491,10 @@ def api_game_deck(
             "game": gprof,
         })
 
-    return {"source": src, "title": deck_title, "count": len(deck), "cards": deck}
+    payload = {"source": src, "title": deck_title, "count": len(deck), "cards": deck}
+    if len(_DECK_CACHE) >= _DECK_CACHE_MAX:
+        _DECK_CACHE.clear()
+    _DECK_CACHE[cache_key] = payload
+    return payload
 
 

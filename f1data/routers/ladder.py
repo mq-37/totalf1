@@ -25,10 +25,7 @@ def _load_or_404(save_id: str) -> dict:
 @router.get("/ladder", response_class=HTMLResponse)
 async def ladder_page(request: Request):
     saves = ldb.list_saves(_base_dir())
-    return srv.templates.TemplateResponse(
-        "ladder.html",
-        {
-            "request": request,
+    return srv.render_template(request, "ladder.html", {
             "saves": saves,
             "tiers_meta": [
                 {
