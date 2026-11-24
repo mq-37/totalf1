@@ -461,9 +461,12 @@ def _ensure_career_v2(state: dict[str, Any]) -> dict[str, Any]:
         state["next_season_cap_penalty_m"] = 0.0
     if "board_ultimatum" not in state:
         state["board_ultimatum"] = None
+    team_colors = {t["id"]: t.get("color") or "#64748b" for t in (state.get("teams") or [])}
     for d in (state.get("drivers") or {}).values():
         if not d.get("dev_focus"):
             d["dev_focus"] = "balanced"
+        if not d.get("hero_color"):
+            d["hero_color"] = team_colors.get(d.get("team_id")) or "#64748b"
     pt["car_overall"] = _compute_car_overall(pt, state.get("staff"))
     return state
 
@@ -1941,7 +1944,7 @@ def commit_race_result(
             "code3": d["code3"],
             "clean_name": d["clean_name"],
             "team_name": t["name"] if t else "",
-            "color": t["color"] if t else d["hero_color"],
+            "color": t["color"] if t else (d.get("hero_color") or "#64748b"),
             "is_player": d["team_id"] == pt["id"],
             "dnf": is_dnf,
             "pts": pts,
@@ -2618,7 +2621,7 @@ def serialize_career_payload(
                 "code3": d["code3"],
                 "team_id": d["team_id"],
                 "team_name": next((t["name"] for t in state["teams"] if t["id"] == d["team_id"]), ""),
-                "color": next((t["color"] for t in state["teams"] if t["id"] == d["team_id"]), d["hero_color"]),
+                "color": next((t["color"] for t in state["teams"] if t["id"] == d["team_id"]), d.get("hero_color") or "#64748b"),
                 "is_player": d["team_id"] == pt["id"],
                 "points": d["season_pts"],
                 "wins": d["season_wins"],
