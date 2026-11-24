@@ -1806,14 +1806,22 @@ def run_qualifying_stage(
     stage: str = "q1",
     tyre_choice: str = "fresh",
     weather_mode: str = "dynamic",
+    live_times: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """Progressive FIA Q1 -> Q2 -> Q3 Knockout Qualifying with Fresh vs Scrubbed Softs call!"""
+    """Progressive FIA Q1 -> Q2 -> Q3 Knockout Qualifying with Fresh vs Scrubbed Softs call & live-watched times!"""
     _ensure_career_v2(state)
     if state.get("season_complete"):
         raise ValueError("Season is already complete — advance to next season first.")
     st_low = (stage or "q1").strip().lower()
     if st_low == "full":
-        return run_qualifying(state, weather_mode=weather_mode)
+        q_full = run_qualifying(state, weather_mode=weather_mode)
+        wk = state.get("weekend_state")
+        if isinstance(wk, dict) and wk.get("round") == state["current_round"]:
+            for k in ("q1", "q2", "q3"):
+                if k not in wk["completed_sessions"]:
+                    wk["completed_sessions"].append(k)
+            wk["current_phase"] = "race"
+        return q_full
 
     rnd = state["current_round"]
     cal_item = state["calendar"][rnd - 1]
@@ -1822,8 +1830,18 @@ def run_qualifying_stage(
     pool = _ensure_pu_pool(state)
     ws = state.get("weekend_setup") or {}
     setup_conf = int(ws.get("confidence", 70)) if (ws.get("round") == rnd and ws.get("circuit_id") == circuit["id"]) else 70
+    wk_st = state.get("weekend_state") if isinstance(state.get("weekend_state"), dict) and state["weekend_state"].get("round") == rnd else {}
+    car_kn = float(wk_st.get("car_knowledge_pct", 15))
+    fp_q_bonus = float(wk_st.get("quali_pace_bonus_s", 0.0))
 
     def _lap_for_entry(g: dict[str, Any], is_fresh_soft: bool) -> float:
+        if isinstance(live_times, dict) and g["driver_id"] in live_times:
+            try:
+                lv = float(live_times[g["driver_id"]])
+                if 45.0 <= lv <= 220.0:
+                    return round(lv, 3)
+            except Exception:
+                pass
         d = g["driver_data"]
         rd = g["rd"]
         if circuit["aero"] == "HIGH":
@@ -1832,7 +1850,7 @@ def run_qualifying_stage(
             car_fit = rd["power"] * 0.44 + rd["chassis"] * 0.28 + rd["aero"] * 0.16 + rd["tyre_care"] * 0.12
         else:
             car_fit = g["car_overall"]
-        setup_delta = (setup_conf - 70.0) * 0.014 if g["is_player_team"] else 0.0
+        setup_delta = ((setup_conf - 70.0) * 0.014 + (car_kn - 15.0) * 0.002 + fp_q_bonus) if g["is_player_team"] else 0.0
         tyre_delta = 0.34 if is_fresh_soft else 0.0
         q_bonus = 3.0 if "Quali Rocket" in d["trait"] else 0.0
         wet_bonus = (d["stats"]["wet"] - 75) * 0.04 if weather_mode in ("rain", "showers") else 0.0
@@ -1904,6 +1922,10 @@ def run_qualifying_stage(
             "grid": entries,
         }
         state["pending_quali"] = quali
+        if isinstance(wk_st, dict) and wk_st.get("round") == rnd:
+            if "q1" not in wk_st["completed_sessions"]:
+                wk_st["completed_sessions"].append("q1")
+            wk_st["current_phase"] = "q2"
         return quali
 
     entries = existing["grid"]
@@ -1931,6 +1953,10 @@ def run_qualifying_stage(
         existing["stage"] = "q2_done"
         existing["saved_fresh_soft"] = saved_fresh
         state["pending_quali"] = existing
+        if isinstance(wk_st, dict) and wk_st.get("round") == rnd:
+            if "q2" not in wk_st["completed_sessions"]:
+                wk_st["completed_sessions"].append("q2")
+            wk_st["current_phase"] = "q3"
         return existing
 
     # Q3 Top-10 Pole Shootout + Final FIA Grid Penalties + Sprint Shootout!
@@ -1973,6 +1999,11 @@ def run_qualifying_stage(
     existing["stage"] = "done"
     existing["saved_fresh_soft"] = saved_fresh
     state["pending_quali"] = existing
+    if isinstance(wk_st, dict) and wk_st.get("round") == rnd:
+        for k in ("q1", "q2", "q3"):
+            if k not in wk_st["completed_sessions"]:
+                wk_st["completed_sessions"].append(k)
+        wk_st["current_phase"] = "race"
     return existing
 
 
@@ -2394,6 +2425,7 @@ def commit_race_result(
     state["parc_ferme_locked"] = False
 
     state["weekend_setup"] = None
+    state["weekend_state"] = None
     # Spawn a fresh interactive Paddock Decision if none is pending!
     if not state.get("pending_dilemma") and rnd < len(state["calendar"]):
         state["pending_dilemma"] = _spawn_dilemma(state)
@@ -2579,6 +2611,7 @@ def advance_to_next_season(state: dict[str, Any]) -> dict[str, Any]:
     state["next_gen_research"] = {"aero": 0.0, "chassis": 0.0, "power": 0.0, "tyre_care": 0.0}
     state["wcc_history"] = []
     state["weekend_setup"] = None
+    state["weekend_state"] = None
     state["pending_dilemma"] = _spawn_dilemma(state)
 
     silly_recap: list[dict[str, str]] = []

@@ -106,6 +106,7 @@
         <div class="arena-control-group">
           <label for="fsim-weather-sel">Weather</label>
           <select id="fsim-weather-sel">
+            <option value="real_live">🌍 Live Real-World Weather</option>
             <option value="dynamic" selected>Dynamic Forecast</option>
             <option value="dry">Dry Sun</option>
             <option value="showers">Changing Showers</option>
@@ -159,7 +160,8 @@
           <select id="fsim-weekend-sel">
             <option value="direct" selected>Grand Prix Direct (Standing Start)</option>
             <option value="formation">Formation Lap + Grand Prix</option>
-            <option value="quali">Live Q1 / Q2 / Q3 Shootout + GP</option>
+            <option value="quali">Live Q1 / Q2 / Q3 Shootout (Watch + Sim to End)</option>
+            <option value="full_weekend">🏁 Full F1 Weekend (Watch FP1 → FP2 → Q1–Q3 + GP)</option>
             <option value="sprint">⚡ 2026 Sprint Weekend (Q + 5L Sprint + GP)</option>
           </select>
         </div>
@@ -270,27 +272,36 @@
       <!-- Floating Checkered Flag / Championship Finish Overlay -->
       <div id="fsim-finish-banner" class="sim-finish-overlay hidden"></div>
 
-      <!-- Live Q1 / Q2 / Q3 Knockout Qualifying Shootout Modal -->
-      <div id="fsim-quali-modal" class="fsim-quali-modal hidden" role="dialog" aria-label="Live FIA Knockout Qualifying">
+      <!-- Live FP1 / FP2 / Q1 / Q2 / Q3 Watchable Session & Knockout Modal -->
+      <div id="fsim-quali-modal" class="fsim-quali-modal hidden" role="dialog" aria-label="Live FIA Practice and Qualifying">
         <div class="fsim-quali-head">
           <div>
             <span id="fsim-quali-badge" class="fsim-quali-badge">Q1 · KNOCKOUT</span>
             <strong id="fsim-quali-title">FIA QUALIFYING SHOOTOUT</strong>
             <small id="fsim-quali-sub" class="muted">Top 15 advance to Q2</small>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <span id="fsim-quali-clock" class="fsim-quali-clock">18:00</span>
-            <button type="button" id="fsim-quali-skip-btn" class="sim-dir-btn" style="border-color:#38bdf8;color:#7dd3fc;"><i class="fas fa-forward"></i> Skip Session</button>
-            <button type="button" id="fsim-quali-go-btn" class="btn-racing hidden"><i class="fas fa-flag-checkered"></i> Proceed to Grid</button>
+            <button type="button" class="sim-dir-btn" data-fsim-wk-spd="1">1×</button>
+            <button type="button" class="sim-dir-btn" data-fsim-wk-spd="4">4×</button>
+            <button type="button" class="sim-dir-btn" data-fsim-wk-spd="12">12×</button>
+            <button type="button" id="fsim-quali-skip-btn" class="sim-dir-btn" style="border-color:#38bdf8;color:#7dd3fc;"><i class="fas fa-fast-forward"></i> Sim to End</button>
+            <button type="button" id="fsim-quali-go-btn" class="btn-racing hidden"><i class="fas fa-flag-checkered"></i> Next / Grid</button>
           </div>
         </div>
-        <div class="fsim-quali-body">
-          <table class="fsim-quali-table">
-            <thead>
-              <tr><th>P</th><th>DRIVER</th><th>TEAM</th><th>S1</th><th>S2</th><th>S3</th><th>BEST LAP</th><th>GAP</th><th>STATUS</th></tr>
-            </thead>
-            <tbody id="fsim-quali-tbody"></tbody>
-          </table>
+        <div style="display:grid;grid-template-columns:minmax(260px,0.95fr) minmax(0,1.25fr);gap:10px;padding:8px 12px;max-height:66vh;overflow:hidden;">
+          <div style="display:flex;flex-direction:column;gap:6px;min-height:0;">
+            <canvas id="fsim-wk-canvas" style="width:100%;height:260px;border-radius:8px;background:#050a14;border:1px solid rgba(56,189,248,0.28);"></canvas>
+            <div id="fsim-wk-radar-host"></div>
+          </div>
+          <div class="fsim-quali-body" style="max-height:62vh;overflow-y:auto;">
+            <table class="fsim-quali-table">
+              <thead>
+                <tr><th>P</th><th>DRIVER</th><th>TEAM</th><th>S1</th><th>S2</th><th>S3</th><th>BEST LAP</th><th>GAP</th><th>STATUS</th></tr>
+              </thead>
+              <tbody id="fsim-quali-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -461,5 +472,7 @@
 <script src="/static/js/f1_race_analytics.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_custom_season.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+<script src="/static/js/weekend_session_sim.js?v={{ asset_v }}"></script>
+<script src="/static/js/weather_radar_ui.js?v={{ asset_v }}"></script>
 <script src="/static/js/full_sim.js?v={{ asset_v }}"></script>
 {% endblock %}

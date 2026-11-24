@@ -1798,37 +1798,321 @@
     getEl("car-silly-modal").classList.remove("hidden");
   }
 
-  function syncFpSetupUI() {
-    const st = DATA.state || {};
-    const ws = st.weekend_setup || { stints_used: 0, max_stints: 3, wing: 50, susp: 50, diff: 50, confidence: 70, feedback: { wing: "UNTESTED", susp: "UNTESTED", diff: "UNTESTED" } };
-    const rnd = st.current_round || 1;
-    const useWs = (ws.round === rnd) ? ws : { stints_used: 0, max_stints: 3, wing: 50, susp: 50, diff: 50, confidence: 70, feedback: { wing: "UNTESTED", susp: "UNTESTED", diff: "UNTESTED" } };
-    cr.setupConf = Number(useWs.confidence || 70);
-    ["wing", "susp", "diff"].forEach((k) => {
-      const inp = getEl(`fp-${k}`);
-      if (inp) inp.value = String(useWs[k] ?? 50);
-      const valEl = getEl(`fp-${k}-val`);
-      if (valEl) valEl.textContent = String(useWs[k] ?? 50);
-      const fbEl = getEl(`fp-${k}-fb`);
-      if (fbEl) fbEl.textContent = (useWs.feedback && useWs.feedback[k]) || "UNTESTED";
-    });
-    const stEl = getEl("car-fp-stints");
-    if (stEl) stEl.textContent = `(${useWs.stints_used || 0}/${useWs.max_stints || 3} FP Stints)`;
-    const cfEl = getEl("car-fp-conf-pill");
-    if (cfEl) cfEl.textContent = `SETUP ${cr.setupConf}%`;
-    const locked = (useWs.stints_used || 0) >= (useWs.max_stints || 3) || (cr.quali && cr.quali.stage === "done");
-    const runBtn = getEl("car-fp-run-btn");
-    if (runBtn) runBtn.disabled = locked;
-    const autoBtn = getEl("car-fp-auto-btn");
-    if (autoBtn) autoBtn.disabled = locked;
+  // ==================== FULL RACE WEEKEND OS (FP1/FP2/FP3 PROGRAMMES + WATCH LIVE + SIM TO END + DOPPLER RADAR) ====================
+  const wkCtx = {
+    data: null,
+    programmes: [],
+    roster: [],
+    devPoints: 0,
+    circuit: null,
+    runner: null,
+    radar: null,
+    radarData: null,
+    activeMode: "fp1",
+    speed: 4,
+  };
 
-    const pt = DATA.player_team;
-    if (pt && st.drivers) {
-      [0, 1].forEach((slot) => {
-        const d = pt.driver_ids[slot] ? st.drivers[pt.driver_ids[slot]] : null;
-        const lbl = getEl(`car-st-lbl-${slot}`);
-        if (lbl && d) lbl.textContent = `Car #${slot + 1} (${d.code3})`;
+  function _wkEnsureWidgets() {
+    if (!wkCtx.runner && window.F1WeekendSessionSim && getEl("car-wk-canvas")) {
+      wkCtx.runner = window.F1WeekendSessionSim.create(getEl("car-wk-canvas"), {});
+    }
+    if (!wkCtx.radar && window.F1WeatherRadarUI && getEl("car-wk-radar-host")) {
+      wkCtx.radar = window.F1WeatherRadarUI.create(getEl("car-wk-radar-host"));
+    }
+  }
+
+  async function refreshWeekendRadar() {
+    _wkEnsureWidgets();
+    if (!wkCtx.radar || !wkCtx.circuit) return;
+    const wMode = getEl("car-q-weather")?.value || "dynamic";
+    const laps = parseInt(getEl("car-q-laps")?.value || "15", 10) || 15;
+    const intel = (wkCtx.data && wkCtx.data.strategy_intel && wkCtx.data.strategy_intel.accuracy_pct) || 35;
+    const tCare = (DATA.player_team && DATA.player_team.rd && DATA.player_team.rd.tyre_care) || 80;
+    wkCtx.radarData = await wkCtx.radar.load(wkCtx.circuit, { mode: wMode, laps, intelPct: intel, tyreCare: tCare });
+    renderStrategyPlanner();
+  }
+
+  function renderWeekendTimingTable(rows, mode) {
+    const wrap = getEl("car-q-grid-wrap");
+    if (!wrap) return;
+    const list = rows || [];
+    const isQ1 = mode === "q1", isQ2 = mode === "q2";
+    const cutoff = isQ1 ? 15 : (isQ2 ? 10 : 99);
+    wrap.innerHTML = `<div class="car-q-grid-list">` + list.map((g) => {
+      const pos = g.pos || 1;
+      const inDrop = pos > cutoff;
+      const lapS = g.best_lap_s != null ? g.best_lap_s : g.quali_s;
+      const tTag = g.tyre ? `<span class="car-q-out-tag" style="background:rgba(56,189,248,0.16);color:#7dd3fc;">${esc(g.tyre)}</span>` : "";
+      const stTag = g.eliminated_in ? `<span class="car-q-out-tag">OUT ${esc(g.eliminated_in)}</span>` : (inDrop ? `<span class="car-q-out-tag">DROP ZONE</span>` : "");
+      return `
+        <div class="car-q-row ${g.is_player_team ? "is-me" : ""} ${g.eliminated_in || inDrop ? "is-elim" : ""}">
+          <span class="car-q-pos">P${pos}</span>
+          <span class="st-bar" style="background:${esc(g.color || "#38bdf8")}"></span>
+          <b>${esc(g.code3)}</b>
+          <span class="car-q-drv">${esc(g.clean_name)}</span>
+          ${tTag}${stTag}
+          <small class="muted">${esc(g.team_name || "")}</small>
+          <span class="car-q-time">${pos === 1 ? fmtLap(lapS) : `+${Number(g.gap_s || 0).toFixed(3)}s`}</span>
+        </div>`;
+    }).join("") + `</div>`;
+  }
+
+  function renderWeekendOS() {
+    const wk = wkCtx.data;
+    if (!wk || !wkCtx.circuit) return;
+    _wkEnsureWidgets();
+    cr.circuit = wkCtx.circuit;
+
+    // Header & KPI pills
+    getEl("car-q-round-pill").textContent = `SEASON ${DATA.state.season_num} · ROUND ${wk.round}${wk.is_sprint ? " ⚡ SPRINT WEEKEND" : ""} · FULL GP WEEKEND`;
+    getEl("car-q-title").textContent = `${wk.gp} — ${wkCtx.circuit.name}`;
+    getEl("car-q-meta").textContent = `${wkCtx.circuit.length_km} km · ${wkCtx.circuit.turns} Turns · ${wkCtx.circuit.drs_zones} DRS · ${wkCtx.circuit.aero} Aero · Track ${wkCtx.circuit.track_temp_c || 32}°C`;
+
+    const setup = wk.setup || { wing: 50, susp: 50, diff: 50, confidence: 64, feedback: {} };
+    cr.setupConf = Number(setup.confidence || 64);
+    const cfEl = getEl("car-fp-conf-pill");
+    if (cfEl) cfEl.textContent = `${cr.setupConf}%`;
+    const knEl = getEl("car-wk-kn-val");
+    if (knEl) knEl.textContent = `${wk.car_knowledge_pct || 12}%`;
+    const stInfo = wk.strategy_intel || { accuracy_pct: 35, tier: "ROUGH" };
+    const stValEl = getEl("car-wk-strat-val");
+    if (stValEl) {
+      stValEl.textContent = `${stInfo.accuracy_pct}% ${stInfo.tier === "NAILED" ? "★" : ""}`;
+      stValEl.style.color = stInfo.accuracy_pct >= 85 ? "#4ade80" : (stInfo.accuracy_pct >= 62 ? "#7dd3fc" : "#fcd34d");
+    }
+    const dpEl = getEl("car-wk-dp-val");
+    if (dpEl) dpEl.textContent = `${wkCtx.devPoints || 0} DP`;
+
+    // Weekend Stepper
+    const doneSet = new Set(wk.completed_sessions || []);
+    const order = wk.sessions_order || ["fp1", "fp2", "fp3", "q1", "q2", "q3", "race"];
+    const stepEl = getEl("car-wk-stepper");
+    if (stepEl) {
+      stepEl.innerHTML = order.map((k) => {
+        const isDone = doneSet.has(k);
+        const isCur = wk.current_phase === k;
+        const lbl = k === "race" ? "🏁 GRAND PRIX" : k.toUpperCase();
+        return `<button type="button" class="car-wk-step${isDone ? " done" : ""}${isCur ? " active" : ""}" data-wk-step="${k}">${isDone ? "✓ " : ""}${lbl}</button>`;
+      }).join("");
+      stepEl.querySelectorAll("[data-wk-step]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const sk = btn.getAttribute("data-wk-step");
+          if (sk === "race") return;
+          wkCtx.activeMode = sk;
+          const prevRes = wk.session_results && wk.session_results[sk];
+          if (prevRes && prevRes.classification) renderWeekendTimingTable(prevRes.classification, sk);
+        });
       });
+    }
+
+    // Populate FP Programmes dropdowns & sliders
+    const progs = wkCtx.programmes || [];
+    const assigned = wk.programmes_assigned || { "0": "track_acclim", "1": "tyre_mgmt" };
+    const pt = DATA.player_team;
+    [0, 1].forEach((slot) => {
+      const drv = pt && pt.driver_ids[slot] ? DATA.state.drivers[pt.driver_ids[slot]] : null;
+      const lbl = getEl(`car-wk-p${slot}-lbl`);
+      if (lbl && drv) lbl.textContent = `Car #${slot + 1} (${drv.code3}) Programme`;
+      const stLbl = getEl(`car-st-lbl-${slot}`);
+      if (stLbl && drv) stLbl.textContent = `Car #${slot + 1} (${drv.code3})`;
+      const sel = getEl(`car-wk-prog-${slot}`);
+      if (sel && progs.length) {
+        if (!sel.options.length) {
+          sel.innerHTML = progs.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} (+${p.dev_points} DP)</option>`).join("");
+        }
+        sel.value = assigned[String(slot)] || progs[slot % progs.length].id;
+        const pObj = progs.find((x) => x.id === sel.value);
+        const dEl = getEl(`car-wk-p${slot}-desc`);
+        if (dEl && pObj) dEl.textContent = pObj.desc;
+      }
+    });
+
+    ["wing", "susp", "diff"].forEach((k) => {
+      const inp = getEl(`fp-${k}`); if (inp) inp.value = String(setup[k] ?? 50);
+      const valEl = getEl(`fp-${k}-val`); if (valEl) valEl.textContent = String(setup[k] ?? 50);
+      const fbEl = getEl(`fp-${k}-fb`); if (fbEl) fbEl.textContent = (setup.feedback && setup.feedback[k]) || "UNTESTED";
+    });
+
+    const curPhase = wk.current_phase || "fp1";
+    const isFpPhase = curPhase.startsWith("fp");
+    const fpDoneCount = (wk.completed_sessions || []).filter((x) => x.startsWith("fp")).length;
+    const fpMax = wk.is_sprint ? 2 : 3;
+    const stEl = getEl("car-fp-stints");
+    if (stEl) stEl.textContent = `(${fpDoneCount}/${fpMax} FP Done)`;
+    const fpTitle = getEl("car-wk-fp-title");
+    if (fpTitle) fpTitle.textContent = isFpPhase ? `${curPhase.toUpperCase()} PROGRAMMES & SETUP` : "PRACTICE COMPLETE (PARC FERMÉ)";
+    const liveLbl = getEl("car-wk-live-lbl");
+    if (liveLbl) liveLbl.innerHTML = `<i class="fas fa-broadcast-tower"></i> ${curPhase === "race" ? "STARTING GRID LOCKED" : curPhase.toUpperCase() + " LIVE TRACK MONITOR"}`;
+
+    const fpLocked = !isFpPhase || (cr.quali && cr.quali.stage === "done");
+    if (getEl("car-fp-run-btn")) getEl("car-fp-run-btn").disabled = fpLocked;
+    if (getEl("car-fp-auto-btn")) getEl("car-fp-auto-btn").disabled = fpLocked;
+    if (getEl("car-wk-watch-btn")) getEl("car-wk-watch-btn").disabled = (curPhase === "race");
+    if (getEl("car-wk-simend-btn")) getEl("car-wk-simend-btn").disabled = (curPhase === "race");
+
+    // Engineer Notes & Driver Skill XP Gains
+    const notesEl = getEl("car-wk-eng-notes");
+    if (notesEl) {
+      const skillTags = Object.values(wk.driver_skill_gains || {}).map((g) => {
+        const parts = Object.entries(g.stats || {}).map(([k, v]) => `+${v} ${k.toUpperCase()}`).join(", ");
+        return `<span style="color:#4ade80;font-weight:700;">⭐ ${esc(g.code3)}: ${esc(parts)}</span>`;
+      }).join(" · ");
+      const notes = (wk.engineer_notes || []).slice(0, 4).map((n) => `<div>• ${esc(n)}</div>`).join("");
+      notesEl.innerHTML = (skillTags ? `<div>${skillTags}</div>` : "") + notes;
+    }
+
+    // Qualifying controls state
+    const qStg = (cr.quali && cr.quali.round === wk.round) ? (cr.quali.stage || "done") : "not_started";
+    const pill = getEl("car-q-stage-pill");
+    const stgBtn = getEl("car-q-stage-btn");
+    const simFullBtn = getEl("car-q-simfull-btn");
+    const watchQBtn = getEl("car-q-watch-btn");
+    const noteEl = getEl("car-q-tyre-note");
+    if (qStg === "not_started") {
+      if (pill) pill.textContent = isFpPhase ? "QUALIFYING READY (OR RUN FP FIRST)" : "Q1 READY · TOP 15 ADVANCE";
+      if (stgBtn) { stgBtn.disabled = false; stgBtn.innerHTML = `<i class="fas fa-stopwatch"></i> Sim Q1`; stgBtn.dataset.nextStage = "q1"; }
+      if (watchQBtn) { watchQBtn.disabled = false; watchQBtn.dataset.nextStage = "q1"; watchQBtn.innerHTML = `<i class="fas fa-play"></i> Watch Q1`; }
+      if (simFullBtn) simFullBtn.disabled = false;
+    } else if (qStg === "q1_done") {
+      if (pill) pill.textContent = "Q1 DONE · TOP 15 ADVANCE TO Q2";
+      if (stgBtn) { stgBtn.disabled = false; stgBtn.innerHTML = `<i class="fas fa-stopwatch"></i> Sim Q2`; stgBtn.dataset.nextStage = "q2"; }
+      if (watchQBtn) { watchQBtn.disabled = false; watchQBtn.dataset.nextStage = "q2"; watchQBtn.innerHTML = `<i class="fas fa-play"></i> Watch Q2`; }
+      if (simFullBtn) simFullBtn.disabled = false;
+    } else if (qStg === "q2_done") {
+      if (pill) pill.textContent = "Q2 DONE · TOP 10 Q3 POLE SHOOTOUT";
+      if (stgBtn) { stgBtn.disabled = false; stgBtn.innerHTML = `<i class="fas fa-fire"></i> Sim Q3`; stgBtn.dataset.nextStage = "q3"; }
+      if (watchQBtn) { watchQBtn.disabled = false; watchQBtn.dataset.nextStage = "q3"; watchQBtn.innerHTML = `<i class="fas fa-play"></i> Watch Q3`; }
+      if (simFullBtn) simFullBtn.disabled = false;
+    } else {
+      if (pill) pill.textContent = "✓ STARTING GRID LOCKED (PARC FERMÉ)";
+      if (stgBtn) { stgBtn.disabled = true; stgBtn.innerHTML = `<i class="fas fa-check"></i> Quali Done`; stgBtn.dataset.nextStage = "done"; }
+      if (watchQBtn) { watchQBtn.disabled = true; watchQBtn.dataset.nextStage = "done"; }
+      if (simFullBtn) simFullBtn.disabled = true;
+      if (noteEl) noteEl.textContent = `Car Knowledge ${wk.car_knowledge_pct}% · Strategy ${stInfo.tier} · Ready for Lights Out!`;
+    }
+
+    if (wkCtx.runner && !wkCtx.runner.isActive()) {
+      wkCtx.runner.previewTrack(wkCtx.circuit);
+    }
+
+    // Show latest classification table (Quali grid if started, else latest FP table, else starter roster)
+    if (cr.quali && cr.quali.round === wk.round && cr.quali.grid && cr.quali.grid.length) {
+      renderQualiGridUI();
+    } else {
+      const lastFp = ["fp3", "fp2", "fp1"].find((k) => wk.session_results && wk.session_results[k]);
+      if (lastFp) {
+        renderWeekendTimingTable(wk.session_results[lastFp].classification, lastFp);
+      } else {
+        const wrap = getEl("car-q-grid-wrap");
+        if (wrap) wrap.innerHTML = `<div class="muted small" style="padding:10px;text-align:center;">Track is green for <b>${curPhase.toUpperCase()}</b>! Pick Car #1 &amp; Car #2 programmes above, then click <b>▶ Watch Session</b> or <b>⏭ Sim to End</b>.</div>`;
+      }
+    }
+    renderStrategyPlanner();
+  }
+
+  function _commitPracticeFromResult(sessionKey, result, autoTune) {
+    const p0 = getEl("car-wk-prog-0")?.value || "track_acclim";
+    const p1 = getEl("car-wk-prog-1")?.value || "tyre_mgmt";
+    const times = result && Array.isArray(result.classification) ? result.classification : null;
+    const scores = result && result.programmeScores ? result.programmeScores : null;
+    return postJson("/api/career/weekend/practice", {
+      session: sessionKey,
+      car_programmes: { "0": p0, "1": p1 },
+      wing: Number(getEl("fp-wing")?.value || 50),
+      susp: Number(getEl("fp-susp")?.value || 50),
+      diff: Number(getEl("fp-diff")?.value || 50),
+      auto_tune: !!autoTune,
+      weather_mode: getEl("car-q-weather")?.value || "dynamic",
+      programme_scores: scores,
+      session_times: times,
+    }).then((res) => {
+      DATA = res;
+      if (res.weekend) wkCtx.data = res.weekend;
+      if (res.dev_points != null) wkCtx.devPoints = res.dev_points;
+      renderWeekendOS();
+      refreshWeekendRadar();
+      showHqToast(res.message, res.ok);
+    });
+  }
+
+  function watchActiveSessionLive(forcedMode) {
+    _wkEnsureWidgets();
+    if (!wkCtx.runner || !wkCtx.data || !wkCtx.circuit) return;
+    const mode = (forcedMode || wkCtx.data.current_phase || "fp1").toLowerCase();
+    if (mode === "race") return;
+
+    const isQuali = mode === "q1" || mode === "q2" || mode === "q3";
+    let sessionRoster = (wkCtx.roster || []).slice();
+    if (isQuali && cr.quali && cr.quali.round === wkCtx.data.round && cr.quali.grid && mode !== "q1") {
+      const aliveIds = new Set(cr.quali.grid.filter((g) => !g.eliminated_in).map((g) => g.driver_id));
+      sessionRoster = sessionRoster.filter((r) => aliveIds.has(r.driver_id));
+    }
+
+    const p0 = (wkCtx.programmes || []).find((p) => p.id === (getEl("car-wk-prog-0")?.value || "track_acclim"));
+    const p1 = (wkCtx.programmes || []).find((p) => p.id === (getEl("car-wk-prog-1")?.value || "tyre_mgmt"));
+    const tyreMap = { "0": (p0 && p0.tyre ? p0.tyre[0].toUpperCase() : "M"), "1": (p1 && p1.tyre ? p1.tyre[0].toUpperCase() : "H") };
+    const progHud = getEl("car-wk-prog-hud");
+
+    wkCtx.runner.start({
+      mode: mode,
+      speed: wkCtx.speed || 4,
+      circuit: wkCtx.circuit,
+      roster: sessionRoster,
+      setupConf: (wkCtx.data.setup && wkCtx.data.setup.confidence) || 68,
+      knowledgePct: wkCtx.data.car_knowledge_pct || 15,
+      qualiBonusS: wkCtx.data.quali_pace_bonus_s || 0,
+      tyreChoice: getEl("car-q-tyre-choice")?.value || "fresh",
+      weather: getEl("car-q-weather")?.value || "dynamic",
+      carTyres: tyreMap,
+      programmeInfo: { "0": p0, "1": p1 },
+      onRadio: (txt) => {
+        const rb = getEl("car-wk-radio-bar");
+        if (rb) rb.textContent = `📻 Race Engineer: ${txt}`;
+      },
+      onUpdate: (snap) => {
+        renderWeekendTimingTable(snap.classification, mode);
+        if (progHud) {
+          if (!isQuali) {
+            const p0Pct = snap.playerProgress["0"] || 0;
+            const p1Pct = snap.playerProgress["1"] || 0;
+            progHud.innerHTML =
+              `<div class="car-wk-ph-item">Car #1 ${esc((p0 && p0.short) || "PROG")} <b>${p0Pct}%</b><div class="car-wk-ph-bar"><i style="width:${p0Pct}%"></i></div></div>` +
+              `<div class="car-wk-ph-item">Car #2 ${esc((p1 && p1.short) || "PROG")} <b>${p1Pct}%</b><div class="car-wk-ph-bar"><i style="width:${p1Pct}%"></i></div></div>`;
+          } else {
+            progHud.innerHTML = `<div class="car-wk-ph-item"><b>${mode.toUpperCase()} LIVE SHOOTOUT</b> · ${snap.progressPct}% Complete · Clock ${snap.clockText}</div>`;
+          }
+        }
+      },
+      onComplete: async (res) => {
+        if (progHud) progHud.innerHTML = "";
+        if (!isQuali) {
+          await _commitPracticeFromResult(mode, res, false);
+        } else {
+          const liveTimes = {};
+          (res.classification || []).forEach((row) => { liveTimes[row.driver_id] = row.best_lap_s; });
+          await runCareerQualifying(mode, liveTimes);
+        }
+      },
+    });
+  }
+
+  async function simActiveSessionToEnd() {
+    if (wkCtx.runner && wkCtx.runner.isActive()) {
+      wkCtx.runner.simToEnd();
+      return;
+    }
+    const phase = (wkCtx.data && wkCtx.data.current_phase) || "fp1";
+    if (phase.startsWith("fp")) {
+      await _commitPracticeFromResult(phase, null, false);
+    } else if (phase === "q1" || phase === "q2" || phase === "q3") {
+      await runCareerQualifying(phase);
+    }
+  }
+
+  function syncFpSetupUI() {
+    if (wkCtx.data) {
+      const ws = wkCtx.data.setup || {};
+      cr.setupConf = Number(ws.confidence || 70);
     }
   }
 
@@ -1840,50 +2124,37 @@
     getEl("car-live-cockpit").classList.add("hidden");
     document.body.classList.remove("sim-cockpit-active");
 
+    const wMode = getEl("car-q-weather")?.value || "dynamic";
+    try {
+      const r = await fetch(`/api/career/weekend?weather_mode=${encodeURIComponent(wMode)}`);
+      if (r.ok) {
+        const d = await r.json();
+        wkCtx.data = d.weekend;
+        wkCtx.programmes = d.programmes || [];
+        wkCtx.roster = d.roster || [];
+        wkCtx.devPoints = d.dev_points || 0;
+        wkCtx.circuit = d.circuit || circuitById(d.weekend.circuit_id);
+        cr.circuit = wkCtx.circuit;
+      }
+    } catch (_) {}
+
     const pq = DATA.state.pending_quali;
     if (pq && pq.round === DATA.state.current_round && pq.grid && pq.grid.length) {
       cr.quali = pq;
       cr.circuit = circuitById(pq.circuit_id);
-      renderQualiGridUI();
     } else {
-      await runCareerQualifying("q1");
+      cr.quali = null;
     }
+    renderWeekendOS();
+    refreshWeekendRadar();
   }
 
   function renderQualiGridUI() {
     if (!cr.quali) return;
-    syncFpSetupUI();
     renderStrategyPlanner();
-    const stg = cr.quali.stage || "done";
-    getEl("car-q-round-pill").textContent = `SEASON ${DATA.state.season_num} · ROUND ${cr.quali.round}${cr.quali.is_sprint ? " ⚡ SPRINT WEEKEND" : ""} · ${cr.quali.grid.length}-CAR GRID`;
-    getEl("car-q-title").textContent = `${cr.quali.gp} — ${cr.circuit.name}`;
-    getEl("car-q-meta").textContent = `${cr.circuit.length_km} km · ${cr.circuit.turns} Turns · ${cr.circuit.drs_zones} DRS Zones · ${cr.circuit.aero} Aero · Track ${cr.circuit.track_temp_c || 32}°C · Rain Risk ${cr.circuit.rain_chance}%`;
-
-    const pill = getEl("car-q-stage-pill");
-    const stgBtn = getEl("car-q-stage-btn");
-    const simFullBtn = getEl("car-q-simfull-btn");
-    const noteEl = getEl("car-q-tyre-note");
-    if (stg === "q1_done") {
-      if (pill) pill.textContent = "Q1 COMPLETE · TOP 15 ADVANCE TO Q2";
-      if (stgBtn) { stgBtn.disabled = false; stgBtn.innerHTML = `<i class="fas fa-stopwatch"></i> Run Q2 (Top 15)`; stgBtn.dataset.nextStage = "q2"; }
-      if (simFullBtn) simFullBtn.disabled = false;
-      if (noteEl) noteEl.textContent = cr.quali.saved_fresh_soft ? "✓ Saved fresh Soft set (+4% race life!)" : "Choose Fresh Softs or Scrubbed Tyres for Q2";
-    } else if (stg === "q2_done") {
-      if (pill) pill.textContent = "Q2 COMPLETE · TOP 10 POLE SHOOTOUT (Q3)";
-      if (stgBtn) { stgBtn.disabled = false; stgBtn.innerHTML = `<i class="fas fa-fire"></i> Run Q3 Shootout`; stgBtn.dataset.nextStage = "q3"; }
-      if (simFullBtn) simFullBtn.disabled = false;
-      if (noteEl) noteEl.textContent = cr.quali.saved_fresh_soft ? "✓ Fresh Soft set banked for Race Start (+4%)" : "Final Q3 pole shootout awaits!";
-    } else {
-      if (pill) pill.textContent = "✓ FINAL STARTING GRID LOCKED (PARC FERMÉ)";
-      if (stgBtn) { stgBtn.disabled = true; stgBtn.innerHTML = `<i class="fas fa-check"></i> Quali Complete`; stgBtn.dataset.nextStage = "done"; }
-      if (simFullBtn) simFullBtn.disabled = true;
-      if (noteEl) noteEl.textContent = cr.quali.saved_fresh_soft ? "✓ Bonus: +4% Fresh Soft tyre life ready for Lights Out!" : "Ready for Lights Out!";
-    }
-
     const sprintBanner = (cr.quali.sprint_top8 && cr.quali.sprint_top8.length)
       ? `<div class="car-sprint-banner"><strong>⚡ SATURDAY F1 SPRINT POINTS AWARDED:</strong> ${cr.quali.sprint_top8.map((s) => `<span class="${s.is_player_team ? "sp-me" : ""}">P${s.pos} ${esc(s.code3)} (+${s.pts})</span>`).join(" · ")}</div>`
       : "";
-
     getEl("car-q-grid-wrap").innerHTML = `
       ${sprintBanner}
       <div class="car-q-grid-list">
@@ -1906,17 +2177,21 @@
     `;
   }
 
-  async function runCareerQualifying(stage) {
+  async function runCareerQualifying(stage, liveTimes) {
     const wMode = getEl("car-q-weather").value || "dynamic";
     const tyreChoice = getEl("car-q-tyre-choice")?.value || "fresh";
-    const res = await postJson("/api/career/race/qualify", {
+    const payload = {
       weather_mode: wMode,
       stage: stage || "full",
       tyre_choice: tyreChoice,
-    });
+    };
+    if (liveTimes && typeof liveTimes === "object") payload.live_times = liveTimes;
+    const res = await postJson("/api/career/race/qualify", payload);
     DATA = res;
     cr.quali = res.quali;
     cr.circuit = circuitById(cr.quali.circuit_id);
+    if (DATA.state && DATA.state.weekend_state) wkCtx.data = DATA.state.weekend_state;
+    renderWeekendOS();
     renderQualiGridUI();
   }
 
@@ -3346,10 +3621,17 @@
     cr.simToEndActive = false;
     getEl("cr-simtoend-ovl")?.classList.add("hidden");
 
+    const liveWet0 = (cr.weatherMode === "real_live" && wkCtx.radarData && wkCtx.radarData.radar && wkCtx.radarData.radar.timeline && wkCtx.radarData.radar.timeline[0])
+      ? Number(wkCtx.radarData.radar.timeline[0].wetness_pct || 0) : null;
+    if (liveWet0 != null) {
+      cr.wetness = liveWet0;
+      cr.targetWetness = liveWet0;
+    }
     const startComp = cr.wetness >= 60 ? "wet" : (cr.wetness >= 22 ? "inter" : "medium");
     const pStart0 = getEl("car-start-tyre-0")?.value || "auto";
     const pStart1 = getEl("car-start-tyre-1")?.value || "auto";
-    const freshBonus = cr.quali.saved_fresh_soft ? 4 : 0;
+    const fpTyreBonus = (wkCtx.data && Number(wkCtx.data.tyre_life_bonus_pct || 0)) || 0;
+    const freshBonus = (cr.quali.saved_fresh_soft ? 4 : 0) + fpTyreBonus;
     cr.teamOrder = "free";
     document.querySelectorAll("[data-cr-order]").forEach((b) => b.classList.toggle("active", b.dataset.crOrder === "free"));
     cr.playerCarIndices = [];
@@ -4033,7 +4315,43 @@
     const nxt = getEl("car-q-stage-btn").dataset.nextStage || "q1";
     if (nxt !== "done") runCareerQualifying(nxt);
   });
+  getEl("car-q-watch-btn")?.addEventListener("click", () => {
+    const nxt = getEl("car-q-watch-btn").dataset.nextStage || "q1";
+    if (nxt !== "done") watchActiveSessionLive(nxt);
+  });
   getEl("car-q-simfull-btn")?.addEventListener("click", () => runCareerQualifying("full"));
+  getEl("car-wk-watch-btn")?.addEventListener("click", () => watchActiveSessionLive());
+  getEl("car-wk-simend-btn")?.addEventListener("click", () => simActiveSessionToEnd());
+  document.querySelectorAll("[data-wk-spd]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sp = Number(btn.getAttribute("data-wk-spd") || 4);
+      wkCtx.speed = sp || wkCtx.speed;
+      document.querySelectorAll("[data-wk-spd]").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+        b.classList.toggle("car-btn-red", b === btn);
+      });
+      if (wkCtx.runner) wkCtx.runner.setSpeed(sp);
+    });
+  });
+  [0, 1].forEach((slot) => {
+    getEl(`car-wk-prog-${slot}`)?.addEventListener("change", (ev) => {
+      const pid = ev.target.value;
+      const pObj = (wkCtx.programmes || []).find((x) => x.id === pid);
+      const dEl = getEl(`car-wk-p${slot}-desc`);
+      if (dEl && pObj) dEl.textContent = pObj.desc;
+    });
+  });
+  getEl("car-wk-dp-sel")?.addEventListener("change", async (ev) => {
+    const tgt = ev.target.value;
+    if (!tgt) return;
+    ev.target.value = "";
+    const res = await postJson("/api/career/weekend/devpoints/spend", { target: tgt });
+    DATA = res;
+    if (res.dev_points != null) wkCtx.devPoints = res.dev_points;
+    renderWeekendOS();
+    refreshWeekendRadar();
+    showHqToast(res.message, res.ok);
+  });
   getEl("cr-duel-toggle")?.addEventListener("click", () => {
     cr.duelEnabled = !cr.duelEnabled;
     const btn = getEl("cr-duel-toggle");
@@ -4062,17 +4380,10 @@
     if (inp) inp.addEventListener("input", () => { const v = getEl(`fp-${k}-val`); if (v) v.textContent = inp.value; });
   });
   async function runFpSetup(auto) {
-    const res = await postJson("/api/career/race/setup", {
-      wing: Number(getEl("fp-wing")?.value || 50),
-      susp: Number(getEl("fp-susp")?.value || 50),
-      diff: Number(getEl("fp-diff")?.value || 50),
-      auto: !!auto,
-    });
-    DATA = res;
-    syncFpSetupUI();
-    showHqToast(res.message, res.ok);
-    // Re-run Qualifying immediately with new setup confidence so you see grid improvement!
-    await runCareerQualifying();
+    const phase = (wkCtx.data && wkCtx.data.current_phase && wkCtx.data.current_phase.startsWith("fp"))
+      ? wkCtx.data.current_phase
+      : "fp1";
+    await _commitPracticeFromResult(phase, null, !!auto);
   }
   getEl("car-fp-run-btn")?.addEventListener("click", () => runFpSetup(false));
   getEl("car-fp-auto-btn")?.addEventListener("click", () => runFpSetup(true));
@@ -4134,18 +4445,27 @@
     DATA = res; renderAll(); showHqToast(res.message, true);
     showSillySeasonModal(res.silly_season_recap || []);
   });
-  getEl("car-q-weather").addEventListener("change", () => runCareerQualifying("q1"));
+  getEl("car-q-weather").addEventListener("change", () => refreshWeekendRadar());
+  getEl("car-q-laps")?.addEventListener("change", () => refreshWeekendRadar());
   getEl("car-q-back-btn").addEventListener("click", () => {
+    if (wkCtx.runner) wkCtx.runner.stop();
     getEl("career-race-view").classList.add("hidden");
     getEl("career-hq").classList.remove("hidden");
     document.body.classList.add("car-hq-active");
   });
   getEl("car-q-quicksim-btn").addEventListener("click", async () => {
+    if (wkCtx.runner) wkCtx.runner.stop();
     const res = await postJson("/api/career/race/quicksim", { weather_mode: getEl("car-q-weather").value });
     DATA = res;
     showPostRaceDebrief(res.debrief);
   });
-  getEl("car-q-lightsout-btn").addEventListener("click", startLiveCareerRace);
+  getEl("car-q-lightsout-btn").addEventListener("click", async () => {
+    if (wkCtx.runner) wkCtx.runner.stop();
+    if (!cr.quali || (cr.quali.stage && cr.quali.stage !== "done")) {
+      await runCareerQualifying("full");
+    }
+    startLiveCareerRace();
+  });
   getEl("car-debrief-close").addEventListener("click", () => getEl("car-debrief-modal").classList.add("hidden"));
   getEl("car-debrief-ok").addEventListener("click", () => getEl("car-debrief-modal").classList.add("hidden"));
 

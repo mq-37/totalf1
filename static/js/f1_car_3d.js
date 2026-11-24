@@ -286,14 +286,39 @@
 
   var CAR_ERAS = ['1950s', '1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s'];
 
+  function parseExactYear(eraOrYear) {
+    if (eraOrYear == null) return 2026;
+    var s = String(eraOrYear).trim().toLowerCase();
+    if (/^\d{4}$/.test(s)) return Math.max(1950, Math.min(2030, parseInt(s, 10)));
+    var m = s.match(/^(\d{4})s$/);
+    if (m) {
+      var dec = parseInt(m[1], 10);
+      if (dec === 2020) return 2026;
+      if (dec === 2010) return 2019;
+      if (dec === 2000) return 2004;
+      if (dec === 1990) return 1994;
+      if (dec === 1980) return 1988;
+      if (dec === 1970) return 1978;
+      if (dec === 1960) return 1967;
+      return 1955;
+    }
+    return 2026;
+  }
+
   function normalizeEra(era) {
     if (!era) return '2020s';
-    var s = String(era).trim().toLowerCase();
-    if (/^\d{4}$/.test(s)) {
-      var y = Math.max(1950, Math.min(2029, parseInt(s, 10)));
-      return (Math.floor(y / 10) * 10) + 's';
-    }
-    if (/^(19[5-9]0|20[0-2]0)s$/.test(s)) return s;
+    var y = parseExactYear(era);
+    /* Map each exact season year onto its true technical chassis generation!
+       Notice: 2009-2016 belong to the Wide-Front/Tall-Narrow-Rear generation (2010s branch),
+       2017-2021 belong to the Wide-2000mm 13"-Tyre generation (2010s branch),
+       and 2022-2026+ belong to the 18" Ground-Effect / Active-Aero generation (2020s branch)! */
+    if (y <= 1959) return '1950s';
+    if (y <= 1969) return '1960s';
+    if (y <= 1982) return '1970s';
+    if (y <= 1988) return '1980s';
+    if (y <= 1997) return '1990s';
+    if (y <= 2008) return '2000s';
+    if (y <= 2021) return '2010s';
     return '2020s';
   }
 
@@ -486,12 +511,14 @@
     return g;
   }
 
-  /* Create the full 3D F1 car Group for any era ('1950s'..'2020s') + live .setPalette(palette, style). */
+  /* Create the full 3D F1 car Group for any exact season year (1950..2026) or era ('1950s'..'2020s') + live .setPalette(). */
   function createF1Car(palette, styleName, eraName) {
+    var exactYear = parseExactYear(eraName);
     var era = normalizeEra(eraName);
     var root = new THREE.Group();
     root.name = 'F1Car3D';
     root.userData.era = era;
+    root.userData.year = exactYear;
 
     var carbonTex = makeCarbonTexture();
 
@@ -786,6 +813,15 @@
       addDriverHelmet(0.69, -0.14, true);
       addChromeRollHoop(-0.46, 0.54, 0.94, 0.19);
       addExposedV8(-1.14, 0.22, true);
+      /* 1968-1969 Iconic High-Stilt Wings Era (Lotus 49B / Matra MS10 / Ferrari 312)! */
+      if (exactYear >= 1968) {
+        addMesh(buildWingElement({ halfSpan: 0.62, zCenter: -1.48, zTip: -1.48, yCenter: 1.44, yTip: 1.44, chordCenter: 0.26, chordTip: 0.26, thick: 0.022, pitch: 0.20 }), mats.rearWingMain);
+        addMesh(buildWingElement({ halfSpan: 0.58, zCenter: 2.08, zTip: 2.08, yCenter: 0.66, yTip: 0.66, chordCenter: 0.20, chordTip: 0.20, thick: 0.018, pitch: 0.16 }), mats.frontWing1);
+        [-1, 1].forEach(function (s) {
+          addMesh(new THREE.CylinderGeometry(0.012, 0.014, 0.96, 8), mats.chrome, [s * 0.26, 0.96, -1.48]);
+          addMesh(new THREE.CylinderGeometry(0.010, 0.012, 0.38, 8), mats.chrome, [s * 0.22, 0.47, 2.08]);
+        });
+      }
       addFourWheels(1.48, -1.42, 0.78, 0.80, 'classic_1960s', mats.chrome);
 
     } else if (era === '1970s') {
@@ -816,6 +852,22 @@
       addMesh(new THREE.BoxGeometry(0.34, 0.14, 0.56), mats.intakeDark, [0, 0.52, 0.02]);
       addDriverHelmet(0.65, -0.02, false);
       addChromeRollHoop(-0.42, 0.50, 0.92, 0.20);
+      /* 1971-1975 Iconic Tall Periscope Overhead Airbox (Ferrari 312T / McLaren M23 / Brabham BT44)! */
+      if (exactYear >= 1971 && exactYear <= 1975) {
+        var peri70 = [
+          [-0.28, 0.145, 0.62, 1.32, 2.0, 2.2],
+          [-0.68, 0.155, 0.56, 1.24, 2.0, 2.2],
+          [-1.18, 0.100, 0.46, 0.86, 1.9, 2.0]
+        ];
+        addMesh(buildLoft(peri70.map(function (s) { return superRing(s[0], 0, s[1], s[2], s[3], s[4], s[5], 16); }), true, true), mats.airboxBody);
+        addMesh(new THREE.CylinderGeometry(0.095, 0.095, 0.08, 16), mats.intakeDark, [0, 1.18, -0.27], [Math.PI / 2, 0, 0]);
+      }
+      /* 1978-1982 Ground-Effect Venturi Side Skirts (Lotus 79 / Williams FW07) */
+      if (exactYear >= 1978) {
+        [-1, 1].forEach(function (s) {
+          addMesh(new THREE.BoxGeometry(0.022, 0.12, 1.94), mats.carbon, [s * 0.73, 0.07, -0.12]);
+        });
+      }
       addExposedV8(-1.12, 0.20, false);
       /* Iconic high-mounted sweeping 1970s rear wing on twin rear pillars */
       addMesh(buildWingElement({ halfSpan: 0.56, zCenter: -2.08, zTip: -2.08, yCenter: 0.86, yTip: 0.86, chordCenter: 0.34, chordTip: 0.34, thick: 0.03, pitch: 0.26 }), mats.rearWingMain);
@@ -1037,37 +1089,49 @@
         addMesh(buildVerticalPlate([[1.12, 0.13], [0.58, 0.13], [0.58, 0.42], [0.95, 0.30]], s * 0.48, 0.018), mats.carbon);
       });
       addMesh(new THREE.BoxGeometry(1.56, 0.04, 2.72), mats.carbon, [0, 0.11, -0.45]);
-      /* Cockpit + HALO! */
+      /* Cockpit + Year-Accurate HALO (Halo introduced in 2018; NO Halo in 2009-2017!) */
       addMesh(new THREE.BoxGeometry(0.32, 0.12, 0.52), mats.intakeDark, [0, 0.54, 0.06]);
       addDriverHelmet(0.66, -0.02, false);
-      var hPil10 = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.56, 0.72), new THREE.Vector3(0, 0.74, 0.60), new THREE.Vector3(0, 0.80, 0.46)]);
-      addMesh(new THREE.TubeGeometry(hPil10, 12, 0.022, 8, false), mats.halo);
+      if (exactYear >= 2018) {
+        var hPil10 = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.56, 0.72), new THREE.Vector3(0, 0.74, 0.60), new THREE.Vector3(0, 0.80, 0.46)]);
+        addMesh(new THREE.TubeGeometry(hPil10, 12, 0.022, 8, false), mats.halo);
+        [-1, 1].forEach(function (s) {
+          var hp = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.80, 0.46), new THREE.Vector3(s * 0.18, 0.81, 0.34), new THREE.Vector3(s * 0.25, 0.78, 0.06), new THREE.Vector3(s * 0.22, 0.67, -0.24)]);
+          addMesh(new THREE.TubeGeometry(hp, 18, 0.024, 8, false), mats.halo);
+        });
+      }
+      /* 2017 Iconic Coat-Hanger T-Wing atop Shark Fin (SF70H / W08)! */
+      if (exactYear === 2017) {
+        addMesh(new THREE.BoxGeometry(0.72, 0.018, 0.09), mats.sharkFinEdge, [0, 0.99, -1.86]);
+      }
+      /* Year-accurate Front & Rear Wing proportions:
+         2009-2016 = Super-wide low front wing + TALL NARROW rectangular rear wing!
+         2017-2021 = Swept delta front wing + WIDE LOW angled rear wing! */
+      var isTallNarrowRear = (exactYear >= 2009 && exactYear <= 2016);
+      var rwSpan10 = isTallNarrowRear ? 0.38 : 0.53;
+      var rwYMain10 = isTallNarrowRear ? 0.86 : 0.73;
+      var rwYFlap10 = isTallNarrowRear ? 1.01 : 0.89;
+      addMesh(buildWingElement({ halfSpan: isTallNarrowRear ? 0.96 : 0.99, zCenter: 2.66, zTip: isTallNarrowRear ? 2.62 : 2.52, yCenter: 0.12, yTip: 0.11, chordCenter: 0.28, chordTip: 0.26, thick: 0.026, pitch: 0.10 }), mats.frontWing1);
+      addMesh(buildWingElement({ halfSpan: isTallNarrowRear ? 0.95 : 0.98, zCenter: 2.48, zTip: isTallNarrowRear ? 2.45 : 2.36, yCenter: 0.17, yTip: 0.16, chordCenter: 0.20, chordTip: 0.18, thick: 0.020, pitch: 0.22 }), mats.frontWing2);
+      addMesh(buildWingElement({ halfSpan: isTallNarrowRear ? 0.93 : 0.96, zCenter: 2.33, zTip: isTallNarrowRear ? 2.30 : 2.22, yCenter: 0.23, yTip: 0.22, chordCenter: 0.15, chordTip: 0.14, thick: 0.018, pitch: 0.34 }), mats.frontWing3);
       [-1, 1].forEach(function (s) {
-        var hp = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0.80, 0.46), new THREE.Vector3(s * 0.18, 0.81, 0.34), new THREE.Vector3(s * 0.25, 0.78, 0.06), new THREE.Vector3(s * 0.22, 0.67, -0.24)]);
-        addMesh(new THREE.TubeGeometry(hp, 18, 0.024, 8, false), mats.halo);
+        addMesh(buildVerticalPlate([[2.68, 0.09], [2.14, 0.09], [2.14, 0.33], [2.62, 0.22]], s * (isTallNarrowRear ? 0.965 : 0.995), 0.022), mats.frontEndplate);
       });
-      /* Wide 2010s 3-element cascaded front wing */
-      addMesh(buildWingElement({ halfSpan: 0.99, zCenter: 2.66, zTip: 2.52, yCenter: 0.12, yTip: 0.11, chordCenter: 0.28, chordTip: 0.26, thick: 0.026, pitch: 0.10 }), mats.frontWing1);
-      addMesh(buildWingElement({ halfSpan: 0.98, zCenter: 2.48, zTip: 2.36, yCenter: 0.17, yTip: 0.16, chordCenter: 0.20, chordTip: 0.18, thick: 0.020, pitch: 0.22 }), mats.frontWing2);
-      addMesh(buildWingElement({ halfSpan: 0.96, zCenter: 2.33, zTip: 2.22, yCenter: 0.23, yTip: 0.22, chordCenter: 0.15, chordTip: 0.14, thick: 0.018, pitch: 0.34 }), mats.frontWing3);
-      [-1, 1].forEach(function (s) {
-        addMesh(buildVerticalPlate([[2.68, 0.09], [2.14, 0.09], [2.14, 0.33], [2.62, 0.22]], s * 0.995, 0.022), mats.frontEndplate);
-      });
-      /* Wide low 2010s DRS rear wing (angled back-swept endplates) */
-      addMesh(buildWingElement({ halfSpan: 0.53, zCenter: -2.34, zTip: -2.34, yCenter: 0.73, yTip: 0.73, chordCenter: 0.25, chordTip: 0.25, thick: 0.024, pitch: 0.20 }), mats.rearWingMain);
+      addMesh(buildWingElement({ halfSpan: rwSpan10, zCenter: -2.34, zTip: -2.34, yCenter: rwYMain10, yTip: rwYMain10, chordCenter: 0.25, chordTip: 0.25, thick: 0.024, pitch: 0.20 }), mats.rearWingMain);
       var drsPivot10 = new THREE.Group();
-      drsPivot10.position.set(0, 0.89, -2.54);
+      drsPivot10.position.set(0, rwYFlap10, -2.54);
       var drsMesh10 = new THREE.Mesh(
-        buildWingElement({ halfSpan: 0.52, zCenter: 0.06, zTip: 0.06, yCenter: -0.04, yTip: -0.04, chordCenter: 0.17, chordTip: 0.17, thick: 0.020, pitch: 0.46 }),
+        buildWingElement({ halfSpan: rwSpan10 - 0.01, zCenter: 0.06, zTip: 0.06, yCenter: -0.04, yTip: -0.04, chordCenter: 0.17, chordTip: 0.17, thick: 0.020, pitch: 0.46 }),
         mats.rearWingFlap
       );
       drsMesh10.castShadow = true;
       drsPivot10.add(drsMesh10);
       root.add(drsPivot10);
       root.userData.drsFlap = drsPivot10;
+      var rwTop10 = isTallNarrowRear ? 1.06 : 0.91;
       [-1, 1].forEach(function (s) {
-        addMesh(buildVerticalPlate([[-2.18, 0.44], [-2.36, 0.32], [-2.52, 0.36], [-2.58, 0.91], [-2.22, 0.91]], s * 0.535, 0.020), mats.rearEndplate);
-        addMesh(new THREE.BoxGeometry(0.028, 0.022, 0.36), mats.rearEndplateCap, [s * 0.535, 0.92, -2.40]);
+        addMesh(buildVerticalPlate([[-2.18, 0.44], [-2.36, 0.32], [-2.52, 0.36], [-2.58, rwTop10], [-2.22, rwTop10]], s * (rwSpan10 + 0.005), 0.020), mats.rearEndplate);
+        addMesh(new THREE.BoxGeometry(0.028, 0.022, 0.36), mats.rearEndplateCap, [s * (rwSpan10 + 0.005), rwTop10 + 0.01, -2.40]);
       });
       addMesh(new THREE.BoxGeometry(0.045, 0.11, 0.025), mats.rainLight, [0, 0.26, -2.38], null, false);
       addFourWheels(1.74, -1.80, 0.82, 0.79, 'pirelli_2010s', mats.carbon);
@@ -1477,16 +1541,21 @@
       /* Steering trackrod */
       root.add(buildStrut([s * 0.18, 0.34, zFront + 0.06], [s * (xFront - 0.16), 0.35, zFront + 0.06], 0.009, mats.chrome));
 
-      /* Front brake duct + over-wheel wake deflector brow (positioned cleanly over inner front wheel shoulder) */
+      /* Front brake duct + over-wheel wake deflector brow (present on 2022-2025 ground-effect cars; REMOVED in 2026 Active-Aero regulations!) */
       addMesh(new THREE.BoxGeometry(0.06, 0.22, 0.24), mats.carbon, [s * (xFront - 0.17), 0.36, zFront]);
-      var browSpec = [
-        [zFront + 0.26, s * (xFront - 0.16), 0.045, 0.56, 0.59],
-        [zFront + 0.06, s * (xFront - 0.14), 0.052, 0.72, 0.75],
-        [zFront - 0.22, s * (xFront - 0.16), 0.045, 0.62, 0.65]
-      ];
-      addMesh(buildLoft(browSpec.map(function (b) {
-        return superRing(b[0], b[1], b[2], b[3], b[4], 2.0, 2.0, 10);
-      }), true, true), mats.carbon);
+      if (exactYear < 2026) {
+        var browSpec = [
+          [zFront + 0.26, s * (xFront - 0.16), 0.045, 0.56, 0.59],
+          [zFront + 0.06, s * (xFront - 0.14), 0.052, 0.72, 0.75],
+          [zFront - 0.22, s * (xFront - 0.16), 0.045, 0.62, 0.65]
+        ];
+        addMesh(buildLoft(browSpec.map(function (b) {
+          return superRing(b[0], b[1], b[2], b[3], b[4], 2.0, 2.0, 10);
+        }), true, true), mats.carbon);
+      } else {
+        /* 2026 Active-Aero front wing inboard footplate & actuator pod */
+        addMesh(new THREE.BoxGeometry(0.036, 0.032, 0.26), mats.frontDiveplane, [s * 0.42, 0.20, 2.40]);
+      }
 
       /* Rear suspension A-arms + pushrod + driveshaft */
       var rHubTop = [s * (xRear - 0.21), 0.45, zRear];
@@ -1823,6 +1892,15 @@
       } else {
         mats.tyreRing.color.copy(ringCol);
       }
+    }
+
+    /* Apply authentic year-specific chassis dimensional proportions:
+       - 2026+ Nimble Active-Aero Formula: 1900mm width (0.95x) & 3400mm wheelbase (0.945x) vs 2022-25 (2000mm / 3600mm)
+       - 2009-2016 Narrow-Track Formula: 1800mm width (0.91x) vs 2017-2021 Wide 2000mm cars */
+    if (exactYear >= 2026) {
+      root.scale.set(0.95, 1.0, 0.945);
+    } else if (exactYear >= 2009 && exactYear <= 2016) {
+      root.scale.set(0.91, 1.0, 0.97);
     }
 
     setPalette(palette, styleName || 'modern');

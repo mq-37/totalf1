@@ -1441,6 +1441,145 @@
     };
   }
 
+  function runLiveWeekendFlow(cardsRaw, circuit, weekendFmt) {
+    return new Promise((resolve) => {
+      const modal = getEl("fsim-quali-modal");
+      const badge = getEl("fsim-quali-badge");
+      const title = getEl("fsim-quali-title");
+      const sub = getEl("fsim-quali-sub");
+      const clock = getEl("fsim-quali-clock");
+      const tbody = getEl("fsim-quali-tbody");
+      const skipBtn = getEl("fsim-quali-skip-btn");
+      const goBtn = getEl("fsim-quali-go-btn");
+      const canvasEl = getEl("fsim-wk-canvas");
+      const radarHost = getEl("fsim-wk-radar-host");
+      if (!modal || !tbody || !canvasEl || !window.F1WeekendSessionSim) {
+        resolve(cardsRaw.slice());
+        return;
+      }
+
+      if (typeof fs.qualiAbort === "function") fs.qualiAbort();
+      const isSprint = weekendFmt === "sprint";
+      const isFullWk = weekendFmt === "full_weekend";
+      const stages = (isFullWk ? ["fp1", "fp2"] : []).concat(["q1", "q2", "q3"]);
+      let stgIdx = 0;
+      let aliveCards = cardsRaw.slice();
+      let elimQ1 = [];
+      let elimQ2 = [];
+      let speed = 4;
+
+      const runner = window.F1WeekendSessionSim.create(canvasEl, {});
+      let radarWidget = null;
+      if (window.F1WeatherRadarUI && radarHost) {
+        radarWidget = window.F1WeatherRadarUI.create(radarHost);
+        const wMode = getEl("fsim-weather-sel")?.value || "dynamic";
+        const laps = parseInt(getEl("fsim-laps-sel")?.value || "15", 10) || 15;
+        radarWidget.load(circuit, { mode: wMode, laps, intelPct: 86, tyreCare: 82 });
+      }
+
+      const toRoster = (cards) => cards.map((c, i) => ({
+        driver_id: c.driver || c.code3 || ("c" + i),
+        slot: i,
+        code3: c.code3,
+        clean_name: c.clean_name,
+        team_name: c.hero_team || "",
+        color: c.hero_color || "#e10600",
+        is_player_team: i < 2,
+        car_fit: Number(c.overall || 80),
+        pace: Number((c.game && c.game.stats && c.game.stats.pace) || c.overall || 80),
+        clutch: Number((c.game && c.game.stats && c.game.stats.clutch) || 78),
+        wet: Number((c.game && c.game.stats && c.game.stats.wet) || 78),
+      }));
+
+      const renderTable = (rows, mode) => {
+        const cutoff = mode === "q1" ? Math.min(15, Math.max(10, rows.length - 5)) : (mode === "q2" ? Math.min(10, Math.max(6, rows.length - 5)) : 99);
+        tbody.innerHTML = (rows || []).map((r) => {
+          const drop = r.pos > cutoff;
+          return `<tr class="${drop ? "is-elim" : ""}${r.pos === 1 ? " is-pole" : ""}">
+            <td><b>P${r.pos}</b></td>
+            <td><span class="st-bar" style="background:${r.color};display:inline-block;width:3px;height:10px;margin-right:4px;"></span><b>${r.code3}</b> ${r.clean_name}</td>
+            <td class="muted">${r.team_name}</td>
+            <td>—</td><td>—</td><td>—</td>
+            <td><b>${window.F1WeekendSessionSim.fmtLap(r.best_lap_s)}</b></td>
+            <td>${r.pos === 1 ? "LEADER" : "+" + Number(r.gap_s || 0).toFixed(3) + "s"}</td>
+            <td>${drop ? "DROP ZONE" : (r.status || "ON TRACK")}</td>
+          </tr>`;
+        }).join("");
+      };
+
+      const startStage = () => {
+        const mode = stages[stgIdx];
+        const isFp = mode.startsWith("fp");
+        const activeList = isFp ? cardsRaw : aliveCards;
+        if (badge) badge.textContent = (isSprint && !isFp ? "S" : "") + mode.toUpperCase() + (isFp ? " · PRACTICE SIM" : " · KNOCKOUT");
+        if (title) title.textContent = `${circuit.name.toUpperCase()} — ${isFp ? "FREE PRACTICE" : (isSprint ? "SPRINT SHOOTOUT" : "FIA QUALIFYING")}`;
+        if (sub) sub.textContent = isFp
+          ? `Watching all ${activeList.length} cars run ${mode.toUpperCase()} practice stints (1×–12× or Sim to End)`
+          : (mode === "q3" ? "Top 10 Pole Position Shootout!" : `Watch live on track or click Sim to End`);
+        skipBtn?.classList.remove("hidden");
+        goBtn?.classList.add("hidden");
+
+        runner.start({
+          mode: mode,
+          speed: speed,
+          circuit: circuit,
+          roster: toRoster(activeList),
+          weather: getEl("fsim-weather-sel")?.value || "dynamic",
+          onUpdate: (snap) => {
+            if (clock) clock.textContent = snap.clockText;
+            renderTable(snap.classification, mode);
+          },
+          onComplete: (res) => {
+            const byId = new Map(activeList.map((c, i) => [c.driver || c.code3 || ("c" + i), c]));
+            const sortedCards = (res.classification || []).map((row) => byId.get(row.driver_id)).filter(Boolean);
+            if (mode === "q1") {
+              const keep = Math.min(15, Math.max(10, sortedCards.length - 5));
+              aliveCards = sortedCards.slice(0, keep);
+              elimQ1 = sortedCards.slice(keep);
+            } else if (mode === "q2") {
+              const keep = Math.min(10, Math.max(6, sortedCards.length - 5));
+              aliveCards = sortedCards.slice(0, keep);
+              elimQ2 = sortedCards.slice(keep);
+            } else if (mode === "q3") {
+              aliveCards = sortedCards;
+            }
+            if (stgIdx < stages.length - 1) {
+              stgIdx += 1;
+              startStage();
+            } else {
+              const finalOrder = [...aliveCards, ...elimQ2, ...elimQ1];
+              if (badge) badge.textContent = "STARTING GRID LOCKED";
+              skipBtn?.classList.add("hidden");
+              goBtn?.classList.remove("hidden");
+              goBtn.onclick = () => {
+                runner.stop();
+                if (radarWidget) radarWidget.destroy();
+                modal.classList.add("hidden");
+                resolve(finalOrder.length ? finalOrder : cardsRaw.slice());
+              };
+            }
+          },
+        });
+      };
+
+      modal.querySelectorAll("[data-fsim-wk-spd]").forEach((btn) => {
+        btn.onclick = () => {
+          speed = Number(btn.getAttribute("data-fsim-wk-spd") || 4);
+          runner.setSpeed(speed);
+        };
+      });
+      skipBtn.onclick = () => runner.simToEnd();
+      fs.qualiAbort = () => {
+        runner.stop();
+        if (radarWidget) radarWidget.destroy();
+        modal.classList.add("hidden");
+      };
+
+      modal.classList.remove("hidden");
+      startStage();
+    });
+  }
+
   function runLiveQualifyingShootout(cardsRaw, circuit, isSprintShootout) {
     return new Promise((resolve) => {
       const modal = getEl("fsim-quali-modal");
@@ -2752,12 +2891,12 @@
     getEl("fsim-simtoend-ovl")?.classList.add("hidden");
     toggleSetupDrawer(false);
 
-    // Phase C: Run Live Q1 / Q2 / Q3 Knockout Qualifying Shootout when weekendFmt is 'quali' or 'sprint'!
+    // Run Live Watchable Weekend (FP1 -> FP2 -> Q1/Q2/Q3) or Qualifying Shootout with Sim-to-End!
     let preSortedQualiCards = Array.isArray(launchOpts.qualiGrid) && launchOpts.qualiGrid.length ? launchOpts.qualiGrid.slice() : null;
-    if (!preSortedQualiCards && (weekendFmt === "quali" || (weekendFmt === "sprint" && !launchOpts.afterSprint))) {
+    if (!preSortedQualiCards && (weekendFmt === "full_weekend" || weekendFmt === "quali" || (weekendFmt === "sprint" && !launchOpts.afterSprint))) {
       fs.running = false;
       fs.paused = true;
-      preSortedQualiCards = await runLiveQualifyingShootout(cardsRaw, selCir, weekendFmt === "sprint");
+      preSortedQualiCards = await runLiveWeekendFlow(cardsRaw, selCir, weekendFmt);
       fs.qualiOrderedCards = preSortedQualiCards.slice();
     }
 
@@ -2789,7 +2928,18 @@
     fs.totalLaps = fs.sprintPhase === "sprint" ? 5 : (dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15));
     fs.weatherMode = getEl("fsim-weather-sel")?.value || "dynamic";
     fs.chaosMult = parseFloat(getEl("fsim-chaos-sel")?.value || "1.0") || 1.0;
-    fs.wetness = fs.weatherMode === "rain" ? 78 : (fs.weatherMode === "showers" ? 28 : 0);
+    let liveWetInit = null;
+    if (fs.weatherMode === "real_live") {
+      try {
+        const wr = await fetch(`/api/weather/live/${encodeURIComponent(selCir.id)}?mode=real_live&laps=${fs.totalLaps}`);
+        if (wr.ok) {
+          const wd = await wr.json();
+          const tl = wd.radar && wd.radar.timeline;
+          if (tl && tl.length) liveWetInit = Number(tl[0].wetness_pct || 0);
+        }
+      } catch (_) {}
+    }
+    fs.wetness = liveWetInit != null ? liveWetInit : (fs.weatherMode === "rain" ? 78 : (fs.weatherMode === "showers" ? 28 : 0));
     fs.targetWetness = fs.wetness;
     fs.drying = false;
     fs.nextWeatherLap = Math.max(3, Math.round(fs.totalLaps * (0.18 + Math.random() * 0.22)));
@@ -3069,7 +3219,7 @@
           balanceBias: c.eng ? c.eng.balanceBias : 0,
           floorHealth: c.components && c.components.floor ? c.components.floor.health : 95,
           suspHealth: c.components && c.components.suspension ? c.components.suspension.health : 95,
-          palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era,
+          palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era, year: c.card.hero_year,
           regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
         })),
         raceState: {

@@ -30,6 +30,12 @@
         {% endfor %}
       </select>
 
+      <label class="studio-label" for="studio-year">Exact Season Year (1950–2026 Faithful Chassis &amp; Livery)</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="range" id="studio-year" min="1950" max="2026" value="2026" style="flex:1;" />
+        <strong id="studio-year-val" style="min-width:46px;text-align:right;font-family:monospace;color:#38bdf8;">2026</strong>
+      </div>
+
       <label class="studio-label" for="studio-era">Car Era / Chassis Generation (8 Decades)</label>
       <select id="studio-era" style="width:100%; margin-bottom: 12px;">
         {% set era_labels = {
@@ -96,6 +102,8 @@
 
       var canvas = document.getElementById('studio-canvas');
       var sel = document.getElementById('studio-team');
+      var yearSlider = document.getElementById('studio-year');
+      var yearValEl = document.getElementById('studio-year-val');
       var eraSel = document.getElementById('studio-era');
       var styleSel = document.getElementById('studio-style');
       var inputs = {
@@ -177,6 +185,24 @@
 
       applyTeam(initTeam, true);
       sel.addEventListener('change', function () { applyTeam(byName[sel.value], false); });
+      if (yearSlider) {
+        yearSlider.addEventListener('input', function () {
+          var yr = parseInt(yearSlider.value, 10) || 2026;
+          if (yearValEl) yearValEl.textContent = String(yr);
+          fetch('/api/cars/livery?team=' + encodeURIComponent(sel.value) + '&year=' + yr)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (!d || !d.palette) return;
+              styleSel.value = d.style || 'modern';
+              eraSel.value = d.era || '2020s';
+              Object.keys(inputs).forEach(function (k) { if (d.palette[k]) inputs[k].value = d.palette[k]; });
+              rebuildCarForEra(String(yr), d.palette, d.style || 'modern');
+              if (car && car.userData.setPalette) car.userData.setPalette(d.palette, d.style || 'modern', d.finish || 'gloss');
+              if (d.palette.main) { ringMat.color.set(d.palette.main); lights.rim.color.set(d.palette.main); }
+            })
+            .catch(function () {});
+        });
+      }
       eraSel.addEventListener('change', function () {
         rebuildCarForEra(eraSel.value, currentPaletteFromInputs(), styleSel.value);
       });

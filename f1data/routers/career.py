@@ -108,6 +108,23 @@ class QualiReq(CareerMutationReq):
     weather_mode: str = Field(default="dynamic", max_length=20)
     stage: str = Field(default="full", max_length=12)
     tyre_choice: str = Field(default="fresh", max_length=16)
+    live_times: Optional[dict[str, float]] = None
+
+
+class WeekendPracticeReq(CareerMutationReq):
+    session: str = Field(default="fp1", max_length=10)
+    car_programmes: dict[str, str] = Field(default_factory=dict)
+    wing: int = Field(default=50, ge=0, le=100)
+    susp: int = Field(default=50, ge=0, le=100)
+    diff: int = Field(default=50, ge=0, le=100)
+    auto_tune: bool = False
+    weather_mode: str = Field(default="dynamic", max_length=20)
+    programme_scores: Optional[dict[str, float]] = None
+    session_times: Optional[list[dict]] = None
+
+
+class WeekendDevSpendReq(CareerMutationReq):
+    target: str = Field(default="aero", max_length=24)
 
 
 class RaceCommitReq(CareerMutationReq):
@@ -510,7 +527,13 @@ def api_career_qualify(req: QualiReq):
         cal_item = state["calendar"][state["current_round"] - 1]
         had_pq = bool(state.get("pending_quali") and state["pending_quali"].get("round") == state["current_round"])
         ckpt = None if had_pq else f"Pre-Quali · S{state['season_num']} R{state['current_round']} {cal_item['name']}"
-        quali = _career.run_qualifying_stage(state, stage=req.stage, tyre_choice=req.tyre_choice, weather_mode=req.weather_mode)
+        quali = _career.run_qualifying_stage(
+            state,
+            stage=req.stage,
+            tyre_choice=req.tyre_choice,
+            weather_mode=req.weather_mode,
+            live_times=req.live_times,
+        )
         _save_career_checked(base, state, checkpoint_label=ckpt, expected_version=req.expected_version)
 
         newly_unlocked = []
@@ -725,6 +748,98 @@ def api_career_dilemma_resolve(req: DilemmaResolveReq):
         if ok:
             _save_career_checked(base, state, expected_version=req.expected_version)
         return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.get("/api/career/weekend")
+def api_career_weekend_get(weather_mode: str = Query("dynamic")):
+    from .. import career as _career, weekend_engine as _wk
+    base = srv._career_base_dir()
+    state = _career.load_career(base)
+    if not state:
+        raise HTTPException(status_code=404, detail="No active career")
+    _career._ensure_career_v2(state)
+    rnd = int(state.get("current_round") or 1)
+    cal = state.get("calendar") or []
+    cal_item = cal[rnd - 1] if 0 < rnd <= len(cal) else {"circuit_id": "melbourne"}
+    circuit = _career._circuit_by_id(cal_item["circuit_id"])
+    ideal = _career._ideal_setup_for_circuit(circuit)
+    wk = _wk.ensure_weekend_state(state, circuit, ideal, weather_mode=weather_mode)
+    roster = _wk.build_weekend_roster(state, circuit, _career._compute_car_overall)
+    return {
+        "ok": True,
+        "weekend": wk,
+        "programmes": _wk.PRACTICE_PROGRAMMES,
+        "roster": roster,
+        "dev_points": int(state.get("dev_points") or 0),
+        "circuit": circuit,
+    }
+
+
+@router.post("/api/career/weekend/practice")
+def api_career_weekend_practice(req: WeekendPracticeReq):
+    from .. import career as _career, career_db as _cdb, weekend_engine as _wk
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        _career._ensure_career_v2(state)
+        rnd = int(state.get("current_round") or 1)
+        cal_item = state["calendar"][rnd - 1]
+        circuit = _career._circuit_by_id(cal_item["circuit_id"])
+        ideal = _career._ideal_setup_for_circuit(circuit)
+        ok, msg, wk = _wk.complete_practice_session(
+            state,
+            session_key=req.session,
+            car_programmes=req.car_programmes,
+            wing=req.wing,
+            susp=req.susp,
+            diff=req.diff,
+            auto_tune=req.auto_tune,
+            programme_scores=req.programme_scores,
+            session_times=req.session_times,
+            circuit=circuit,
+            ideal_setup=ideal,
+            get_player_team_fn=_career.get_player_team,
+            compute_car_overall_fn=_career._compute_car_overall,
+            add_inbox_fn=_career._add_inbox,
+            weather_mode=req.weather_mode,
+        )
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {
+            "ok": ok,
+            "message": msg,
+            "weekend": wk,
+            "dev_points": int(state.get("dev_points") or 0),
+            **_career_payload(state),
+        }
+
+
+@router.post("/api/career/weekend/devpoints/spend")
+def api_career_weekend_devpoints_spend(req: WeekendDevSpendReq):
+    from .. import career as _career, career_db as _cdb, weekend_engine as _wk
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        _career._ensure_career_v2(state)
+        ok, msg = _wk.spend_dev_points(
+            state,
+            req.target,
+            _career.get_player_team,
+            _career._compute_car_overall,
+            _career._add_inbox,
+        )
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {
+            "ok": ok,
+            "message": msg,
+            "dev_points": int(state.get("dev_points") or 0),
+            **_career_payload(state),
+        }
 
 
 @router.post("/api/career/race/setup")

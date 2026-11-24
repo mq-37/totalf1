@@ -120,6 +120,27 @@ def api_paddock_profiles(year: int = Query(2026)):
     return {"ok": True, **get_season_paddock_bundle(year)}
 
 
+@router.get("/api/weather/live/{circuit_id}")
+def api_weather_live(
+    circuit_id: str,
+    mode: str = Query("dynamic"),
+    laps: int = Query(15),
+    intel_pct: int = Query(70),
+    tyre_care: float = Query(80.0),
+):
+    """Fetch real-time Open-Meteo circuit weather, Doppler radar cells & R&D-calibrated optimal pit/crossover plan."""
+    from ..circuits import get_circuit, CIRCUITS
+    from ..weather_radar import build_weather_radar_and_pit_plan
+    cir = get_circuit(circuit_id) or (CIRCUITS[0] if CIRCUITS else {"id": circuit_id, "name": circuit_id})
+    return build_weather_radar_and_pit_plan(
+        cir,
+        mode=mode,
+        laps=laps,
+        intel_pct=intel_pct,
+        tyre_care=tyre_care,
+    )
+
+
 @router.get("/api/sim/balance")
 def api_sim_balance(
     circuit_id: str = Query("melbourne"),
@@ -445,6 +466,7 @@ def api_game_deck(
             "hero_livery_style": (livery_spec["style"] if livery_spec else _infer_livery_style(hero_team_name)),
             "hero_livery_finish": (livery_spec["finish"] if livery_spec else "gloss"),
             "hero_livery_motif": (livery_spec.get("motif", "standard") if livery_spec else "standard"),
+            "hero_year": int(hero_year),
             "hero_era": _infer_team_era(hero_team_name, year=hero.get("year"), team_years_map=_team_years_map),
             "hero_color": hero_pal.get("main") or hero.get("color") or "#475569",
             "spine_colors": spine_colors or ["#475569"],

@@ -519,17 +519,35 @@
 
   <!-- ==================== LIVE 2-CAR RACE WEEKEND OVERLAY (QUALIFYING + 1-SCREEN GPS PIT WALL) ==================== -->
   <section id="career-race-view" class="car-race-view hidden">
-    <!-- Qualifying Briefing Panel -->
+    <!-- Full F1 Race Weekend OS (FP1 -> FP2 -> FP3 -> Q1/Q2/Q3 -> Grand Prix, Watch Live or Sim to End, Doppler Radar) -->
     <div id="car-quali-panel" class="car-quali-panel">
-      <div class="car-quali-card">
-        <div class="car-quali-head">
-          <div>
-            <span class="tut-pill" id="car-q-round-pill">ROUND 1 QUALIFYING</span>
+      <div class="car-quali-card car-wk-card">
+        <div class="car-quali-head car-wk-head">
+          <div class="car-wk-title-block">
+            <span class="tut-pill" id="car-q-round-pill">ROUND 1 RACE WEEKEND</span>
             <h2 id="car-q-title">Australian Grand Prix — Albert Park</h2>
             <p id="car-q-meta" class="muted"></p>
           </div>
+          <div class="car-wk-kpis">
+            <div class="car-wk-kpi"><small>SETUP</small><b id="car-fp-conf-pill">64%</b></div>
+            <div class="car-wk-kpi"><small>KNOWLEDGE</small><b id="car-wk-kn-val">12%</b></div>
+            <div class="car-wk-kpi"><small>STRATEGY</small><b id="car-wk-strat-val">35%</b></div>
+            <div class="car-wk-kpi is-dp">
+              <small>DEV PTS</small>
+              <b id="car-wk-dp-val">0 DP</b>
+              <select id="car-wk-dp-sel" title="Spend 100 Dev Points from Practice Programmes">
+                <option value="">Spend 100…</option>
+                <option value="aero">+1.2 Aero</option>
+                <option value="chassis">+1.2 Chassis</option>
+                <option value="power">+1.2 Power</option>
+                <option value="tyre_care">+1.2 Tyre Care</option>
+                <option value="rd_boost">Fast-Track R&amp;D</option>
+              </select>
+            </div>
+          </div>
           <div class="car-q-controls">
-            <select id="car-q-weather">
+            <select id="car-q-weather" title="Weather Mode (includes Live Open-Meteo real-world circuit weather!)">
+              <option value="real_live">🌍 Live Real-World Weather</option>
               <option value="dynamic" selected>Dynamic Forecast</option>
               <option value="dry">Dry Sun</option>
               <option value="showers">Changing Showers</option>
@@ -540,77 +558,130 @@
               <option value="15" selected>15-Lap Grand Prix</option>
               <option value="25">25-Lap Endurance</option>
             </select>
-            <button type="button" id="car-q-back-btn" class="sim-dir-btn"><i class="fas fa-arrow-left"></i> Back to HQ</button>
+            <button type="button" id="car-q-back-btn" class="sim-dir-btn"><i class="fas fa-arrow-left"></i> HQ</button>
           </div>
         </div>
 
-        <!-- Free Practice Car Setup Tuner + Pre-Race Split Tyre Strategy -->
-        <div class="car-fp-setup-box">
-          <div class="car-fp-head">
-            <span><i class="fas fa-sliders-h"></i> FREE PRACTICE CAR SETUP <small id="car-fp-stints" class="muted">(0/3 FP Stints)</small></span>
-            <div class="car-fp-right">
-              <span id="car-fp-conf-pill" class="car-fp-conf">SETUP 70%</span>
-              <button type="button" id="car-fp-auto-btn" class="car-btn-xs car-btn-gold" title="Let your Chief Race Engineer dial in the car">⚡ Engineer Auto-Tune</button>
-              <button type="button" id="car-fp-run-btn" class="car-btn-xs car-btn-red">Run FP Stint</button>
+        <!-- Structured F1 Weekend Session Stepper -->
+        <div id="car-wk-stepper" class="car-wk-stepper"></div>
+
+        <!-- Zero-Scroll 2-Column Race Weekend Stage -->
+        <div class="car-wk-stage">
+          <!-- LEFT COLUMN: Live Watchable Track Canvas + Doppler Weather Radar & Optimal Pit Calc -->
+          <div class="car-wk-left">
+            <div class="car-wk-track-box">
+              <div class="car-wk-track-bar">
+                <span id="car-wk-live-lbl"><i class="fas fa-broadcast-tower"></i> FP1 PRACTICE MONITOR</span>
+                <div class="car-wk-speed-grp">
+                  <button type="button" class="car-btn-xs" data-wk-spd="0" title="Pause">⏸</button>
+                  <button type="button" class="car-btn-xs" data-wk-spd="1">1×</button>
+                  <button type="button" class="car-btn-xs active car-btn-red" data-wk-spd="4">4×</button>
+                  <button type="button" class="car-btn-xs" data-wk-spd="8">8×</button>
+                  <button type="button" class="car-btn-xs" data-wk-spd="16">16×</button>
+                  <button type="button" id="car-wk-watch-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-play"></i> Watch Session</button>
+                  <button type="button" id="car-wk-simend-btn" class="car-btn-xs car-btn-red"><i class="fas fa-fast-forward"></i> Sim to End</button>
+                </div>
+              </div>
+              <div class="car-wk-canvas-wrap">
+                <canvas id="car-wk-canvas" aria-label="Live Watchable FP1 FP2 FP3 and Qualifying Track Simulator"></canvas>
+                <div id="car-wk-prog-hud" class="car-wk-prog-hud"></div>
+              </div>
+              <div id="car-wk-radio-bar" class="car-wk-radio-bar">📻 Race Engineer: Assign FP1 programmes for Car #1 &amp; Car #2, then Watch Live or Sim to End!</div>
             </div>
-          </div>
-          <div class="car-fp-sliders">
-            <label>
-              <span>Wing Angle <b id="fp-wing-val">50</b> <em id="fp-wing-fb">UNTESTED</em></span>
-              <input type="range" id="fp-wing" min="0" max="100" value="50">
-            </label>
-            <label>
-              <span>Suspension <b id="fp-susp-val">50</b> <em id="fp-susp-fb">UNTESTED</em></span>
-              <input type="range" id="fp-susp" min="0" max="100" value="50">
-            </label>
-            <label>
-              <span>Diff &amp; Brakes <b id="fp-diff-val">50</b> <em id="fp-diff-fb">UNTESTED</em></span>
-              <input type="range" id="fp-diff" min="0" max="100" value="50">
-            </label>
-          </div>
-          <div class="car-start-tyre-bar">
-            <span class="muted small"><i class="fas fa-dharmachakra"></i> Starting Tyre Strategy:</span>
-            <label><span id="car-st-lbl-0">Car #1</span>
-              <select id="car-start-tyre-0">
-                <option value="auto" selected>Auto (Best)</option>
-                <option value="soft">Soft (S)</option>
-                <option value="medium">Medium (M)</option>
-                <option value="hard">Hard (H)</option>
-                <option value="inter">Inter (I)</option>
-                <option value="wet">Wet (W)</option>
-              </select>
-            </label>
-            <label><span id="car-st-lbl-1">Car #2</span>
-              <select id="car-start-tyre-1">
-                <option value="auto" selected>Auto (Best)</option>
-                <option value="soft">Soft (S)</option>
-                <option value="medium">Medium (M)</option>
-                <option value="hard">Hard (H)</option>
-                <option value="inter">Inter (I)</option>
-                <option value="wet">Wet (W)</option>
-              </select>
-            </label>
-          </div>
-          <div id="car-strat-planner" class="car-strat-planner"></div>
-        </div>
 
-        <!-- Interactive Q1 -> Q2 -> Q3 Knockout Qualifying Controls -->
-        <div id="car-q-knockout-bar" class="car-q-ko-bar">
-          <div class="car-q-ko-left">
-            <span id="car-q-stage-pill" class="car-q-stage-pill">Q1 · TOP 15 ADVANCE</span>
-            <small id="car-q-tyre-note" class="muted">Pick tyre set or skip straight to full grid</small>
+            <!-- Live Real-Time Doppler Weather Radar + R&D Optimal Pit Calculator -->
+            <div id="car-wk-radar-host" class="car-wk-radar-host"></div>
+
+            <!-- Race Engineer Strategy & Driver XP Feedback Notes -->
+            <div id="car-wk-eng-notes" class="car-wk-eng-notes"></div>
           </div>
-          <div class="car-q-ko-btns">
-            <select id="car-q-tyre-choice" title="Fresh Softs give peak pace; Scrubbed Tyres save a fresh Soft set (+4% life) for the race!">
-              <option value="fresh" selected>🔴 Fresh Softs (Peak Lap)</option>
-              <option value="scrubbed">🟡 Scrubbed Tyres (Save Softs +4%)</option>
-            </select>
-            <button type="button" id="car-q-stage-btn" class="car-btn-xs car-btn-red"><i class="fas fa-stopwatch"></i> Run Q1</button>
-            <button type="button" id="car-q-simfull-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-fast-forward"></i> Sim Full Quali</button>
+
+          <!-- RIGHT COLUMN: Practice Programmes & Setup Tuner OR Qualifying Controls + Live 20-Car Timing Grid -->
+          <div class="car-wk-right">
+            <!-- Practice Programmes + Setup Sliders -->
+            <div id="car-wk-fp-pane" class="car-fp-setup-box">
+              <div class="car-fp-head">
+                <span><i class="fas fa-tasks"></i> <strong id="car-wk-fp-title">FP1 PROGRAMMES &amp; SETUP</strong> <small id="car-fp-stints" class="muted">(0/3 FP)</small></span>
+                <div class="car-fp-right">
+                  <button type="button" id="car-fp-auto-btn" class="car-btn-xs car-btn-gold" title="Let your Chief Race Engineer dial in setup">⚡ Auto-Tune</button>
+                  <button type="button" id="car-fp-run-btn" class="car-btn-xs car-btn-red">⏭ Sim FP</button>
+                </div>
+              </div>
+              <div class="car-wk-prog-grid">
+                <label class="car-wk-prog-col">
+                  <span id="car-wk-p0-lbl">Car #1 Programme</span>
+                  <select id="car-wk-prog-0"></select>
+                  <small id="car-wk-p0-desc" class="muted"></small>
+                </label>
+                <label class="car-wk-prog-col">
+                  <span id="car-wk-p1-lbl">Car #2 Programme</span>
+                  <select id="car-wk-prog-1"></select>
+                  <small id="car-wk-p1-desc" class="muted"></small>
+                </label>
+              </div>
+              <div class="car-fp-sliders">
+                <label>
+                  <span>Wing Angle <b id="fp-wing-val">50</b> <em id="fp-wing-fb">UNTESTED</em></span>
+                  <input type="range" id="fp-wing" min="0" max="100" value="50">
+                </label>
+                <label>
+                  <span>Suspension <b id="fp-susp-val">50</b> <em id="fp-susp-fb">UNTESTED</em></span>
+                  <input type="range" id="fp-susp" min="0" max="100" value="50">
+                </label>
+                <label>
+                  <span>Diff &amp; Brakes <b id="fp-diff-val">50</b> <em id="fp-diff-fb">UNTESTED</em></span>
+                  <input type="range" id="fp-diff" min="0" max="100" value="50">
+                </label>
+              </div>
+            </div>
+
+            <!-- Interactive Q1 -> Q2 -> Q3 Knockout Qualifying Controls -->
+            <div id="car-q-knockout-bar" class="car-q-ko-bar">
+              <div class="car-q-ko-left">
+                <span id="car-q-stage-pill" class="car-q-stage-pill">Q1 · TOP 15 ADVANCE</span>
+                <small id="car-q-tyre-note" class="muted">Watch Q1/Q2/Q3 live on track or Sim to End</small>
+              </div>
+              <div class="car-q-ko-btns">
+                <select id="car-q-tyre-choice" title="Fresh Softs give peak pace; Scrubbed Tyres save a fresh Soft set (+4% life) for the race!">
+                  <option value="fresh" selected>🔴 Fresh Softs</option>
+                  <option value="scrubbed">🟡 Scrubbed (+4% Race)</option>
+                </select>
+                <button type="button" id="car-q-watch-btn" class="car-btn-xs car-btn-gold"><i class="fas fa-play"></i> Watch Q</button>
+                <button type="button" id="car-q-stage-btn" class="car-btn-xs car-btn-red"><i class="fas fa-stopwatch"></i> Sim Q1</button>
+                <button type="button" id="car-q-simfull-btn" class="car-btn-xs"><i class="fas fa-fast-forward"></i> Sim Full Q</button>
+              </div>
+            </div>
+
+            <!-- Starting Tyre & Strategy Cards -->
+            <div class="car-start-tyre-bar">
+              <span class="muted small"><i class="fas fa-dharmachakra"></i> Race Start Tyres:</span>
+              <label><span id="car-st-lbl-0">Car #1</span>
+                <select id="car-start-tyre-0">
+                  <option value="auto" selected>Auto (Optimal)</option>
+                  <option value="soft">Soft (S)</option>
+                  <option value="medium">Medium (M)</option>
+                  <option value="hard">Hard (H)</option>
+                  <option value="inter">Inter (I)</option>
+                  <option value="wet">Wet (W)</option>
+                </select>
+              </label>
+              <label><span id="car-st-lbl-1">Car #2</span>
+                <select id="car-start-tyre-1">
+                  <option value="auto" selected>Auto (Optimal)</option>
+                  <option value="soft">Soft (S)</option>
+                  <option value="medium">Medium (M)</option>
+                  <option value="hard">Hard (H)</option>
+                  <option value="inter">Inter (I)</option>
+                  <option value="wet">Wet (W)</option>
+                </select>
+              </label>
+            </div>
+            <div id="car-strat-planner" class="car-strat-planner"></div>
+
+            <!-- Live 20-Car Practice / Qualifying Timing Grid -->
+            <div id="car-q-grid-wrap" class="car-q-grid-wrap"></div>
           </div>
         </div>
-
-        <div id="car-q-grid-wrap" class="car-q-grid-wrap"></div>
 
         <div class="car-q-foot">
           <button type="button" id="car-q-quicksim-btn" class="sim-dir-btn">
@@ -1101,6 +1172,8 @@
 <script src="/static/js/career_hq_3d.js?v={{ asset_v }}"></script>
 <script src="/static/js/career_analytics.js?v={{ asset_v }}"></script>
 <script src="/static/js/reg_grapher.js?v={{ asset_v }}"></script>
+<script src="/static/js/weekend_session_sim.js?v={{ asset_v }}"></script>
+<script src="/static/js/weather_radar_ui.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_profile.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
 <script src="/static/js/career.js?v={{ asset_v }}"></script>
