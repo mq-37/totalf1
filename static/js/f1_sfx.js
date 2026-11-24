@@ -296,7 +296,7 @@
       try { await ac.resume(); } catch (_) {}
     }
 
-    const cacheKey = `${engineMode}|${role}|${o.archetype || ""}|${o.driverName || ""}|${o.tone || ""}|${rawText.slice(0, 180)}`;
+    const cacheKey = `${engineMode}|${role}|${o.archetype || ""}|${o.driverName || ""}|${o.engineerName || ""}|${o.nationality || ""}|${o.tone || ""}|${rawText.slice(0, 180)}`;
     voiceBusy = true;
 
     try {
@@ -313,6 +313,8 @@
             role,
             archetype: o.archetype || "",
             driver_name: o.driverName || "",
+            engineer_name: o.engineerName || "",
+            nationality: o.nationality || "",
             tone: o.tone || "",
             engine: engineMode,
             reply_text: o.replyText || "",
@@ -1056,6 +1058,7 @@
       F1Sfx.speak({
         text: "Copy, box this lap — box opposite Hamilton. Diff entry plus two, brake balance one click forward.",
         role: "engineer",
+        engineerName: "Peter Bonnington",
         tone: "warn",
         channel: "radio",
         force: true,

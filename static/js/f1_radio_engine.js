@@ -478,6 +478,8 @@
             role: isBoard ? "stewards" : (payload.isEngineer ? "engineer" : "driver"),
             archetype: payload.archetype || "",
             driverName: payload.driverName || "",
+            engineerName: payload.engineerName || "",
+            nationality: payload.nationality || "",
             tone: payload.tone || "info",
             channel: isBoard ? "stewards" : "radio",
             priority: "high",
@@ -529,6 +531,8 @@
           isEngineer: msg.speaker !== (car.code3 || (car.card && car.card.code3) || "DRV"),
           archetype: (car.dna && car.dna.radio_archetype) || "",
           driverName: car.name || car.cleanName || (car.card && car.card.clean_name) || "",
+          engineerName: (car.engineer && car.engineer.name) || "",
+          nationality: (car.card && car.card.nationality) || (car.driver && car.driver.nationality) || "",
           actions: ctx && ctx.actions,
         });
         return true;

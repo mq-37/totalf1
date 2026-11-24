@@ -121,6 +121,8 @@ async def api_tts_speak(request: Request):
             tone=str(body.get("tone") or ""),
             engine=str(body.get("engine") or "auto"),
             reply_text=str(body.get("reply_text") or ""),
+            engineer_name=str(body.get("engineer_name") or ""),
+            nationality=str(body.get("nationality") or ""),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -133,6 +135,7 @@ async def api_tts_speak(request: Request):
         headers={
             "X-TTS-Engine": res["engine"],
             "X-TTS-Voice": res["voice"],
+            "X-TTS-Accent": res.get("accent", "British"),
             "X-TTS-Cached": "1" if res["cached"] else "0",
             "Cache-Control": "public, max-age=3600",
         },
