@@ -218,6 +218,51 @@
           tone: "info",
           category: "strategy",
         };
+      case "blue_flag":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `Blue flags coming up — ${rival} is ${(ctx && ctx.gapS ? ctx.gapS.toFixed(1) : "2.1")} seconds behind lapping us. Let them pass cleanly after the apex, don't risk a 5-second penalty!`,
+          engReply: `${drv}: Copy, watching my mirrors — moving off-line on exit.`,
+          tone: "info",
+          category: "race",
+        };
+      case "meatball":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `Black and Orange Meatball Flag from Race Control! Front wing endplate is dragging — box this lap for a new nose, mandatory FIA safety order!`,
+          engReply: `${drv}: Understood, pitting this lap — car feels super light on the front axle anyway.`,
+          tone: "warn",
+          category: "mechanical",
+        };
+      case "penalty_serve":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `Box this lap — remember we have a ${ctx?.penS || 5}-second FIA penalty to serve motionless in the box! Crew will stay hands-off until the clock clears.`,
+          engReply: `${drv}: Copy, hitting my marks cleanly — give me the countdown.`,
+          tone: "warn",
+          category: "strategy",
+        };
+      case "give_place_back":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `FIA Race Control noted leaving the track to pass ${rival} — give the position back immediately on the straight to avoid a 5-second penalty!`,
+          engReply: `${drv}: Fine, lifting off to hand it back — I'll get him cleanly with DRS next lap!`,
+          tone: "warn",
+          category: "race",
+        };
+      case "unsafe_release":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `Stewards handed us a 5-second penalty for unsafe release in the fast lane — head down and push to build a 5-second gap behind!`,
+          engReply: `${drv}: Copy that — Strat Mode 2, pushing flat out!`,
+          tone: "warn",
+          category: "strategy",
+        };
       case "safety_car":
         return {
           speaker: eng.short,

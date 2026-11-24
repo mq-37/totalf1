@@ -115,6 +115,7 @@
     debrisZones: [],
     nextDebrisId: 1,
     yellowSector: 0,
+    yellowLevel: 1, // 1 = Single Yellow, 2 = Double Waved Yellow (ISC App. H)
     yellowTimer: 0,
     bestSectors: [999, 999, 999],
     fastestLap: { time: 999, driver: "", code3: "" },
@@ -1154,7 +1155,7 @@
       else if (fs.chequeredFlag) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-finish"; flagEl.innerHTML = `<i class="fas fa-flag-checkered"></i> FINISHING (${fs.chequeredFinishedCount}/${fs.chequeredRunningCount})`; }
       else if (fs.safetyCarLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-car-side"></i> SAFETY CAR`; }
       else if (fs.vscLaps > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-sc"; flagEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> VSC`; }
-      else if (fs.yellowSector > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
+      else if (fs.yellowSector > 0) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-yellow"; flagEl.innerHTML = fs.yellowLevel === 2 ? `<i class="fas fa-exclamation-triangle"></i> DBL YELLOW S${fs.yellowSector}` : `<i class="fas fa-exclamation"></i> YELLOW S${fs.yellowSector}`; }
       else if (fs.drsEnabled) { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN · DRS ON`; }
       else { flagEl.style.cssText = ""; flagEl.className = "sim-flag-pill flag-green"; flagEl.innerHTML = `<i class="fas fa-flag"></i> GREEN FLAG`; }
     }
@@ -1545,6 +1546,12 @@
         let bestSoFar = Math.min(...active.map((x) => x.bestLap), 999);
         active.forEach((e) => {
           if (tick === 1 || Math.random() < 0.58) {
+            // Authentic FIA Double-Yellow Qualifying Lap Deletion (~3.5% mid-session hazard!)
+            if (tick >= 3 && Math.random() < 0.035 && e.bestLap < 900) {
+              e.sectors = ["yellow", "yellow", "yellow"];
+              e.status = "DEL · DBL YEL";
+              return;
+            }
             const t = simLapFor(e, stg.num, tick / TICKS_PER_STAGE);
             if (t < e.bestLap) {
               const isPurp = t < bestSoFar;
@@ -1658,6 +1665,19 @@
     // FIA 5-Red-Lights Standing Start Sequence (0 kph grid hold -> randomized hold -> LIGHTS OUT!)
     if (fs.startSeq && fs.startSeq.active && window.F1TrackArchitect) {
       const sRes = window.F1TrackArchitect.stepStandingStart(fs.startSeq, fs.cars, dt, fastMode);
+      // Official FIA Jump Start / False Start Grid-Sensor Detection (+5s unserved time penalty!)
+      if (Array.isArray(sRes.jumpStarters) && sRes.jumpStarters.length) {
+        sRes.jumpStarters.forEach((jc) => {
+          jc.unservedPenaltyS = (jc.unservedPenaltyS || 0) + 5;
+          jc.timePenaltyS = (jc.timePenaltyS || 0) + 5;
+          addCommentary(1, `⚖️ FIA FALSE START! Grid sensors detect ${jc.card.clean_name} moving before Lights Out — +5s Time Penalty!`, "warn");
+          if (!fastMode) {
+            showStewardsBanner("⚖️ FIA STEWARDS · FALSE START (+5s)", `${jc.card.clean_name} — Moved prior to start signal (Art. 48.1)`, "penalty");
+            playSfx("radioAlert");
+          }
+          if (fs.telemetry) fs.telemetry.addEvent(1, "penalty", `${jc.card.code3} Jump Start`, "+5s False Start Penalty", jc.idx);
+        });
+      }
       if (sRes.newLight > 0 && !fastMode) {
         playSfx("startLight", sRes.newLight);
         updateChyron(`🔴 ${"●".repeat(sRes.newLight)}${"○".repeat(5 - sRes.newLight)} · ${fs.startSeq.bannerLabel || "FIA STANDING START"}`);
@@ -1689,7 +1709,7 @@
     fs.gripPct = Math.min(100, 38 + (leaderLap / Math.max(1, fs.totalLaps)) * 62);
     if (fs.yellowTimer > 0) {
       fs.yellowTimer -= dt;
-      if (fs.yellowTimer <= 0) fs.yellowSector = 0;
+      if (fs.yellowTimer <= 0) { fs.yellowSector = 0; fs.yellowLevel = 1; }
     }
 
     const canOvertakeAid = Boolean(era.drs_enabled || era.override_mode);
@@ -1743,6 +1763,30 @@
       if (car.inPit > 0) {
         car.inPit -= simDt;
         if (car.inPit <= 0) {
+          // Clear any served pit-box time penalty + Meatball repair flag on pit exit!
+          if (car.servingPenaltyS > 0) {
+            car.unservedPenaltyS = Math.max(0, (car.unservedPenaltyS || 0) - car.servingPenaltyS);
+            car.timePenaltyS = Math.max(0, (car.timePenaltyS || 0) - car.servingPenaltyS);
+            if (!fastMode && car.pos <= 12) addCommentary(car.lap + 1, `⏱️ ${car.card.clean_name} cleanly serves +${car.servingPenaltyS}s FIA penalty motionless in pit box before tyre swap!`, "info");
+            car.servingPenaltyS = 0;
+            car.pitPenaltyHoldFrac = 0;
+          }
+          if (car.meatballFlag) {
+            car.meatballFlag = false;
+            car.wingDamaged = false;
+            if (!fastMode) addCommentary(car.lap + 1, `🔧 ${car.card.clean_name} replaces damaged nose cone — Black & Orange Meatball Flag cleared!`, "info");
+          }
+          // Authentic FIA Unsafe Pit Release Check: exiting pit box within 1.2s of another car in fast lane!
+          const otherInPit = fs.cars.find((o) => o.idx !== car.idx && !o.dnf && o.inPit > 0 && o.inPit < 2.2);
+          if (otherInPit && Math.random() < 0.32) {
+            car.unservedPenaltyS = (car.unservedPenaltyS || 0) + 5;
+            car.timePenaltyS = (car.timePenaltyS || 0) + 5;
+            addCommentary(car.lap + 1, `⚖️ FIA UNSAFE RELEASE! ${car.card.clean_name} released into the path of ${otherInPit.card.clean_name} in the fast lane — +5s Penalty!`, "warn");
+            if (!fastMode) {
+              showStewardsBanner("⚖️ FIA STEWARDS · UNSAFE RELEASE (+5s)", `${car.card.clean_name} released into path of ${otherInPit.card.code3} (Art. 34.14)`, "penalty");
+              if (fs.radio) fs.radio.emit("unsafe_release", { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, engineer: car.engineer, dna: car.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: car.lap }, { lap: car.lap + 1 });
+            }
+          }
           car.inPit = 0; car.pitDuration = 0;
           car.compound = car.nextCompound;
           car.tyreLife = 100;
@@ -1795,6 +1839,7 @@
         scActive: fs.safetyCarLaps > 0,
         vscActive: fs.vscLaps > 0,
         yellowSector: fs.yellowSector,
+        yellowLevel: fs.yellowLevel || 1,
         drsEnabled: fs.drsEnabled,
         chaosMult: fs.chaosMult,
       });
@@ -1976,7 +2021,7 @@
           fs.stats.dnfs += 1;
           fs.stats.incidents += 1;
           const secNum = Math.floor((((car.totalProg % 1) + 1) % 1) * 3) + 1;
-          fs.yellowSector = secNum; fs.yellowTimer = 6.5;
+          fs.yellowSector = secNum; fs.yellowLevel = 2; fs.yellowTimer = 6.5;
           const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || `Sector ${secNum}`;
           addCommentary(car.lap + 1, `💨 MECHANICAL DNF! ${car.card.clean_name} pulls off smoking at ${corner} — Yellow Flag S${secNum}!`, "warn");
           if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "dnf", `${car.card.code3} DNF`, `Smoking mechanical retirement at ${corner}`, car.idx);
@@ -2003,6 +2048,7 @@
               }
               addCommentary(car.lap + 1, `🏁 BLACK & WHITE FLAG: ${car.card.clean_name} warned for track limits (Strike 3/3)!`, "info");
             } else if (car.trackLimitStrikes >= 4 && (car.trackLimitStrikes - 4) % 2 === 0) {
+              car.unservedPenaltyS = (car.unservedPenaltyS || 0) + 5;
               car.timePenaltyS = (car.timePenaltyS || 0) + 5;
               if (!fastMode) {
                 showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY (ART. 33.3)", `${car.card.clean_name} — Exceeding Track Limits (Strike ${car.trackLimitStrikes})`, "penalty");
@@ -2032,11 +2078,41 @@
           weatherTarget = "slick";
         }
 
+        // FIA Blue Flag 3.0s Radio Pre-Warning!
+        if (!fastMode && car.blueFlagPreWarn && car.blueFlagPreTarget && (!car._bfWarnAt || fs.raceClock - car._bfWarnAt > 50)) {
+          car._bfWarnAt = fs.raceClock;
+          if (fs.radio && (car.idx === fs.focusIdx || car.blueFlagPreTarget.pos <= 3)) {
+            fs.radio.emit("blue_flag", { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, engineer: car.engineer, dna: car.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: car.lap }, { rival: car.blueFlagPreTarget.card.code3, gapS: car.blueFlagPreGapS || 2.2, lap: car.lap + 1 });
+          }
+        }
+
+        // FIA Black & Orange Disc ("Meatball") Flag for dangerous dragging front-wing damage!
+        if (car.wingDamaged && !car.meatballFlag && lapsLeft >= 3 && Math.random() < 0.55) {
+          car.meatballFlag = true;
+          car.meatballDeadlineLap = car.lap + 2;
+          addCommentary(car.lap + 1, `⚫🟠 FIA MEATBALL FLAG! ${car.card.clean_name}'s front wing endplate is dragging dangerously — mandatory pit stop for nose repair!`, "warn");
+          if (!fastMode) {
+            showStewardsBanner("⚫🟠 FIA BLACK & ORANGE (MEATBALL) FLAG", `${car.card.clean_name} — Dangerous damage, MUST box within 2 laps (ISC App. H)`, "penalty");
+            if (fs.radio) fs.radio.emit("meatball", { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, engineer: car.engineer, dna: car.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: car.lap }, { lap: car.lap + 1 });
+          }
+        }
+        // FIA Black Flag (DSQ) if a car ignores a mandatory Meatball Flag past the deadline!
+        if (car.meatballFlag && car.lap > (car.meatballDeadlineLap || 999)) {
+          car.dsq = true;
+          car.dnf = true;
+          car.dnfReason = "DSQ (Black Flag)";
+          car.cleared = true;
+          fs.stats.dnfs += 1;
+          addCommentary(car.lap + 1, `⬛ FIA BLACK FLAG (DSQ)! ${car.card.clean_name} disqualified for ignoring mandatory Meatball repair flag!`, "warn");
+          if (!fastMode) showStewardsBanner("⬛ FIA BLACK FLAG · DISQUALIFIED", `${car.card.clean_name} — Failed to pit under Black & Orange Flag`, "penalty");
+          return;
+        }
+
         const mustFulfillRule = era.two_compound_rule !== false && !car.usedWet && car.dryCompoundsUsed.size < 2 && lapsLeft <= Math.max(3, Math.round(fs.totalLaps * 0.14)) && lapsLeft >= 2;
         const fuelPit = era.refuelling && Number.isFinite(car.fuelKg) && car.fuelKg <= (era.fuel_burn_per_lap_kg || 2.3) * 1.8 && lapsLeft >= 2;
         const scOpportunistic = (fs.safetyCarLaps > 0 || fs.vscLaps > 0) && car.tyreLife < 58 && lapsSincePit >= minStint && lapsLeft >= 4;
         const cliffPit = car.tyreLife < (car.aiPlan === "aggressive" ? 27 : 22) && lapsLeft >= 3 && lapsSincePit >= minStint;
-        const wingPit = car.wingDamaged && lapsLeft >= 4 && lapsSincePit >= 2;
+        const wingPit = (car.meatballFlag && lapsLeft >= 2) || (car.wingDamaged && lapsLeft >= 4 && lapsSincePit >= 2);
         // Real Undercut Strategy: Stuck within 2.4s behind a rival in pit window -> box 1 lap early on fresh rubber!
         const rivalAhead = sortedNow[Math.max(0, (car.pos || 2) - 2)];
         const gapToRival = (rivalAhead && rivalAhead.idx !== car.idx && !rivalAhead.dnf) ? (rivalAhead.totalProg - car.totalProg) * fs.circuit.base_lap_s : 99;
@@ -2046,7 +2122,18 @@
           // Real Teammate Double-Stacking in Shared Pit Box (+3.2s hold!)
           const teammate = fs.cars.find((o) => o.idx !== car.idx && !o.dnf && o.card.hero_team === car.card.hero_team && o.inPit > 0);
           const isDoubleStack = Boolean(teammate);
-          let extraPit = (car.wingDamaged ? 4.5 : 0) + (isDoubleStack ? 3.2 : 0);
+          // Official FIA Rule: Unserved +5s / +10s Time Penalties MUST be served motionless in pit box before crew touches car!
+          const servePenS = Math.min(10, Math.round(car.unservedPenaltyS || 0));
+          let extraPit = (car.wingDamaged ? 4.5 : 0) + (isDoubleStack ? 3.2 : 0) + servePenS;
+          car.servingPenaltyS = servePenS;
+          if (servePenS > 0) {
+            car.pitPenaltyHoldFrac = Math.min(0.54, servePenS / Math.max(10, (effPit + extraPit) * 0.42));
+            if (!fastMode && fs.radio && (car.idx === fs.focusIdx || car.pos <= 8)) {
+              fs.radio.emit("penalty_serve", { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, engineer: car.engineer, dna: car.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: car.lap }, { penS: servePenS, lap: car.lap + 1 });
+            }
+          } else {
+            car.pitPenaltyHoldFrac = 0;
+          }
           if (isDoubleStack) {
             car.pitErrorReason = "Double-Stack +3.2s";
             if (!fastMode && car.pos <= 10) addCommentary(car.lap + 1, `⚠ DOUBLE STACK! ${car.card.clean_name} queues +3.2s behind teammate ${teammate.card.code3} in the ${car.card.hero_team} pit box!`, "warn");
@@ -2066,11 +2153,17 @@
           } else {
             ENG.applyPsychologyEvent(car, "fast_pit");
           }
-          // Rare Pit-Lane Speeding Stewards Penalty (+5s, ~1.8% on aggressive push entry)
+          // Official FIA Pit-Lane Speed Limit (60 kph tight street circuits vs 80 kph standard) & Tiered Penalties!
           if (car.paceMode === "push" && Math.random() < 0.018) {
-            car.timePenaltyS = (car.timePenaltyS || 0) + 5;
-            if (!fastMode) showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY", `${car.card.clean_name} — Speeding in Pit Lane (84.2 kph in 80 kph zone)`, "penalty");
-            addCommentary(car.lap + 1, `⚖️ FIA PENALTY: +5s for ${car.card.clean_name} — Pit-Lane Speeding!`, "warn");
+            const street60 = ["monaco", "singapore", "zandvoort", "melbourne", "miami", "baku"].includes(fs.circuit.id);
+            const lim = street60 ? 60 : 80;
+            const overKph = 1.4 + Math.random() * 8.5;
+            const penTier = overKph >= 6.0 ? 10 : 5;
+            const penLbl = overKph >= 6.0 ? "+10s Stop-Go" : "+5s Penalty";
+            car.unservedPenaltyS = (car.unservedPenaltyS || 0) + penTier;
+            car.timePenaltyS = (car.timePenaltyS || 0) + penTier;
+            if (!fastMode) showStewardsBanner(`⚖️ FIA STEWARDS · ${penLbl.toUpperCase()}`, `${car.card.clean_name} — Speeding in Pit Lane (${(lim + overKph).toFixed(1)} in ${lim} kph zone)`, "penalty");
+            addCommentary(car.lap + 1, `⚖️ FIA PENALTY: ${penLbl} for ${car.card.clean_name} — Pit-Lane Speeding (${(lim + overKph).toFixed(1)}/${lim} kph)!`, "warn");
           }
           car.inPit = effPit + extraPit;
           car.pitDuration = car.inPit;
@@ -2125,30 +2218,42 @@
           : `${ev.type.toUpperCase()} AT ${corner.toUpperCase()} · ${ev.chaser.card.code3} & ${ev.target.card.code3}`;
         const clipId = fastMode ? null : saveReplayClip(clipTitle, (ev.culprit || ev.target).idx);
 
-        if (ev.type === "fia_breach") {
+        if (ev.type === "fia_breach" || ev.type === "blue_flag_ignore") {
+          if (ev.penaltyS && ev.culprit) {
+            ev.culprit.unservedPenaltyS = (ev.culprit.unservedPenaltyS || 0) + ev.penaltyS;
+            ev.culprit.timePenaltyS = (ev.culprit.timePenaltyS || 0) + ev.penaltyS;
+          }
           if (!fastMode) {
             showStewardsBanner(`⚖️ FIA RACE CONTROL · ${ev.article || "APP. L CH. IV"}`, `${ev.culprit.card.clean_name} — ${ev.fiaRule} (${ev.verdict})`, ev.penaltyS ? "penalty" : "info");
             playSfx("radioAlert");
           }
-          emitBroadcastCall("fia_mub", { lap: leaderLap + 1, culprit: ev.culprit.card.clean_name, victim: ev.chaser.card.clean_name, article: ev.article, verdict: ev.verdict, clipId });
+          if (ev.type === "blue_flag_ignore") {
+            addCommentary(leaderLap + 1, `🔵⚖️ FIA PENALTY: +5s for ${ev.culprit.card.clean_name} — Ignoring Blue Flags (3 marshal posts impeding ${ev.chaser.card.code3})!`, "warn", clipId);
+          } else {
+            emitBroadcastCall("fia_mub", { lap: leaderLap + 1, culprit: ev.culprit.card.clean_name, victim: ev.chaser.card.clean_name, article: ev.article, verdict: ev.verdict, clipId });
+          }
           return;
         }
 
         fs.stats.incidents += 1;
+        if (ev.penaltyS && ev.culprit) {
+          ev.culprit.unservedPenaltyS = (ev.culprit.unservedPenaltyS || 0) + ev.penaltyS;
+          ev.culprit.timePenaltyS = (ev.culprit.timePenaltyS || 0) + ev.penaltyS;
+        }
         ENG.applyPsychologyEvent(ev.chaser, "mistake");
         ENG.applyPsychologyEvent(ev.target, "mistake");
         if (ev.type === "contact") {
           addCommentary(leaderLap + 1, `💥 WHEEL-TO-WHEEL! ${aName} & ${bName} bang wheels at ${corner} — ${ev.verdict}!`, "warn", clipId);
           if (!fastMode) runAutoTvDirector(sortedNow, ev.chaser.idx, `💥 CONTACT · ${ev.chaser.card.code3} & ${ev.target.card.code3}`);
         } else if (ev.type === "spin") {
-          fs.yellowSector = ev.sector; fs.yellowTimer = 5.5;
+          fs.yellowSector = ev.sector; fs.yellowLevel = 1; fs.yellowTimer = 5.5;
           const penTxt = ev.penaltyS ? ` (${ev.fiaRule}: +${ev.penaltyS}s)` : ` (${ev.verdict})`;
           const msg = `🎙 CROFTY: SPIN AT ${corner.toUpperCase()}! ${aName} & ${bName} make contact${penTxt}!`;
           addCommentary(leaderLap + 1, msg, "warn", clipId);
           if (!fastMode) { showToast(msg, "warn"); playSfx("radioAlert"); runAutoTvDirector(sortedNow, ev.target.idx, `🌀 SPIN AT ${corner.toUpperCase()}!`); }
           if (fs.telemetry) fs.telemetry.addEvent(leaderLap + 1, "incident", `Spin at ${corner}`, `${ev.chaser.card.code3} & ${ev.target.card.code3}`, ev.target.idx);
         } else if (ev.type === "crash") {
-          fs.yellowSector = ev.sector; fs.yellowTimer = 8.5;
+          fs.yellowSector = ev.sector; fs.yellowLevel = 2; fs.yellowTimer = 8.5;
           spawnDebrisZone(ev.target.totalProg, ev.target.latOffset, leaderLap + 1);
           let crashDnfs = 0;
           if (ev.target.dnf) { parkBreakdownCar(ev.target, "Collision", "crash"); fs.stats.dnfs += 1; crashDnfs += 1; }
@@ -2280,6 +2385,22 @@
               if (!fastMode && fs.radio && (passer.idx === fs.focusIdx || passer.pos <= 3)) {
                 fs.radio.emit("overtake", { code3: passer.card.code3, name: passer.card.clean_name, color: passer.card.hero_color, confidence: passer.confidence, engineer: passer.engineer, lap: passer.lap }, { rival: victim.card.code3, lap: passer.lap + 1 });
               }
+              // FIA Art. 33.3: Leaving the track & gaining a lasting advantage -> voluntary give-back OR +5s Stewards Penalty!
+              if (passer.lap >= 2 && fs.wetness < 20 && Math.random() < 0.042) {
+                const givesBack = Math.random() < 0.58;
+                if (givesBack) {
+                  const tmpP = passer.totalProg;
+                  passer.totalProg = Math.min(passer.totalProg, victim.totalProg - 0.0012);
+                  victim.totalProg = Math.max(victim.totalProg, tmpP);
+                  addCommentary(passer.lap + 1, `⚖️ FIA RACE CONTROL: ${passer.card.clean_name} ran off-track at ${corner} — voluntarily gives P${passer.pos} back to ${victim.card.clean_name} to avoid a penalty!`, "info");
+                  if (!fastMode && fs.radio) fs.radio.emit("give_place_back", { idx: passer.idx, code3: passer.card.code3, name: passer.card.clean_name, color: passer.card.hero_color, engineer: passer.engineer, dna: passer.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: passer.lap }, { rival: victim.card.code3, lap: passer.lap + 1 });
+                } else {
+                  passer.unservedPenaltyS = (passer.unservedPenaltyS || 0) + 5;
+                  passer.timePenaltyS = (passer.timePenaltyS || 0) + 5;
+                  addCommentary(passer.lap + 1, `⚖️ FIA STEWARDS: +5s for ${passer.card.clean_name} — Leaving track & gaining a lasting advantage on ${victim.card.clean_name} at ${corner}!`, "warn");
+                  if (!fastMode) showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY", `${passer.card.clean_name} — Leaving track & gaining an advantage (Art. 33.3)`, "penalty");
+                }
+              }
             }
           }
         }
@@ -2348,8 +2469,16 @@
   function finishGrandPrix() {
     fs.finished = true;
     fs.running = false;
-    // Classify any remaining far-back lapped cars at race conclusion
+    // Classify any remaining far-back lapped cars at race conclusion + FIA Two Dry Tyre Compounds DSQ check!
+    const eraFin = fs.eraRule || ENG.DEFAULT_ERA_RULES;
+    const enforceTwoDry = eraFin.two_compound_rule !== false && fs.sprintPhase !== "sprint" && fs.totalLaps >= 8;
     fs.cars.forEach((c) => {
+      if (!c.dnf && enforceTwoDry && !c.usedWet && c.dryCompoundsUsed && c.dryCompoundsUsed.size < 2) {
+        c.dsq = true;
+        c.dnf = true;
+        c.dnfReason = "DSQ (1 Dry Compound)";
+        addCommentary(fs.totalLaps, `⬛ FIA POST-RACE DSQ: ${c.card.clean_name} disqualified — failed to run two distinct dry tyre specifications!`, "warn");
+      }
       if (!c.dnf && !c.finishedRace) {
         c.finishedRace = true;
         c.finishLaps = Math.min(fs.totalLaps - 1, Math.max(0, Math.floor(c.totalProg || 0)));
@@ -2829,7 +2958,7 @@
         circuit: fs.circuit,
         cars: fs.cars.map((c) => ({
           idx: c.idx, code3: c.card.code3, team: c.card.hero_team, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
-          inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
+          inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, pitPenaltyHoldFrac: c.pitPenaltyHoldFrac || 0, dnf: c.dnf, color: c.card.hero_color,
           wingDamaged: !!c.wingDamaged, parkedProg: c.parkedProg, parkedSide: c.parkedSide, parkedYawOff: c.parkedYawOff,
           breakdownKind: c.breakdownKind, smokeActive: c.smokeActive, cleared: !!c.cleared,
           liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
@@ -2856,6 +2985,9 @@
           redFlag: !!(fs.redFlag && fs.redFlag.active),
           debrisZones: fs.debrisZones,
           yellowSector: fs.yellowSector,
+          yellowLevel: fs.yellowLevel || 1,
+          blueFlagSectors: fs.cars.filter((c) => !c.dnf && c.blueFlagActive).map((c) => c.blueFlagSector || 1),
+          whiteFlagSectors: fs.cars.filter((c) => !c.dnf && (c.wingDamaged || c.meatballFlag)).map((c) => Math.floor((((c.totalProg % 1) + 1) % 1) * 3) + 1),
           chequered: fs.chequeredFlag || fs.finished,
           startSeq: fs.startSeq,
           top3: sorted3d.slice(0, 3).map((x) => ({ code3: x.card.code3, color: x.card.hero_color || "#e10600" })),
@@ -2920,7 +3052,7 @@
       fs.stats.incidents += 1;
       const curLap = Math.max(1, (cand.lap || 0) + 1);
       const secNum = Math.floor((((cand.totalProg % 1) + 1) % 1) * 3) + 1;
-      fs.yellowSector = secNum; fs.yellowTimer = 8.0;
+      fs.yellowSector = secNum; fs.yellowLevel = 2; fs.yellowTimer = 8.0;
       spawnDebrisZone(cand.totalProg, cand.latOffset, curLap);
       const victim = fs.cars.find((c) => !c.dnf && c.idx !== cand.idx);
       if (victim) victim.wingDamaged = true;

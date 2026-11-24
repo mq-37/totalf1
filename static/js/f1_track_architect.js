@@ -329,11 +329,12 @@
    *   0.68..0.78 : Gantry GREEN release + diagonal pull-out onto fast lane (0 -> 80 kph)
    *   0.78..1.00 : Accelerate down pit exit merge lane back onto circuit (80 -> 215 kph)
    */
-  function samplePitStopMotion(pitLayout, uRaw, boxIdx) {
+  function samplePitStopMotion(pitLayout, uRaw, boxIdx, penaltyHoldFrac) {
     if (!pitLayout || !pitLayout.boxes || !pitLayout.boxes.length) {
       return { x: 0, z: 0, tx: 1, tz: 0, yaw: 0, speedKph: 80, phase: "entry", stopped: false, jackLift: 0, crewActive: false, gantryState: "off", boxIdx: 0 };
     }
     const u = clamp(Number(uRaw || 0), 0, 1);
+    const pHold = clamp(Number(penaltyHoldFrac || 0), 0, 0.58);
     const bIdx = Math.abs(Math.floor(Number(boxIdx || 0))) % pitLayout.boxes.length;
     const box = pitLayout.boxes[bIdx];
     const pitSide = pitLayout.pitSide;
@@ -383,8 +384,24 @@
     }
 
     if (u < 0.68) {
-      // FULL STATIONARY STOP (0 kph!) with pneumatic jack lift & pit crew wheel guns!
-      const serviceF = (u - 0.34) / 0.34;
+      // FULL STATIONARY STOP (0 kph!) — FIA Penalty Hold (crew hands-off!) followed by pneumatic jack & wheel guns!
+      const rawF = (u - 0.34) / 0.34;
+      if (pHold > 0.01 && rawF < pHold) {
+        return {
+          x: box.x, z: box.z, tx: box.tx, tz: box.tz,
+          yaw: box.yaw,
+          speedKph: 0,
+          phase: "penalty_hold",
+          stopped: true,
+          servingPenalty: true,
+          jackLift: 0,
+          crewActive: false,
+          serviceProgress: 0,
+          gantryState: "red",
+          boxIdx: bIdx,
+        };
+      }
+      const serviceF = pHold > 0.01 ? clamp((rawF - pHold) / Math.max(0.1, 1 - pHold), 0, 1) : rawF;
       const jackLift = Math.sin(clamp(serviceF, 0, 1) * Math.PI) * 0.085;
       const gantryState = serviceF > 0.82 ? "amber" : "red";
       return {
@@ -393,6 +410,7 @@
         speedKph: 0,
         phase: "service",
         stopped: true,
+        servingPenalty: false,
         jackLift,
         crewActive: true,
         serviceProgress: serviceF,
@@ -793,15 +811,18 @@
       const launchSkill = clamp((clutch * 0.6 + pace * 0.4) / 100, 0.45, 0.99);
       const jitter = (Math.random() - 0.5) * 0.08;
       const antiStall = Math.random() < 0.025; // Rare 2.5% clutch anti-stall drama!
+      const jumpStart = !antiStall && i > 0 && Math.random() < 0.018; // Rare ~1.8% FIA False/Jump Start!
       const dnaReact = (car.dna && Number.isFinite(Number(car.dna.launch_reaction_s))) ? Number(car.dna.launch_reaction_s) : null;
       const baseReact = dnaReact != null ? dnaReact : (0.34 - launchSkill * 0.16);
       car.launchReactionS = antiStall
         ? (0.58 + Math.random() * 0.28)
-        : clamp(baseReact + jitter, 0.14, 0.42);
+        : (jumpStart ? 0.08 : clamp(baseReact + jitter, 0.14, 0.42));
       car.launchTraction = antiStall
         ? 0.72
         : clamp(0.86 + launchSkill * 0.22 + (dnaReact != null ? (0.22 - dnaReact) * 0.45 : 0) + (Math.random() - 0.5) * 0.06, 0.78, 1.18);
       car.launchAntiStall = antiStall;
+      car.launchJumpStart = jumpStart;
+      car.launchJumpFlagged = false;
       car.launchScale = 0;
       car.launchElapsed = 0;
     });
@@ -856,9 +877,18 @@
         seq.prevLitCount = lit;
       }
 
-      // Keep all grid cars strictly stationary at 0 kph with revving engines!
+      // Keep all grid cars strictly stationary at 0 kph with revving engines (except rare FIA Jump Start creep!)
+      const jumpStarters = [];
       (cars || []).forEach((c) => {
         if (c.dnf) return;
+        if (c.launchJumpStart && !c.launchJumpFlagged && lit >= 5 && seq.elapsed >= seq.lightsOutAt - 0.22) {
+          c.launchJumpFlagged = true;
+          c.totalProg += 0.00065; // Visible premature grid box creep detected by FIA sensors!
+          c.liveKph = 14;
+          c.aiStatus = "⚠ JUMP START!";
+          jumpStarters.push(c);
+          return;
+        }
         c.liveKph = 0;
         c.livePhysKph = 0;
         c.liveGear = 1;
@@ -874,7 +904,7 @@
         seq.lightsOutJustFired = true;
         lightsOutNow = true;
       }
-      return { holding: !seq.lightsOut, newLight, lightsOutNow };
+      return { holding: !seq.lightsOut, newLight, lightsOutNow, jumpStarters };
     }
 
     // Post-LIGHTS OUT: ramp each car smoothly from 0 kph based on Reaction Time + Traction DNA!

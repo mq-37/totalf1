@@ -2260,15 +2260,31 @@
         });
       }
 
-      // Animate Trackside FIA Digital Marshal Flag Panels (Red Flag / Safety Car / Yellow Sector!)
+      // Animate Trackside FIA Digital Marshal LED Flag Panels (ISC Appendix H: Red / Double-Yellow / Yellow / Blue / Debris Y-R / White!)
       if (state.marshalPanels && state.marshalPanels.length) {
         const blinkOn = Math.floor(state.elapsed * 4.5) % 2 === 0;
+        const fastBlink = Math.floor(state.elapsed * 9.0) % 2 === 0;
+        const blueSecs = Array.isArray(rs.blueFlagSectors) ? rs.blueFlagSectors : [];
+        const whiteSecs = Array.isArray(rs.whiteFlagSectors) ? rs.whiteFlagSectors : [];
+        const debrisSecs = debrisZones.map((dz) => Math.floor((((dz.prog || 0) % 1) + 1) % 1 * 3) + 1);
         for (let mi = 0; mi < state.marshalPanels.length; mi++) {
           const mp = state.marshalPanels[mi];
           if (rs.redFlag) {
             mp.mat.color.setHex(blinkOn ? 0xef4444 : 0x7f1d1d);
+          } else if (rs.yellowSector > 0 && mp.sector === rs.yellowSector && rs.yellowLevel === 2) {
+            // Double Waved Yellow: high-urgency double-pulse amber/yellow!
+            mp.mat.color.setHex(fastBlink ? 0xfacc15 : 0xd97706);
           } else if (rs.scActive || rs.vscActive || (rs.yellowSector > 0 && mp.sector === rs.yellowSector)) {
             mp.mat.color.setHex(blinkOn ? 0xfacc15 : 0x713f12);
+          } else if (blueSecs.includes(mp.sector)) {
+            // FIA Blue Flag LED Panel (Pantone 298C Electric Blue!)
+            mp.mat.color.setHex(blinkOn ? 0x0ea5e9 : 0x0369a1);
+          } else if (debrisSecs.includes(mp.sector)) {
+            // Yellow-Red Striped Surface / Debris warning!
+            mp.mat.color.setHex(blinkOn ? 0xfacc15 : 0xef4444);
+          } else if (whiteSecs.includes(mp.sector)) {
+            // White Flag: Slow/limping car ahead!
+            mp.mat.color.setHex(0xf8fafc);
           } else {
             mp.mat.color.setHex(0x111827);
           }
@@ -2357,7 +2373,7 @@
         const inPit = car.inPit > 0 && car.pitDuration > 0;
         const pitU = inPit ? (1 - Math.max(0, Math.min(1, car.inPit / car.pitDuration))) : 0;
         const pitMotion = (inPit && ARCH && state.layout && state.layout.pitLayout)
-          ? ARCH.samplePitStopMotion(state.layout.pitLayout, pitU, car.pitBoxIdx != null ? car.pitBoxIdx : (car.idx % 10))
+          ? ARCH.samplePitStopMotion(state.layout.pitLayout, pitU, car.pitBoxIdx != null ? car.pitBoxIdx : (car.idx % 10), car.pitPenaltyHoldFrac || 0)
           : null;
 
         let wx, wz, trackY = 0, slopePitch = 0, bankRad = 0, heaveY = 0.06, yaw = 0, pitchRad = 0, rollRad = 0, dyn = null;

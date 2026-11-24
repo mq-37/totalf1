@@ -2223,7 +2223,8 @@
       let ahead = null, aheadDs = Infinity, aheadGapS = 99;
       let behind = null, behindDs = Infinity, behindGapS = 99;
       let hazard = null, hazardDs = Infinity;
-      let blueFlagLeader = null, blueFlagDs = Infinity;
+      let blueFlagLeader = null, blueFlagDs = Infinity, blueFlagGapS = Infinity;
+      let blueFlagPreLeader = null, blueFlagPreGapS = Infinity;
       const sideRivals = [];
       const nearby = [];
 
@@ -2253,10 +2254,18 @@
             behindDs = -ds;
             behindGapS = gapS;
           }
-          // FIA Blue Flag: faster car at least ~0.45 laps ahead of us is closing rapidly from behind!
-          if ((other.totalProg - car.totalProg) > 0.45 && -ds < 62 && -ds < blueFlagDs) {
-            blueFlagLeader = other;
-            blueFlagDs = -ds;
+          // Official FIA Blue Flag System (ISC App. H & L):
+          //   - 3.0s Pre-Warning -> pit wall warns backmarker on radio
+          //   - < 1.25s (or < 60m) -> Blue LED marshal panels & steering wheel lights activate!
+          if ((other.totalProg - car.totalProg) > 0.45) {
+            if ((gapS <= 1.25 || -ds < 60) && -ds < blueFlagDs) {
+              blueFlagLeader = other;
+              blueFlagDs = -ds;
+              blueFlagGapS = gapS;
+            } else if (gapS <= 3.0 && gapS < blueFlagPreGapS) {
+              blueFlagPreLeader = other;
+              blueFlagPreGapS = gapS;
+            }
           }
         }
         // Deadband hysteresis on side-by-side FIGHT prevents rapid fight <-> attack boundary flapping!
@@ -2313,6 +2322,12 @@
       let hardOverride = false;
 
       // ---- HARD SAFETY & FIA SPORTING CODE OVERRIDES ----
+      car.blueFlagActive = false;
+      car.blueFlagPreWarn = Boolean(blueFlagPreLeader && !blueFlagLeader && !inYellowZone);
+      car.blueFlagPreTarget = car.blueFlagPreWarn ? blueFlagPreLeader : null;
+      car.blueFlagPreGapS = blueFlagPreGapS;
+      if (!blueFlagLeader || inYellowZone) car.blueFlagHoldS = 0;
+
       if (hazard) {
         const hPose = sampleTrack(geom, hazard.totalProg);
         const hLat = hazard.latOffset || 0;
@@ -2330,25 +2345,56 @@
         car.aiCommitTimer = 0.85;
         hardOverride = true;
       } else if (blueFlagLeader && !inYellowZone) {
-        // FIA Blue Flag: Lapped backmarker smoothly yields off the racing line so leaders pass cleanly!
-        const yieldSign = (baseLat >= 0 ? -1 : 1);
-        targetLat = Math.max(-4.4, Math.min(4.4, yieldSign * 4.15));
-        speedMod = 0.945;
-        bState = "blue_flag";
-        bTag = "BLUE";
-        obsBadge = "🔵 BLUE FLAG";
-        obsDetail = `YIELDING TO LAPPING LEADER ${getCode(blueFlagLeader)}`;
+        // FIA Blue Flag (<1.25s): Lapped backmarker yields off the racing line!
+        car.blueFlagActive = true;
+        car.blueFlagSector = curSec;
+        car.blueFlagHoldS = (car.blueFlagHoldS || 0) + dt;
+        // Stubborn backmarker (high defensive craft or mid-fight) may hesitate briefly -> 3-Post Ignoring Blue Flag Penalty!
+        const stubborn = sideRivals.length > 0 || ((car.dna && car.dna.defensive_craft > 86) && car.blueFlagHoldS < 4.4);
+        if (stubborn && car.blueFlagHoldS < 4.5) {
+          targetLat = baseLat;
+          speedMod = 0.99;
+          bState = "blue_flag";
+          bTag = "BLUE!";
+          obsBadge = "🔵 BLUE FLAG!";
+          obsDetail = `HOLDING UP LAPPING LEADER ${getCode(blueFlagLeader)} (${car.blueFlagHoldS.toFixed(1)}s)`;
+          if (car.blueFlagHoldS >= 4.0 && (!car.blueFlagPenAt || (o.raceClock || 0) - car.blueFlagPenAt > 45)) {
+            car.blueFlagPenAt = o.raceClock || 0;
+            events.push({
+              type: "blue_flag_ignore",
+              chaser: blueFlagLeader,
+              target: car,
+              culprit: car,
+              article: "ISC APP. H & L",
+              fiaRule: "Ignoring Blue Flags (3 Marshal Posts)",
+              verdict: "+5s Time Penalty",
+              penaltyS: 5,
+              x: poseNow.x,
+              y: poseNow.y,
+              sector: curSec,
+            });
+          }
+        } else {
+          const yieldSign = (baseLat >= 0 ? -1 : 1);
+          targetLat = Math.max(-4.4, Math.min(4.4, yieldSign * 4.15));
+          speedMod = 0.935;
+          bState = "blue_flag";
+          bTag = "BLUE";
+          obsBadge = "🔵 BLUE FLAG";
+          obsDetail = `YIELDING TO LAPPING LEADER ${getCode(blueFlagLeader)} (${Math.min(1.2, blueFlagGapS).toFixed(1)}s)`;
+        }
         car.aiCommitTimer = 0.75;
         hardOverride = true;
-      } else if (inYellowZone && ahead && aheadGapS < 0.65) {
+      } else if (inYellowZone && ((ahead && aheadGapS < 0.75) || (o.yellowLevel === 2 && !safetyActive))) {
         targetLat = baseLat;
-        speedMod = Math.min(speedMod, 0.96);
+        const isDblYel = !safetyActive && o.yellowLevel === 2 && o.yellowSector === curSec;
+        speedMod = Math.min(speedMod, isDblYel ? 0.86 : 0.95);
         bState = "hold";
-        bTag = "YELLOW";
-        obsBadge = "🟡 YELLOW";
+        bTag = isDblYel ? "DBL YEL" : "YELLOW";
+        obsBadge = isDblYel ? "🟡🟡 DBL YELLOW" : "🟡 YELLOW";
         obsDetail = safetyActive
           ? `SC / VSC DELTA · NO OVERTAKING ALLOWED`
-          : `YELLOW FLAG S${curSec} · HOLDING BEHIND ${getCode(ahead)}`;
+          : (isDblYel ? `DOUBLE WAVED YELLOW S${curSec} · HEAVY LIFT, BE PREPARED TO STOP` : `YELLOW FLAG S${curSec} · HOLDING BEHIND ${ahead ? getCode(ahead) : "HAZARD"}`);
         hardOverride = true;
       } else if (!inYellowZone && sideRivals.length > 0) {
         // PHYSICAL SIDE-BY-SIDE (2-Wide or 3-Wide): Leave a full car's width at all times!
