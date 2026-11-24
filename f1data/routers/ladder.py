@@ -84,6 +84,22 @@ async def api_ladder_setup(save_id: str, request: Request):
     return JSONResponse({**res, "view": leng.serialize_ladder_view(state)})
 
 
+@router.post("/api/ladder/{save_id}/weekend/practice")
+async def api_ladder_practice(save_id: str, request: Request):
+    from .. import weekend_engine as wk_eng
+    state = _load_or_404(save_id)
+    body = await request.json()
+    ok, msg, report = wk_eng.run_ladder_practice_session(
+        state,
+        session=str((body or {}).get("session") or "fp1"),
+        prog_d1=str((body or {}).get("prog_d1") or "track_acclim"),
+        prog_d2=str((body or {}).get("prog_d2") or "tyre_mgmt"),
+    )
+    if ok:
+        ldb.save_state(_base_dir(), state)
+    return JSONResponse({"ok": ok, "message": msg, "report": report, "view": leng.serialize_ladder_view(state)})
+
+
 @router.post("/api/ladder/{save_id}/qualify")
 async def api_ladder_qualify(save_id: str, request: Request):
     state = _load_or_404(save_id)

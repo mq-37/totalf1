@@ -54,6 +54,8 @@
       this.pauseBanner = null;
       this.pitWindowNotified = false;
       this.rainNotified = false;
+      this.radio = null;
+      this.lastAutosaveLap = 0;
     }
 
     initRace(view) {
@@ -62,7 +64,18 @@
       const st = view.state;
       const wk = st.weekend;
       this.tier = st.tier;
+      this.season = Number(st.season || 1);
+      this.roundNum = Number(st.round || 1);
       this.unlocks = (view.tier_config && view.tier_config.unlocks) || {};
+      // Strictly gate live team radio by tier unlock (Karting = ZERO radio!)
+      if (this.unlocks.live_radio && window.F1RadioEngine && this.cb.radioContainer) {
+        this.radio = window.F1RadioEngine.createRadioController(this.cb.radioContainer, {
+          sfxEnabled: () => false,
+          ttsEnabled: () => false,
+        });
+      } else {
+        this.radio = null;
+      }
       this.circuit = view.circuit || { id: "monza", name: wk.circuit_name, base_lap_s: 82, pit_loss_s: 21, pts: [] };
       this.totalLaps = Number(wk.laps || 15);
       this.pitLossS = Number(this.circuit.pit_loss_s || 20.5);
@@ -169,11 +182,42 @@
     togglePause(forceVal) {
       if (this.finished) return;
       this.paused = typeof forceVal === "boolean" ? forceVal : !this.paused;
-      if (!this.paused) {
+      if (this.paused) {
+        this._emitAutosave();
+      } else {
         this.pauseBanner = null;
         this.lastTs = performance.now();
       }
       this._emitHud();
+    }
+
+    _emitAutosave() {
+      if (!this.cb.onAutosave || this.finished) return;
+      const leadLap = Math.min(this.totalLaps, Math.max(1, Math.floor((this.cars[0]?.prog || 0) + 1)));
+      this.cb.onAutosave({
+        season: this.season || 1,
+        round: this.roundNum || 1,
+        tier: this.tier,
+        circuit_id: this.circuit ? this.circuit.id : "",
+        lap: leadLap,
+        total_laps: this.totalLaps,
+        wetness: Math.round(this.wetness),
+        safety_car_laps: this.safetyCarLaps,
+        cars: this.cars.map((c) => ({
+          driver_id: c.driver_id, code3: c.code3, pos: c.pos, prog: +c.prog.toFixed(3),
+          compound: c.compound, tyreLife: Math.round(c.tyreLife), dnf: c.dnf,
+        })),
+      });
+    }
+
+    _emitRadio(evType, car, ctx) {
+      if (!this.unlocks.live_radio || !this.radio || !car) return;
+      try {
+        this.radio.emit(evType, {
+          idx: 0, code3: car.code3, name: car.name, color: car.color,
+          team: car.team, confidence: car.trust || 72, lap: car.lap || 1,
+        }, ctx || {});
+      } catch (_) {}
     }
 
     toggleAutoPause() {
@@ -307,6 +351,8 @@
       }
       if (!this.rainNotified && this.wetness >= 26) {
         this.rainNotified = true;
+        const pCar = this.cars.find((c) => c.is_player && !c.dnf);
+        this._emitRadio("rain", pCar, { lap: Math.floor(leadProg) + 1 });
         this._triggerCriticalPause("RAIN ONSET!", `Track wetness crossed ${Math.round(this.wetness)}% — crossover to Intermediates approaching!`);
       }
 
@@ -444,6 +490,10 @@
       if (newLeadLap > prevLeadLap) {
         if (this.safetyCarLaps > 0) this.safetyCarLaps--;
         if (this.vscLaps > 0) this.vscLaps--;
+        if (newLeadLap >= 2 && newLeadLap - this.lastAutosaveLap >= 2) {
+          this.lastAutosaveLap = newLeadLap;
+          this._emitAutosave();
+        }
       }
 
       // Check Chequered Flag

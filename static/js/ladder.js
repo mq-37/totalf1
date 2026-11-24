@@ -7,6 +7,8 @@
   let selectedStartTier = "karting";
   let worldViewTier = null;
   let liveSim = null;
+  let radarWidget = null;
+  let fpRunner = null;
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
   const fmtMoney = (k) => {
@@ -261,7 +263,33 @@
       </div>
     ` : "";
 
-    prepBox.innerHTML = setupControls + qualiBlock + launchBlock;
+    const prules = currentView.practice_rules || { sessions: [], programmes: [] };
+    const doneFp = wk.completed_fp_sessions || [];
+    const nextFp = (prules.sessions || []).find((sx) => !doneFp.includes(sx));
+    const fpProgBlock = (!u.kart_tuning && prules.sessions && prules.sessions.length) ? `
+      <div class="ld-item" style="border-color:rgba(56,189,248,0.4)">
+        <div class="ld-item-top">
+          <strong>Practice Programmes (${esc(prules.label || "")})</strong>
+          <span class="ld-tag ld-tag-ok">Know ${wk.car_knowledge_pct || 20}% · Intel ${wk.strategy_intel_pct || 35}%</span>
+        </div>
+        <p>Completed: ${doneFp.length ? doneFp.map((x) => x.toUpperCase()).join(", ") : "None"} ${nextFp ? `· Next: <b>${nextFp.toUpperCase()}</b>` : "· All FP sessions complete!"}</p>
+        ${nextFp ? `
+          <div class="ld-form-grid" style="grid-template-columns:1fr 1fr;margin:6px 0">
+            <label>Car #1 Programme
+              <select id="fp-prog-1" class="ld-select">${prules.programmes.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}</select>
+            </label>
+            <label>Car #2 Programme
+              <select id="fp-prog-2" class="ld-select">${prules.programmes.map((p, idx) => `<option value="${esc(p.id)}"${idx === 1 ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+            </label>
+          </div>
+          <div class="ld-ctrl-row">
+            <button type="button" id="btn-run-fp" class="ld-btn ld-btn-primary" data-sess="${esc(nextFp)}"><i class="fas fa-flask"></i> Run ${nextFp.toUpperCase()} Programmes</button>
+          </div>
+        ` : ""}
+      </div>
+    ` : "";
+
+    prepBox.innerHTML = setupControls + fpProgBlock + qualiBlock + launchBlock;
 
     // Render qualifying grid in timing tower if set
     if (wk.quali_grid && wk.quali_grid.length) {
@@ -287,6 +315,18 @@
         toast(res.note || "Setup applied!");
         renderAll();
       } catch (e) { toast(e.message, true); }
+    });
+
+    document.getElementById("btn-run-fp")?.addEventListener("click", async (e) => {
+      try {
+        const sess = e.currentTarget.dataset.sess || "fp1";
+        const p1 = document.getElementById("fp-prog-1")?.value || "track_acclim";
+        const p2 = document.getElementById("fp-prog-2")?.value || "tyre_mgmt";
+        const res = await api(`/api/ladder/${currentSaveId}/weekend/practice`, "POST", { session: sess, prog_d1: p1, prog_d2: p2 });
+        currentView = res.view;
+        toast(res.message, !res.ok);
+        renderAll();
+      } catch (err) { toast(err.message, true); }
     });
 
     prepBox.querySelectorAll(".btn-quali").forEach((b) => {
@@ -319,8 +359,36 @@
     liveWrap.classList.remove("hidden");
 
     const canvas = document.getElementById("ladder-track-canvas");
+    const radioBox = document.getElementById("pw-radio-banner");
+    const radarBox = document.getElementById("pw-radar-widget");
+    const u = currentView.tier_config.unlocks;
+
+    if (radioBox) {
+      radioBox.innerHTML = "";
+      radioBox.classList.toggle("hidden", !u.live_radio);
+    }
+    if (radarBox) {
+      radarBox.classList.toggle("hidden", !u.pit_stops);
+      if (u.pit_stops && window.F1WeatherRadarUI) {
+        if (radarWidget && radarWidget.destroy) radarWidget.destroy();
+        radarWidget = window.F1WeatherRadarUI.create(radarBox);
+        if (currentView.state.weekend.weather_radar && radarWidget) {
+          radarWidget.renderData(currentView.state.weekend.weather_radar, currentView.circuit);
+        }
+      }
+    }
+
     liveSim = new window.LadderRaceSim(canvas, {
+      radioContainer: u.live_radio ? radioBox : null,
       onTick: renderLiveHud,
+      onAutosave: (snap) => {
+        if (!currentSaveId) return;
+        fetch(`/api/ladder/${encodeURIComponent(currentSaveId)}/race/autosave`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snap),
+        }).catch(() => {});
+      },
       onFinish: async (standings, telemetry) => {
         try {
           const res = await api(`/api/ladder/${currentSaveId}/race/commit`, "POST", { standings, telemetry });

@@ -110,6 +110,8 @@
             <canvas id="ladder-track-canvas" class="ld-track-canvas"></canvas>
             <div id="pw-pause-banner" class="ld-pause-banner hidden"></div>
             <div class="ld-radar-strip" id="pw-radar-strip"></div>
+            <div id="pw-radar-widget" class="ld-radar-widget hidden"></div>
+            <div id="pw-radio-banner" class="ld-radio-banner hidden"></div>
             <div class="ld-drivers-deck" id="pw-drivers-deck"></div>
           </div>
         </div>
@@ -235,6 +237,9 @@
     window.__LADDER_SAVES__ = {{ saves | tojson }};
   </script>
   <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+  <script src="/static/js/weather_radar_ui.js?v={{ asset_v }}"></script>
+  <script src="/static/js/weekend_session_sim.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_radio_engine.js?v={{ asset_v }}"></script>
   <script src="/static/js/ladder_race_sim.js?v={{ asset_v }}"></script>
   <script src="/static/js/ladder.js?v={{ asset_v }}"></script>
 {% endblock %}

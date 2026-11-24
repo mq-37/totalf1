@@ -546,3 +546,116 @@ def spend_dev_points(
         return True, f"Fast-tracked {len(active)} active R&D project(s) (-1 round, +8% correlation)!"
 
     return False, f"Unknown Dev Points target '{target}'"
+
+
+# =============================================================================
+# PIT WALL: THE LADDER — TIER-GATED PRACTICE PROGRAMMES (PR 3)
+# =============================================================================
+
+LADDER_TIER_PRACTICE_RULES: dict[str, dict[str, Any]] = {
+    "karting": {
+        "sessions": [],
+        "allowed_programmes": [],
+        "label": "Bench Tuning Only (No FP Sessions · No Live Radio)",
+    },
+    "f4": {
+        "sessions": ["fp1"],
+        "allowed_programmes": ["track_acclim", "tyre_mgmt", "quali_sim"],
+        "label": "F4 Single Practice Session (FP1)",
+    },
+    "f3": {
+        "sessions": ["fp1", "fp2"],
+        "allowed_programmes": ["track_acclim", "tyre_mgmt", "quali_sim"],
+        "label": "F3 Twin Practice Sessions (FP1–FP2)",
+    },
+    "f2": {
+        "sessions": ["fp1", "fp2", "fp3"],
+        "allowed_programmes": ["track_acclim", "tyre_mgmt", "quali_sim", "wet_lines"],
+        "label": "F2 Full Practice Weekend (FP1–FP3)",
+    },
+    "f1": {
+        "sessions": ["fp1", "fp2", "fp3"],
+        "allowed_programmes": ["track_acclim", "tyre_mgmt", "aero_corr", "quali_sim", "wet_lines", "ers_deploy"],
+        "label": "F1 Aerospace Practice + Wind-Tunnel Correlation (FP1–FP3)",
+    },
+}
+
+
+def get_ladder_practice_rules(tier: str) -> dict[str, Any]:
+    rules = LADDER_TIER_PRACTICE_RULES.get(tier, LADDER_TIER_PRACTICE_RULES["karting"])
+    allowed_set = set(rules["allowed_programmes"])
+    progs = [copy.deepcopy(p) for p in PRACTICE_PROGRAMMES if p["id"] in allowed_set]
+    return {
+        "tier": tier,
+        "sessions": list(rules["sessions"]),
+        "allowed_programmes": list(rules["allowed_programmes"]),
+        "programmes": progs,
+        "label": rules["label"],
+    }
+
+
+def run_ladder_practice_session(
+    state: dict[str, Any],
+    session: str = "fp1",
+    prog_d1: str = "track_acclim",
+    prog_d2: str = "tyre_mgmt",
+) -> tuple[bool, str, dict[str, Any]]:
+    """Run a tier-gated Practice Programme session inside Pit Wall: The Ladder."""
+    tier = str(state.get("tier") or "karting")
+    rules = get_ladder_practice_rules(tier)
+    sess = str(session or "fp1").strip().lower()
+    if not rules["sessions"]:
+        return False, "Karting uses pre-race bench tuning only — Practice sessions unlock in Formula 4.", {}
+    if sess not in rules["sessions"]:
+        return False, f"Session {sess.upper()} is not available in {tier.upper()} (allowed: {', '.join(s.upper() for s in rules['sessions'])}).", {}
+
+    allowed = set(rules["allowed_programmes"])
+    p_by_id = {p["id"]: p for p in PRACTICE_PROGRAMMES}
+    p1 = p_by_id.get(prog_d1 if prog_d1 in allowed else rules["allowed_programmes"][0])
+    p2 = p_by_id.get(prog_d2 if prog_d2 in allowed else rules["allowed_programmes"][-1])
+
+    wk = state["weekend"]
+    done = list(wk.get("completed_fp_sessions") or [])
+    if sess in done:
+        return False, f"{sess.upper()} has already been completed this weekend.", {}
+
+    knowledge_gain = round((p1["knowledge_gain"] + p2["knowledge_gain"]) * 0.65, 1)
+    strat_gain = round((p1["strategy_gain"] + p2["strategy_gain"]) * 0.65, 1)
+    wk["car_knowledge_pct"] = round(min(100.0, float(wk.get("car_knowledge_pct") or 20.0) + knowledge_gain), 1)
+    wk["strategy_intel_pct"] = round(min(100.0, float(wk.get("strategy_intel_pct") or 35.0) + strat_gain), 1)
+    wk["setup_confidence"] = round(min(99.0, float(wk.get("setup_confidence") or 55.0) + knowledge_gain * 0.35), 1)
+    done.append(sess)
+    wk["completed_fp_sessions"] = done
+    wk["practice_done"] = True
+    wk["phase"] = "quali"
+
+    # Driver skill XP progression from programmes
+    xp_notes = []
+    for did, prog in zip(state["player"]["driver_ids"][:2], (p1, p2)):
+        d = state["drivers"].get(did)
+        if not d:
+            continue
+        sk = prog["skill_stat"]
+        if sk in d["stats"] and d["stats"][sk] < 99:
+            d["stats"][sk] = min(99, int(d["stats"][sk]) + 1)
+            xp_notes.append(f"{d['code3']} +1 {sk.upper()}")
+
+    # In F1, Aero Flow-Viz / ERS programmes improve Wind-Tunnel Correlation accuracy!
+    corr_boost = 0.0
+    if tier == "f1" and any(p["id"] in ("aero_corr", "ers_deploy") for p in (p1, p2)):
+        corr_boost = 2.5 if p1["id"] == "aero_corr" or p2["id"] == "aero_corr" else 1.2
+        state["rd"]["correlation_accuracy"] = round(min(98.5, float(state["rd"]["correlation_accuracy"]) + corr_boost), 1)
+
+    report = {
+        "session": sess.upper(),
+        "programmes": [p1["id"], p2["id"]],
+        "car_knowledge_pct": wk["car_knowledge_pct"],
+        "strategy_intel_pct": wk["strategy_intel_pct"],
+        "setup_confidence": wk["setup_confidence"],
+        "correlation_boost": corr_boost,
+        "xp_notes": xp_notes,
+        "engineer_hints": [p1["engineer_hint"], p2["engineer_hint"]],
+    }
+    wk.setdefault("fp_reports", []).append(report)
+    msg = f"{sess.upper()} complete: Knowledge {wk['car_knowledge_pct']}% · Intel {wk['strategy_intel_pct']}% · " + (", ".join(xp_notes) or "Telemetry logged")
+    return True, msg, report

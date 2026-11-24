@@ -1952,9 +1952,11 @@ def serialize_ladder_view(state: dict[str, Any]) -> dict[str, Any]:
         and (state["player"]["reputation"] >= tcfg["promotion_rep"] or state["economy"]["cash_k"] >= tcfg["promotion_cash_k"])
     )
 
+    from .weekend_engine import get_ladder_practice_rules
     return {
         "state": state,
         "tier_config": tcfg,
+        "practice_rules": get_ladder_practice_rules(tier),
         "all_tiers_meta": [
             {
                 "id": tid, "rank": TIER_CONFIG[tid]["rank"], "name": TIER_CONFIG[tid]["name"],

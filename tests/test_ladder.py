@@ -208,6 +208,31 @@ class TestPitWallTheLadder(unittest.TestCase):
         self.assertIn("ladder_world_integrity", payload)
         self.assertTrue(payload["ladder_world_integrity"]["ok"])
 
+    def test_pr3_tier_gated_practice_programmes_and_f1_correlation_boost(self):
+        from f1data import weekend_engine as wke
+
+        # Karting: strictly blocked from FP sessions (bench tuning only)
+        st_k = leng.build_new_ladder(team_name="Kart Bench", start_tier="karting", seed=12)
+        ok_k, msg_k, _ = wke.run_ladder_practice_session(st_k, "fp1", "track_acclim", "tyre_mgmt")
+        self.assertFalse(ok_k)
+        self.assertIn("Karting", msg_k)
+
+        # F4: FP1 allowed, FP2 rejected
+        st_4 = leng.build_new_ladder(team_name="F4 Junior", start_tier="f4", seed=13)
+        ok_4a, _, rep4 = wke.run_ladder_practice_session(st_4, "fp1", "track_acclim", "quali_sim")
+        self.assertTrue(ok_4a)
+        self.assertGreater(rep4["car_knowledge_pct"], 20.0)
+        ok_4b, _, _ = wke.run_ladder_practice_session(st_4, "fp2", "track_acclim", "tyre_mgmt")
+        self.assertFalse(ok_4b)
+
+        # F1: FP1..FP3 allowed + aero_corr boosts Wind-Tunnel Correlation accuracy
+        st_1 = leng.build_new_ladder(team_name="Apex F1", start_tier="f1", seed=14)
+        corr_before = st_1["rd"]["correlation_accuracy"]
+        ok_1, _, rep1 = wke.run_ladder_practice_session(st_1, "fp1", "aero_corr", "ers_deploy")
+        self.assertTrue(ok_1)
+        self.assertGreater(st_1["rd"]["correlation_accuracy"], corr_before)
+        self.assertGreater(rep1["correlation_boost"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
