@@ -100,7 +100,31 @@ async def api_ladder_race_commit(save_id: str, request: Request):
     body = await request.json()
     standings = body.get("standings") or []
     telemetry = body.get("telemetry") or {}
+    pre_season = int(state.get("season") or 1)
+    pre_round = int(state.get("round") or 1)
+    pre_tier = str(state.get("tier") or "karting")
+    pre_cir = str((state.get("weekend") or {}).get("circuit_id") or "")
     res = leng.commit_race_results(state, standings, telemetry=telemetry)
+    deb = res.get("debrief") or {}
+    winner_name = str(deb.get("winner") or "")
+    winner_team = ""
+    if standings:
+        w_drv = state.get("drivers", {}).get(standings[0].get("driver_id"))
+        winner_team = str((w_drv or {}).get("team") or "")
+    ldb.archive_race_report(
+        _base_dir(),
+        save_id,
+        season=pre_season,
+        round_num=pre_round,
+        tier=pre_tier,
+        circuit_id=pre_cir,
+        winner_name=winner_name,
+        winner_team=winner_team,
+        weather_summary=str(deb.get("weather") or "Dry"),
+        sc_count=int(deb.get("safety_cars") or 0),
+        report={"debrief": deb, "standings": standings, "telemetry": telemetry},
+    )
+    ldb.delete_midrace_snapshot(_base_dir(), save_id)
     ldb.save_state(_base_dir(), state)
     return JSONResponse({**res, "view": leng.serialize_ladder_view(state)})
 
@@ -108,9 +132,61 @@ async def api_ladder_race_commit(save_id: str, request: Request):
 @router.post("/api/ladder/{save_id}/race/quick")
 def api_ladder_race_quick(save_id: str):
     state = _load_or_404(save_id)
+    pre_season = int(state.get("season") or 1)
+    pre_round = int(state.get("round") or 1)
+    pre_tier = str(state.get("tier") or "karting")
+    pre_cir = str((state.get("weekend") or {}).get("circuit_id") or "")
     res = leng.quick_sim_race(state)
+    deb = res.get("debrief") or {}
+    ldb.archive_race_report(
+        _base_dir(),
+        save_id,
+        season=pre_season,
+        round_num=pre_round,
+        tier=pre_tier,
+        circuit_id=pre_cir,
+        winner_name=str(deb.get("winner") or ""),
+        weather_summary=str(deb.get("weather") or "Dry"),
+        sc_count=int(deb.get("safety_cars") or 0),
+        report={"debrief": deb},
+    )
+    ldb.delete_midrace_snapshot(_base_dir(), save_id)
     ldb.save_state(_base_dir(), state)
     return JSONResponse({**res, "view": leng.serialize_ladder_view(state)})
+
+
+@router.post("/api/ladder/{save_id}/race/autosave")
+async def api_ladder_race_autosave(save_id: str, request: Request):
+    state = _load_or_404(save_id)
+    body = await request.json()
+    snap = dict(body if isinstance(body, dict) else {})
+    snap.setdefault("season", int(state.get("season") or 1))
+    snap.setdefault("round", int(state.get("round") or 1))
+    snap.setdefault("tier", str(state.get("tier") or "karting"))
+    snap.setdefault("circuit_id", str((state.get("weekend") or {}).get("circuit_id") or ""))
+    meta = ldb.save_midrace_snapshot(_base_dir(), save_id, snap)
+    return JSONResponse({"ok": True, **meta})
+
+
+@router.get("/api/ladder/{save_id}/race/autosave")
+def api_ladder_race_autosave_get(save_id: str):
+    _load_or_404(save_id)
+    snap = ldb.load_midrace_snapshot(_base_dir(), save_id)
+    return JSONResponse({"ok": True, "midrace": snap})
+
+
+@router.delete("/api/ladder/{save_id}/race/autosave")
+def api_ladder_race_autosave_delete(save_id: str):
+    _load_or_404(save_id)
+    deleted = ldb.delete_midrace_snapshot(_base_dir(), save_id)
+    return JSONResponse({"ok": True, "deleted": deleted})
+
+
+@router.get("/api/ladder/{save_id}/reports")
+def api_ladder_reports(save_id: str, limit: int = 50):
+    _load_or_404(save_id)
+    reports = ldb.list_race_reports(_base_dir(), save_id, limit=limit)
+    return JSONResponse({"ok": True, "count": len(reports), "reports": reports})
 
 
 @router.post("/api/ladder/{save_id}/facility/upgrade")

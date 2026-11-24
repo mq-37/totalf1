@@ -16,11 +16,18 @@ from __future__ import annotations
 import copy
 import math
 import random
+import re
+import sqlite3
+from pathlib import Path
 from typing import Any
 
 from .circuits import CIRCUITS, get_circuit
 from .feeders import FEEDER_ROSTER_SEED
+from .rating_engine import compute_fair_attributes
 from .weather_radar import build_weather_radar_and_pit_plan
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_F1_SQLITE = _BASE_DIR / "data" / "f1.sqlite"
 
 # =============================================================================
 # 1. TIER PROGRESSION & UNLOCK MATRIX (Section 3 of Concept Document)
@@ -391,6 +398,102 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
+def _apply_junior_fog_of_war(drv: dict[str, Any], rng: random.Random) -> dict[str, Any]:
+    """Lightweight Fog-of-War wrapper for junior tiers (Karting–F3) hiding true potential & traits until scouted."""
+    pot = int(drv.get("potential") or drv.get("overall") or 75)
+    ovr = int(drv.get("overall") or 65)
+    drv["potential_ceiling"] = pot
+    if drv.get("scouted"):
+        drv["pot_lo"] = pot
+        drv["pot_hi"] = pot
+        drv["trait_revealed"] = True
+        return drv
+    err = rng.randint(5, 11)
+    drv["pot_lo"] = int(_clamp(pot - err, ovr, 99))
+    drv["pot_hi"] = int(_clamp(pot + rng.randint(4, 10), pot, 99))
+    drv["trait_revealed"] = False
+    return drv
+
+
+def _load_real_f1_grid_seeds() -> list[dict[str, Any]]:
+    """Load real modern F1 grid drivers from f1.sqlite and hydrate all 8 calibrated attributes via rating_engine."""
+    rows_out: list[dict[str, Any]] = []
+    if _F1_SQLITE.exists():
+        try:
+            con = sqlite3.connect(str(_F1_SQLITE))
+            con.row_factory = sqlite3.Row
+            # Pick most recent complete/active season with >= 18 drivers
+            yr_row = con.execute(
+                "SELECT year FROM drivers_standings GROUP BY year HAVING COUNT(*) >= 18 ORDER BY year DESC LIMIT 1"
+            ).fetchone()
+            target_year = int(yr_row["year"]) if yr_row else 2025
+            standings = con.execute(
+                "SELECT driver, nationality, team, points, position FROM drivers_standings WHERE year=? ORDER BY position ASC",
+                (target_year,),
+            ).fetchall()
+            # Aggregate career totals from f1.sqlite for fair_overall card context
+            totals_map: dict[str, dict[str, Any]] = {}
+            for tr in con.execute(
+                """
+                SELECT driver,
+                       COUNT(DISTINCT year) AS seasons,
+                       SUM(CASE WHEN position = 1 THEN 1 ELSE 0 END) AS titles
+                FROM drivers_standings GROUP BY driver
+                """
+            ).fetchall():
+                totals_map[str(tr["driver"])] = {"seasons": int(tr["seasons"] or 1), "titles": int(tr["titles"] or 0)}
+            win_map: dict[str, int] = {}
+            for wr in con.execute("SELECT winner, COUNT(*) AS w FROM races GROUP BY winner").fetchall():
+                if wr["winner"]:
+                    win_map[str(wr["winner"])] = int(wr["w"] or 0)
+            con.close()
+
+            seen_clean: set[str] = set()
+            for r in standings:
+                raw_drv = str(r["driver"] or "").strip()
+                clean = re.sub(r"\s+[A-Z]{2,3}$", "", raw_drv).strip()
+                if not clean or clean in seen_clean:
+                    continue
+                seen_clean.add(clean)
+                tm_raw = str(r["team"] or "Independent").strip()
+                nat = str(r["nationality"] or "F1").strip()[:3].upper()
+                tinfo = totals_map.get(raw_drv, {"seasons": 3, "titles": 0})
+                wins = win_map.get(raw_drv, win_map.get(clean, 0))
+                starts_est = max(18, tinfo["seasons"] * 20)
+                card_ctx = {
+                    "driver": raw_drv,
+                    "clean_name": clean,
+                    "wins": wins,
+                    "podiums": max(wins, int(wins * 2.1)),
+                    "starts": starts_est,
+                    "fastest_laps": max(0, wins // 2),
+                    "championships": tinfo["titles"],
+                    "win_rate": round((wins / max(1, starts_est)) * 100.0, 2),
+                    "podium_rate": round((max(wins, int(wins * 2.1)) / max(1, starts_est)) * 100.0, 2),
+                    "overall": 78.0 + max(0, 14 - int(r["position"] or 15)),
+                    "hero_team": tm_raw,
+                }
+                fair = compute_fair_attributes(card_ctx, year=None)
+                age_est = int(_clamp(18 + tinfo["seasons"] * 1.45, 19, 44))
+                ovr = int(round(fair["fair_overall"]))
+                pot = int(_clamp(ovr + max(0, (27 - age_est)), ovr, 99))
+                rows_out.append({
+                    "name": clean,
+                    "nationality": nat,
+                    "team": tm_raw,
+                    "age": age_est,
+                    "overall": ovr,
+                    "potential": pot,
+                    "fair": fair,
+                })
+                if len(rows_out) >= 24:
+                    break
+        except Exception:
+            rows_out = []
+
+    return rows_out
+
+
 def _make_driver(
     rng: random.Random,
     did: str,
@@ -407,24 +510,41 @@ def _make_driver(
     pay_driver_k: float = 0.0,
     scouted: bool = False,
     academy: str = "Independent",
+    calibrated_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tr = trait or rng.choice(DRIVER_TRAITS)
-    pace = int(_clamp(ovr + rng.randint(-4, 5), 42, 99))
-    racecraft = int(_clamp(ovr + rng.randint(-4, 5), 42, 99))
-    tyre_care = int(_clamp(ovr + (7 if tr == "Tire Whisperer" else rng.randint(-5, 4)), 40, 99))
-    wet = int(_clamp(ovr + (9 if tr == "Wet Weather Specialist" else rng.randint(-6, 5)), 40, 99))
-    consistency = int(_clamp(ovr + (-8 if tr == "Crash-Prone Charger" else rng.randint(-4, 5)), 40, 99))
+    if calibrated_profile and isinstance(calibrated_profile.get("stats"), dict):
+        cs = calibrated_profile["stats"]
+        pace = int(cs.get("pace", ovr))
+        racecraft = int(cs.get("racecraft", ovr))
+        reliability = int(cs.get("reliability", ovr))
+        duels = int(cs.get("duels", ovr))
+        clutch = int(cs.get("clutch", ovr))
+        wet = int(cs.get("wet", ovr))
+        tyre_care = int(cs.get("tyre_care", ovr))
+        discipline = int(cs.get("discipline", reliability))
+        dnf_rate = float(cs.get("dnf_rate", 7.5))
+        consistency = reliability
+        ovr = int(round(float(calibrated_profile.get("fair_overall") or ovr)))
+        pot = max(ovr, pot)
+    else:
+        pace = int(_clamp(ovr + rng.randint(-4, 5), 42, 99))
+        racecraft = int(_clamp(ovr + rng.randint(-4, 5), 42, 99))
+        tyre_care = int(_clamp(ovr + (7 if tr == "Tire Whisperer" else rng.randint(-5, 4)), 40, 99))
+        wet = int(_clamp(ovr + (9 if tr == "Wet Weather Specialist" else rng.randint(-6, 5)), 40, 99))
+        consistency = int(_clamp(ovr + (-8 if tr == "Crash-Prone Charger" else rng.randint(-4, 5)), 40, 99))
+        reliability = consistency
+        duels = int(_clamp(round((racecraft + pace) * 0.5 + rng.randint(-3, 3)), 40, 99))
+        clutch = int(_clamp(ovr + rng.randint(-4, 5), 40, 99))
+        discipline = consistency
+        dnf_rate = round(_clamp(14.5 - (consistency - 50) * 0.22, 2.5, 18.0), 1)
+
     ego = int(_clamp(35 + (ovr - 55) * 1.1 + rng.randint(-12, 18), 20, 95))
     trust = int(_clamp(65 + rng.randint(-8, 12), 40, 90))
     sl_hist = list(sl_history or [0, 0, 0])[-3:]
     while len(sl_hist) < 3:
         sl_hist.insert(0, 0)
     sl_total = sum(sl_hist)
-
-    # Fog-of-war masked potential window until scouted!
-    err = rng.randint(5, 11)
-    pot_lo = int(_clamp(pot - err, ovr, 99))
-    pot_hi = int(_clamp(pot + rng.randint(4, 10), pot, 99))
 
     base_sal = {
         "karting": 8.0,
@@ -436,7 +556,7 @@ def _make_driver(
     salary_k = round(max(0.0, base_sal * (0.65 + max(0, ovr - 52) * 0.045) - pay_driver_k * 0.4), 1)
     code3 = "".join(ch for ch in name.split()[-1].upper() if ch.isalpha())[:3] or "DRV"
 
-    return {
+    drv = {
         "id": did,
         "name": name,
         "code3": code3,
@@ -446,8 +566,9 @@ def _make_driver(
         "age": age,
         "overall": ovr,
         "potential": pot,
-        "pot_lo": pot_lo,
-        "pot_hi": pot_hi,
+        "potential_ceiling": pot,
+        "pot_lo": pot,
+        "pot_hi": pot,
         "trait": tr,
         "trait_revealed": scouted,
         "scouted": scouted,
@@ -457,10 +578,19 @@ def _make_driver(
         "stats": {
             "pace": pace,
             "racecraft": racecraft,
-            "tyre_care": tyre_care,
-            "wet": wet,
+            "reliability": reliability,
             "consistency": consistency,
+            "duels": duels,
+            "clutch": clutch,
+            "wet": wet,
+            "tyre_care": tyre_care,
+            "discipline": discipline,
+            "dnf_rate": dnf_rate,
         },
+        "rating_source": (calibrated_profile.get("telemetry", {}).get("source", "F1DB + FIA Docs") if calibrated_profile else "Ladder Procedural"),
+        "driver_skill": float(calibrated_profile.get("driver_skill", ovr)) if calibrated_profile else float(ovr),
+        "car_strength_est": float(calibrated_profile.get("car_strength_est", ovr)) if calibrated_profile else float(ovr),
+        "telemetry": dict(calibrated_profile.get("telemetry") or {}) if calibrated_profile else {},
         "ego": ego,
         "trust": trust,
         "engineer_trust": int(_clamp(trust + rng.randint(-6, 8), 35, 95)),
@@ -473,6 +603,9 @@ def _make_driver(
         "season_podiums": 0,
         "season_dnfs": 0,
     }
+    if tier in ("karting", "f4", "f3") or not scouted:
+        _apply_junior_fog_of_war(drv, rng)
+    return drv
 
 
 def _build_5tier_world(
@@ -509,29 +642,22 @@ def _build_5tier_world(
         elif ser == "f1_academy":
             feeder_by_tier["f4"].append(row)
 
-    # Real 2026 F1 headline drivers for Tier 5
-    f1_seeds = [
-        ("Lando Norris", "GBR", "McLaren", 26, 91, 93, "Tire Whisperer"),
-        ("Oscar Piastri", "AUS", "McLaren", 25, 89, 94, "Iron Nerve"),
-        ("Charles Leclerc", "MON", "Ferrari", 28, 91, 93, "Quali Rocket"),
-        ("Lewis Hamilton", "GBR", "Ferrari", 41, 92, 92, "Wet Weather Specialist"),
-        ("Max Verstappen", "NED", "Red Bull Racing", 28, 96, 97, "Wet Weather Specialist"),
-        ("Isack Hadjar", "FRA", "Red Bull Racing", 21, 82, 90, "Late Braker"),
-        ("George Russell", "GBR", "Mercedes", 28, 89, 91, "Smooth Operator"),
-        ("Kimi Antonelli", "ITA", "Mercedes", 19, 85, 95, "Quali Rocket"),
-        ("Fernando Alonso", "ESP", "Aston Martin", 44, 89, 89, "Tire Whisperer"),
-        ("Lance Stroll", "CAN", "Aston Martin", 27, 75, 76, "Sponsor Magnet"),
-        ("Carlos Sainz", "ESP", "Williams", 31, 86, 86, "Smooth Operator"),
-        ("Alexander Albon", "THA", "Williams", 30, 83, 84, "Tire Whisperer"),
-        ("Pierre Gasly", "FRA", "Alpine", 30, 83, 84, "Street Fighter"),
-        ("Franco Colapinto", "ARG", "Alpine", 23, 79, 86, "Late Braker"),
-        ("Esteban Ocon", "FRA", "Haas", 29, 81, 82, "Iron Nerve"),
-        ("Oliver Bearman", "GBR", "Haas", 21, 81, 89, "Late Braker"),
-        ("Liam Lawson", "NZL", "Racing Bulls", 24, 80, 85, "Street Fighter"),
-        ("Arvid Lindblad", "GBR", "Racing Bulls", 18, 78, 92, "Quali Rocket"),
-        ("Nico Hulkenberg", "GER", "Audi", 38, 82, 82, "Quali Rocket"),
-        ("Gabriel Bortoleto", "BRA", "Audi", 21, 81, 90, "Smooth Operator"),
-    ]
+    # Real F1 grid drivers hydrated from f1.sqlite + f1db.sqlite + fia_docs.sqlite via rating_engine!
+    f1_real_seeds = _load_real_f1_grid_seeds()
+    # Team-matched lookup so real drivers land on their authentic F1 constructors where possible
+    f1_assigned_names: set[str] = set()
+
+    def _pop_f1_seed_for_team(team_name: str) -> dict[str, Any] | None:
+        tlow = team_name.lower().split()[0]
+        for s in f1_real_seeds:
+            if s["name"] not in f1_assigned_names and tlow in s["team"].lower():
+                f1_assigned_names.add(s["name"])
+                return s
+        for s in f1_real_seeds:
+            if s["name"] not in f1_assigned_names:
+                f1_assigned_names.add(s["name"])
+                return s
+        return None
 
     tier_team_specs: dict[str, list[dict[str, Any]]] = {
         "karting": [{"name": n, "color": c, "principal": f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}", "car_rating": rng.randint(52, 62)} for n, c in KARTING_TEAMS],
@@ -561,7 +687,6 @@ def _build_5tier_world(
 
         teams_built = []
         feeder_pool = list(feeder_by_tier.get(tid, []))
-        f1_cursor = 0
         for idx, tspec in enumerate(tlist):
             t_obj = {
                 "id": f"{tid}_t{idx}",
@@ -577,13 +702,21 @@ def _build_5tier_world(
             seats = 3 if (tid == "f3" and not t_obj["is_player"]) else 2
             for s_i in range(seats):
                 did = f"{tid}_d_{idx}_{s_i}"
-                if tid == "f1" and not t_obj["is_player"] and f1_cursor < len(f1_seeds):
-                    nm, nat, _, age, ovr, pot, tr = f1_seeds[f1_cursor]
-                    f1_cursor += 1
+                f1_seed = _pop_f1_seed_for_team(t_obj["name"]) if (tid == "f1" and not t_obj["is_player"]) else None
+                if f1_seed is not None:
+                    nm = f1_seed["name"]
                     used_names.add(nm)
+                    f_stats = f1_seed["fair"]["stats"]
+                    inferred_tr = (
+                        "Wet Weather Specialist" if f_stats.get("wet", 0) >= 90
+                        else ("Tire Whisperer" if f_stats.get("tyre_care", 0) >= 88
+                        else ("Quali Rocket" if f_stats.get("pace", 0) >= 88 else "Smooth Operator"))
+                    )
                     drv = _make_driver(
-                        rng, did, nm, nat, tid, t_obj["name"], age, ovr, pot,
-                        trait=tr, sl_history=[20, 20, 0], scouted=True,
+                        rng, did, nm, f1_seed["nationality"], tid, t_obj["name"],
+                        f1_seed["age"], f1_seed["overall"], f1_seed["potential"],
+                        trait=inferred_tr, sl_history=[20, 20, 0], scouted=True,
+                        calibrated_profile=f1_seed["fair"],
                     )
                 elif feeder_pool and not t_obj["is_player"]:
                     row = feeder_pool.pop(0)

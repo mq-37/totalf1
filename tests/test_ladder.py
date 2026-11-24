@@ -142,6 +142,72 @@ class TestPitWallTheLadder(unittest.TestCase):
             self.assertTrue(ldb.delete_save(base, sid))
             self.assertEqual(len(ldb.list_saves(base)), 0)
 
+    def test_pr1_rating_engine_f1_hydration_and_junior_fog_of_war(self):
+        st = leng.build_new_ladder(team_name="DataHydrate Kart", start_tier="karting", seed=2026)
+        f1_drvs = [d for d in st["drivers"].values() if d["tier"] == "f1" and d["team"] != "Free Agent"]
+        self.assertGreaterEqual(len(f1_drvs), 18)
+        hydrated = [d for d in f1_drvs if d.get("rating_source") == "F1DB + FIA Docs"]
+        self.assertGreaterEqual(len(hydrated), 15, "Tier 5 F1 grid must hydrate from F1DB/rating_engine")
+
+        sample_f1 = hydrated[0]
+        for key in ("pace", "racecraft", "reliability", "duels", "clutch", "wet", "tyre_care", "discipline", "dnf_rate"):
+            self.assertIn(key, sample_f1["stats"])
+        self.assertIn("driver_skill", sample_f1)
+        self.assertIn("car_strength_est", sample_f1)
+
+        # Junior Fog-of-War wrapper hides true potential_ceiling & trait until scouted
+        unscouted_juniors = [
+            d for d in st["drivers"].values()
+            if d["tier"] in ("karting", "f4", "f3") and not d["scouted"]
+        ]
+        self.assertGreater(len(unscouted_juniors), 20)
+        j = unscouted_juniors[0]
+        self.assertFalse(j["trait_revealed"])
+        self.assertEqual(j["potential_ceiling"], j["potential"])
+        self.assertLessEqual(j["pot_lo"], j["potential"])
+        self.assertGreaterEqual(j["pot_hi"], j["potential"])
+
+    def test_pr1_midrace_snapshot_race_reports_and_health_integrity(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            st = leng.build_new_ladder(team_name="Persist Racing", start_tier="f4", seed=55)
+            sid = ldb.save_state(base, st)
+
+            # Mid-race snapshot save / load / delete
+            meta = ldb.save_midrace_snapshot(base, sid, {"season": 1, "round": 1, "tier": "f4", "circuit_id": "imola", "lap": 7, "total_laps": 15, "cars": [{"code3": "VER", "pos": 1}]})
+            self.assertEqual(meta["lap"], 7)
+            loaded_snap = ldb.load_midrace_snapshot(base, sid)
+            self.assertIsNotNone(loaded_snap)
+            self.assertEqual(loaded_snap["lap"], 7)
+            self.assertEqual(loaded_snap["snapshot"]["circuit_id"], "imola")
+
+            # Race report archival & query
+            ldb.archive_race_report(
+                base, sid, season=1, round_num=1, tier="f4", circuit_id="imola",
+                winner_name="Luca Moretti", winner_team="PREMA F4", weather_summary="Dry", sc_count=1,
+                report={"notes": "Clean race"},
+            )
+            reps = ldb.list_race_reports(base, sid)
+            self.assertEqual(len(reps), 1)
+            self.assertEqual(reps[0]["winner_name"], "Luca Moretti")
+            self.assertEqual(reps[0]["sc_count"], 1)
+
+            # Integrity check confirms WAL mode and all 4 tables
+            integ = ldb.check_ladder_integrity(base)
+            self.assertTrue(integ["ok"])
+            self.assertEqual(integ["journal_mode"], "wal")
+            self.assertEqual(integ["missing_tables"], [])
+
+            self.assertTrue(ldb.delete_midrace_snapshot(base, sid))
+            self.assertIsNone(ldb.load_midrace_snapshot(base, sid))
+
+        # Verify /api/health returns ladder_world_integrity
+        import json
+        resp = f1data.server.api_health()
+        payload = json.loads(resp.body.decode("utf-8"))
+        self.assertIn("ladder_world_integrity", payload)
+        self.assertTrue(payload["ladder_world_integrity"]["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

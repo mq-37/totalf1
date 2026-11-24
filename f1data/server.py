@@ -175,6 +175,8 @@ def api_health():
         except Exception as exc:
             dbs[fname] = {"exists": True, "error": str(exc)}
     manifest = _fcp.load_png_manifest()
+    from . import ladder_db as _ldb
+    ladder_integrity = _ldb.check_ladder_integrity(BASE_DIR)
     return JSONResponse({
         "ok": True,
         "uptime_s": round(time.time() - _SERVER_START_TS, 1),
@@ -183,6 +185,7 @@ def api_health():
         "rating_engine_warm": _re._CACHE is not None,
         "car_png_manifest_aliases": len(manifest),
         "car_png_unique_files": len(set(manifest.values())) if manifest else len(list(_fcp.CAR_PNG_DIR.glob("*.png"))),
+        "ladder_world_integrity": ladder_integrity,
         "databases": dbs,
     })
 

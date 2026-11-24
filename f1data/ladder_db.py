@@ -54,6 +54,40 @@ def _connect(base_dir: Path) -> sqlite3.Connection:
         CREATE INDEX IF NOT EXISTS idx_ladder_history_save_season
         ON ladder_history(save_id, season DESC)
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ladder_midrace (
+            save_id TEXT PRIMARY KEY,
+            season INTEGER NOT NULL,
+            round INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            circuit_id TEXT NOT NULL,
+            lap INTEGER NOT NULL,
+            total_laps INTEGER NOT NULL,
+            updated_at REAL NOT NULL,
+            snapshot_json TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ladder_race_reports (
+            report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            save_id TEXT NOT NULL,
+            season INTEGER NOT NULL,
+            round INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            circuit_id TEXT NOT NULL,
+            winner_name TEXT NOT NULL DEFAULT '',
+            winner_team TEXT NOT NULL DEFAULT '',
+            weather_summary TEXT NOT NULL DEFAULT 'Dry',
+            sc_count INTEGER NOT NULL DEFAULT 0,
+            report_json TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            UNIQUE(save_id, season, round)
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ladder_reports_save_season
+        ON ladder_race_reports(save_id, season DESC, round DESC)
+    """)
     conn.commit()
     return conn
 
@@ -177,11 +211,176 @@ def get_season_history(base_dir: Path, save_id: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def save_midrace_snapshot(base_dir: Path, save_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    conn = _connect(base_dir)
+    try:
+        now = time.time()
+        conn.execute(
+            """
+            INSERT INTO ladder_midrace (
+                save_id, season, round, tier, circuit_id, lap, total_laps, updated_at, snapshot_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(save_id) DO UPDATE SET
+                season=excluded.season,
+                round=excluded.round,
+                tier=excluded.tier,
+                circuit_id=excluded.circuit_id,
+                lap=excluded.lap,
+                total_laps=excluded.total_laps,
+                updated_at=excluded.updated_at,
+                snapshot_json=excluded.snapshot_json
+            """,
+            (
+                save_id,
+                int(snapshot.get("season") or 1),
+                int(snapshot.get("round") or 1),
+                str(snapshot.get("tier") or "karting"),
+                str(snapshot.get("circuit_id") or ""),
+                int(snapshot.get("lap") or 1),
+                int(snapshot.get("total_laps") or 15),
+                now,
+                json.dumps(snapshot),
+            ),
+        )
+        conn.commit()
+        return {"save_id": save_id, "lap": int(snapshot.get("lap") or 1), "updated_at": now}
+    finally:
+        conn.close()
+
+
+def load_midrace_snapshot(base_dir: Path, save_id: str) -> dict[str, Any] | None:
+    conn = _connect(base_dir)
+    try:
+        row = conn.execute(
+            "SELECT season, round, tier, circuit_id, lap, total_laps, updated_at, snapshot_json FROM ladder_midrace WHERE save_id = ?",
+            (save_id,),
+        ).fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["snapshot"] = json.loads(out.pop("snapshot_json"))
+        return out
+    finally:
+        conn.close()
+
+
+def delete_midrace_snapshot(base_dir: Path, save_id: str) -> bool:
+    conn = _connect(base_dir)
+    try:
+        cur = conn.execute("DELETE FROM ladder_midrace WHERE save_id = ?", (save_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def archive_race_report(
+    base_dir: Path,
+    save_id: str,
+    *,
+    season: int,
+    round_num: int,
+    tier: str,
+    circuit_id: str,
+    winner_name: str,
+    winner_team: str = "",
+    weather_summary: str = "Dry",
+    sc_count: int = 0,
+    report: dict[str, Any] | None = None,
+) -> int:
+    conn = _connect(base_dir)
+    try:
+        now = time.time()
+        cur = conn.execute(
+            """
+            INSERT INTO ladder_race_reports (
+                save_id, season, round, tier, circuit_id, winner_name, winner_team,
+                weather_summary, sc_count, report_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(save_id, season, round) DO UPDATE SET
+                tier=excluded.tier,
+                circuit_id=excluded.circuit_id,
+                winner_name=excluded.winner_name,
+                winner_team=excluded.winner_team,
+                weather_summary=excluded.weather_summary,
+                sc_count=excluded.sc_count,
+                report_json=excluded.report_json,
+                created_at=excluded.created_at
+            """,
+            (
+                save_id,
+                int(season),
+                int(round_num),
+                str(tier),
+                str(circuit_id),
+                str(winner_name or ""),
+                str(winner_team or ""),
+                str(weather_summary or "Dry"),
+                int(sc_count or 0),
+                json.dumps(report or {}),
+                now,
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid or 0)
+    finally:
+        conn.close()
+
+
+def list_race_reports(base_dir: Path, save_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    conn = _connect(base_dir)
+    try:
+        rows = conn.execute(
+            """
+            SELECT report_id, save_id, season, round, tier, circuit_id,
+                   winner_name, winner_team, weather_summary, sc_count, report_json, created_at
+            FROM ladder_race_reports
+            WHERE save_id = ?
+            ORDER BY season DESC, round DESC
+            LIMIT ?
+            """,
+            (save_id, int(limit)),
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["report"] = json.loads(d.pop("report_json") or "{}")
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+def check_ladder_integrity(base_dir: Path) -> dict[str, Any]:
+    """Verify ladder_saves.sqlite WAL mode and required relational tables."""
+    required = ("ladder_saves", "ladder_history", "ladder_midrace", "ladder_race_reports")
+    conn = _connect(base_dir)
+    try:
+        jm = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+        existing = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        missing = [t for t in required if t not in existing]
+        counts = {t: conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in required if t in existing}
+        return {
+            "ok": (jm == "wal" and not missing),
+            "journal_mode": jm,
+            "required_tables": list(required),
+            "missing_tables": missing,
+            "row_counts": counts,
+        }
+    finally:
+        conn.close()
+
+
 def delete_save(base_dir: Path, save_id: str) -> bool:
     conn = _connect(base_dir)
     try:
         cur = conn.execute("DELETE FROM ladder_saves WHERE save_id = ?", (save_id,))
         conn.execute("DELETE FROM ladder_history WHERE save_id = ?", (save_id,))
+        conn.execute("DELETE FROM ladder_midrace WHERE save_id = ?", (save_id,))
+        conn.execute("DELETE FROM ladder_race_reports WHERE save_id = ?", (save_id,))
         conn.commit()
         return cur.rowcount > 0
     finally:
