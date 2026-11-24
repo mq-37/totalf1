@@ -24,10 +24,12 @@
     musicEnabled: false,   // Default OFF until explicitly toggled on by user
     ambienceEnabled: true,
     mood: "paddock",       // paddock | monaco | zen
+    voiceEngine: "auto",   // auto | gemini | edge | browser
     masterVol: 0.78,
     musicVol: 0.42,
     ambienceVol: 0.34,
     sfxVol: 0.68,
+    voiceVol: 0.92,
   };
 
   function loadPrefs() {
@@ -66,8 +68,29 @@
   let musicDuckGain = null;
   let ambienceBus = null;
   let sfxBus = null;
+  let voiceStudioBus = null;
+  let voiceRadioBus = null;
   let reverbSend = null;
   let noiseBuffer = null;
+
+  // Neural Voice Engine runtime state (Gemini TTS -> Edge-TTS -> Browser fallback)
+  const voiceBufCache = new Map();
+  let activeVoiceSrc = null;
+  let activeVoiceNoise = null;
+  let activeVoiceAbort = null;
+  let voiceBusy = false;
+  let voiceStatusCache = null;
+
+  function makeRadioDriveCurve(amount) {
+    const k = amount || 18;
+    const n = 256;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+  }
 
   // Live continuous trackside nodes
   let engineOsc1 = null;
@@ -146,6 +169,33 @@
         ambienceBus = ctx.createGain();
         sfxBus = ctx.createGain();
 
+        // Studio Broadcast Voice Chain (warmth + clarity EQ -> master)
+        voiceStudioBus = ctx.createGain();
+        const vLow = ctx.createBiquadFilter();
+        vLow.type = "lowshelf"; vLow.frequency.value = 170; vLow.gain.value = 2.4;
+        const vPres = ctx.createBiquadFilter();
+        vPres.type = "highshelf"; vPres.frequency.value = 3100; vPres.gain.value = 2.2;
+        voiceStudioBus.connect(vLow);
+        vLow.connect(vPres);
+        vPres.connect(masterGain);
+
+        // Authentic F1 Cockpit Team Radio Chain (380Hz-2950Hz Bandpass + RF Soft-Clip Drive!)
+        voiceRadioBus = ctx.createGain();
+        const rHp = ctx.createBiquadFilter();
+        rHp.type = "highpass"; rHp.frequency.value = 380; rHp.Q.value = 0.85;
+        const rLp = ctx.createBiquadFilter();
+        rLp.type = "lowpass"; rLp.frequency.value = 2950; rLp.Q.value = 0.9;
+        const rMid = ctx.createBiquadFilter();
+        rMid.type = "peaking"; rMid.frequency.value = 1450; rMid.Q.value = 1.2; rMid.gain.value = 3.5;
+        const rDrive = ctx.createWaveShaper();
+        rDrive.curve = makeRadioDriveCurve(14);
+        rDrive.oversample = "2x";
+        voiceRadioBus.connect(rHp);
+        rHp.connect(rLp);
+        rLp.connect(rMid);
+        rMid.connect(rDrive);
+        rDrive.connect(masterGain);
+
         const conv = ctx.createConvolver();
         conv.buffer = makeWarmReverbIR(ctx, 2.6, 2.8);
         reverbSend = ctx.createGain();
@@ -184,6 +234,152 @@
     musicBus.gain.setTargetAtTime(prefs.musicEnabled ? prefs.musicVol : 0.0001, now, 0.18);
     ambienceBus.gain.setTargetAtTime((prefs.sfxEnabled && prefs.ambienceEnabled) ? prefs.ambienceVol : 0.0001, now, 0.12);
     sfxBus.gain.setTargetAtTime(prefs.sfxEnabled ? prefs.sfxVol : 0.0001, now, 0.03);
+    if (voiceStudioBus) voiceStudioBus.gain.setTargetAtTime(prefs.voiceVol ?? 0.92, now, 0.04);
+    if (voiceRadioBus) voiceRadioBus.gain.setTargetAtTime((prefs.voiceVol ?? 0.92) * 1.08, now, 0.04);
+  }
+
+  function stopVoice() {
+    if (activeVoiceAbort) {
+      try { activeVoiceAbort.abort(); } catch (_) {}
+      activeVoiceAbort = null;
+    }
+    if (activeVoiceSrc) {
+      try { activeVoiceSrc.stop(); } catch (_) {}
+      activeVoiceSrc = null;
+    }
+    if (activeVoiceNoise) {
+      try { activeVoiceNoise.stop(); } catch (_) {}
+      activeVoiceNoise = null;
+    }
+    voiceBusy = false;
+    try { if (global.speechSynthesis) global.speechSynthesis.cancel(); } catch (_) {}
+  }
+
+  function speakBrowserFallback(text, role) {
+    if (!global.speechSynthesis || global.speechSynthesis.speaking) return;
+    try {
+      const clean = String(text || "").replace(/[^\w\s.,!?'’:+%-]/g, " ").replace(/\s+/g, " ").trim();
+      if (!clean) return;
+      const u = new SpeechSynthesisUtterance(clean.slice(0, 170));
+      u.rate = role === "crofty" ? 1.12 : (role === "driver" ? 1.10 : 1.04);
+      u.pitch = role === "brundle" ? 0.92 : 1.02;
+      global.speechSynthesis.speak(u);
+    } catch (_) {}
+  }
+
+  async function speak(opts) {
+    const o = typeof opts === "string" ? { text: opts } : (opts || {});
+    const rawText = String(o.text || "").trim();
+    if (!rawText) return false;
+    const role = o.role || "crofty";
+    const channel = o.channel || (role === "driver" || role === "engineer" ? "radio" : "commentary");
+    const engineMode = o.engine || prefs.voiceEngine || "auto";
+
+    if (engineMode === "browser") {
+      if (o.priority === "high" && global.speechSynthesis) global.speechSynthesis.cancel();
+      speakBrowserFallback(rawText, role);
+      return true;
+    }
+
+    // Never pile up stale commentary; high-priority radio/test can interrupt normal commentary
+    if (voiceBusy) {
+      if (o.priority === "high" || o.force) stopVoice();
+      else return false;
+    }
+
+    const ac = ensureGraph(true);
+    if (!ac) {
+      speakBrowserFallback(rawText, role);
+      return false;
+    }
+    if (ac.state === "suspended") {
+      try { await ac.resume(); } catch (_) {}
+    }
+
+    const cacheKey = `${engineMode}|${role}|${o.archetype || ""}|${o.driverName || ""}|${o.tone || ""}|${rawText.slice(0, 180)}`;
+    voiceBusy = true;
+
+    try {
+      let decoded = voiceBufCache.get(cacheKey);
+      if (!decoded) {
+        const ab = new AbortController();
+        activeVoiceAbort = ab;
+        const resp = await fetch("/api/tts/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ab.signal,
+          body: JSON.stringify({
+            text: rawText.slice(0, 230),
+            role,
+            archetype: o.archetype || "",
+            driver_name: o.driverName || "",
+            tone: o.tone || "",
+            engine: engineMode,
+            reply_text: o.replyText || "",
+          }),
+        });
+        activeVoiceAbort = null;
+        if (!resp.ok) throw new Error(`TTS HTTP ${resp.status}`);
+        const arrBuf = await resp.arrayBuffer();
+        decoded = await ac.decodeAudioData(arrBuf.slice(0));
+        if (voiceBufCache.size >= 36) {
+          const oldest = voiceBufCache.keys().next().value;
+          voiceBufCache.delete(oldest);
+        }
+        voiceBufCache.set(cacheKey, decoded);
+      }
+
+      if (!voiceBusy) return false; // Cancelled while loading
+
+      const src = ac.createBufferSource();
+      src.buffer = decoded;
+      const targetBus = (channel === "radio" && voiceRadioBus) ? voiceRadioBus : (voiceStudioBus || masterGain);
+      src.connect(targetBus);
+
+      // Duck music & engine ambience smoothly during speech!
+      const dur = Math.max(0.8, decoded.duration || 2.5);
+      duckMusic(dur + 0.5);
+      if (ambienceBus && prefs.ambienceEnabled) {
+        const now = ac.currentTime;
+        ambienceBus.gain.cancelScheduledValues(now);
+        ambienceBus.gain.setTargetAtTime(prefs.ambienceVol * 0.42, now, 0.08);
+        ambienceBus.gain.setTargetAtTime(prefs.ambienceVol, now + dur + 0.25, 0.35);
+      }
+
+      // Add subtle authentic F1 RF static noise floor while cockpit radio is transmitting!
+      let radioNoise = null;
+      if (channel === "radio" && noiseBuffer && voiceRadioBus) {
+        radioNoise = ac.createBufferSource();
+        radioNoise.buffer = noiseBuffer;
+        radioNoise.loop = true;
+        const nG = ac.createGain();
+        nG.gain.value = 0.055;
+        radioNoise.connect(nG);
+        nG.connect(voiceRadioBus);
+        radioNoise.start();
+        activeVoiceNoise = radioNoise;
+      }
+
+      activeVoiceSrc = src;
+      src.onended = () => {
+        if (activeVoiceSrc === src) activeVoiceSrc = null;
+        if (radioNoise) {
+          try { radioNoise.stop(); } catch (_) {}
+          if (activeVoiceNoise === radioNoise) activeVoiceNoise = null;
+          // Crisp F1 radio release click!
+          noiseBurst(0.032, 0.0, 2400, 2.5, 0.032);
+        }
+        voiceBusy = false;
+      };
+      src.start();
+      return true;
+    } catch (err) {
+      voiceBusy = false;
+      activeVoiceAbort = null;
+      if (err && err.name === "AbortError") return false;
+      speakBrowserFallback(rawText, role);
+      return false;
+    }
   }
 
   function duckMusic(holdSec) {
@@ -577,9 +773,24 @@
       else if (bus === "music") prefs.musicVol = v;
       else if (bus === "ambience") prefs.ambienceVol = v;
       else if (bus === "sfx") prefs.sfxVol = v;
+      else if (bus === "voice") prefs.voiceVol = v;
       persistPrefs();
       syncGains();
     },
+
+    setVoiceEngine(mode) {
+      if (!["auto", "gemini", "edge", "browser"].includes(mode)) return;
+      prefs.voiceEngine = mode;
+      persistPrefs();
+      syncAllUi();
+    },
+
+    getVoiceEngine() {
+      return prefs.voiceEngine || "auto";
+    },
+
+    speak,
+    stopVoice,
 
     setAmbienceEnabled(val) {
       prefs.ambienceEnabled = !!val;
@@ -726,6 +937,38 @@
     popoverEl.querySelectorAll("[data-aud-mood]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-aud-mood") === prefs.mood);
     });
+    const vSel = popoverEl.querySelector("#aud-voice-engine");
+    if (vSel) vSel.value = prefs.voiceEngine || "auto";
+    const vStat = popoverEl.querySelector("#aud-voice-status");
+    if (vStat && voiceStatusCache) {
+      const gOk = voiceStatusCache.gemini_available;
+      const eOk = voiceStatusCache.edge_available;
+      if (prefs.voiceEngine === "browser") {
+        vStat.textContent = "Browser Fallback";
+        vStat.className = "f1-aud-vbadge";
+      } else if (gOk && (prefs.voiceEngine === "auto" || prefs.voiceEngine === "gemini")) {
+        vStat.textContent = `Gemini TTS (${voiceStatusCache.gemini_model})`;
+        vStat.className = "f1-aud-vbadge is-gem";
+      } else if (eOk) {
+        vStat.textContent = gOk ? "Neural Edge-TTS" : "Neural Edge-TTS (add GEMINI_API_KEY for Gemini)";
+        vStat.className = "f1-aud-vbadge is-edge";
+      } else {
+        vStat.textContent = "Browser Fallback";
+        vStat.className = "f1-aud-vbadge";
+      }
+    }
+  }
+
+  function refreshVoiceStatus() {
+    fetch("/api/tts/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.ok) {
+          voiceStatusCache = data;
+          syncAllUi();
+        }
+      })
+      .catch(() => {});
   }
 
   function ensurePopover() {
@@ -762,6 +1005,26 @@
         </label>
         <input type="range" id="aud-sfx-vol" min="0" max="1" step="0.02" value="${prefs.sfxVol}" aria-label="SFX volume">
       </div>
+      <div class="f1-aud-voice-box">
+        <div class="f1-aud-vhead">
+          <span><i class="fas fa-microphone-alt"></i> Neural Voices</span>
+          <select id="aud-voice-engine" aria-label="Voice synthesis engine">
+            <option value="auto">Auto (Gemini → Edge)</option>
+            <option value="gemini">Gemini TTS</option>
+            <option value="edge">Neural Edge-TTS</option>
+            <option value="browser">Browser</option>
+          </select>
+        </div>
+        <div class="f1-aud-row" style="margin-bottom:6px;">
+          <span style="color:#cbd5e1;font-size:.76rem;">Voice Level</span>
+          <input type="range" id="aud-voice-vol" min="0" max="1" step="0.02" value="${prefs.voiceVol ?? 0.92}" aria-label="Voice volume">
+        </div>
+        <div class="f1-aud-vtests">
+          <button type="button" id="aud-test-crofty" class="f1-aud-mood" title="Preview Studio Broadcast Commentary">🎙 Commentary</button>
+          <button type="button" id="aud-test-radio" class="f1-aud-mood" title="Preview F1 Cockpit Bandpass Team Radio">📻 Team Radio</button>
+        </div>
+        <div id="aud-voice-status" class="f1-aud-vbadge">Checking voice engines…</div>
+      </div>
       <div class="f1-aud-row f1-aud-master">
         <span>Master</span>
         <input type="range" id="aud-master-vol" min="0" max="1" step="0.02" value="${prefs.masterVol}" aria-label="Master volume">
@@ -777,7 +1040,29 @@
     div.querySelector("#aud-music-vol").addEventListener("input", (e) => F1Sfx.setVolume("music", e.target.value));
     div.querySelector("#aud-amb-vol").addEventListener("input", (e) => F1Sfx.setVolume("ambience", e.target.value));
     div.querySelector("#aud-sfx-vol").addEventListener("input", (e) => F1Sfx.setVolume("sfx", e.target.value));
+    div.querySelector("#aud-voice-vol").addEventListener("input", (e) => F1Sfx.setVolume("voice", e.target.value));
+    div.querySelector("#aud-voice-engine").addEventListener("change", (e) => F1Sfx.setVoiceEngine(e.target.value));
+    div.querySelector("#aud-test-crofty").addEventListener("click", () => {
+      F1Sfx.speak({
+        text: "Lights out and away we go at Albert Park! Late on the brakes into Turn 1, wheel to wheel for the lead!",
+        role: "crofty",
+        tone: "win",
+        channel: "commentary",
+        force: true,
+      });
+    });
+    div.querySelector("#aud-test-radio").addEventListener("click", () => {
+      F1Sfx.radioBeep();
+      F1Sfx.speak({
+        text: "Copy, box this lap — box opposite Hamilton. Diff entry plus two, brake balance one click forward.",
+        role: "engineer",
+        tone: "warn",
+        channel: "radio",
+        force: true,
+      });
+    });
     div.querySelector("#aud-master-vol").addEventListener("input", (e) => F1Sfx.setVolume("master", e.target.value));
+    refreshVoiceStatus();
     div.querySelectorAll("[data-aud-mood]").forEach((btn) => {
       btn.addEventListener("click", () => {
         F1Sfx.setMood(btn.getAttribute("data-aud-mood"));

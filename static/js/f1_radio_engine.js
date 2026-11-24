@@ -470,12 +470,25 @@
       if (o.sfxEnabled && o.sfxEnabled() && global.F1Sfx && global.F1Sfx.radioBeep) {
         try { global.F1Sfx.radioBeep(); } catch (_) {}
       }
-      if (o.voiceEnabled && o.voiceEnabled() && global.speechSynthesis && !global.speechSynthesis.speaking) {
-        try {
-          const u = new SpeechSynthesisUtterance(payload.text.slice(0, 140));
-          u.rate = 1.1;
-          global.speechSynthesis.speak(u);
-        } catch (_) {}
+      if (o.voiceEnabled && o.voiceEnabled()) {
+        if (global.F1Sfx && global.F1Sfx.speak) {
+          const isBoard = String(payload.speaker || "").toUpperCase() === "PIT BOARD";
+          global.F1Sfx.speak({
+            text: payload.text.slice(0, 190),
+            role: isBoard ? "stewards" : (payload.isEngineer ? "engineer" : "driver"),
+            archetype: payload.archetype || "",
+            driverName: payload.driverName || "",
+            tone: payload.tone || "info",
+            channel: isBoard ? "stewards" : "radio",
+            priority: "high",
+          });
+        } else if (global.speechSynthesis && !global.speechSynthesis.speaking) {
+          try {
+            const u = new SpeechSynthesisUtterance(payload.text.slice(0, 140));
+            u.rate = 1.1;
+            global.speechSynthesis.speak(u);
+          } catch (_) {}
+        }
       }
 
       clearTimeout(hideTimer);
@@ -513,6 +526,9 @@
           text: msg.text,
           tone: msg.tone,
           color,
+          isEngineer: msg.speaker !== (car.code3 || (car.card && car.card.code3) || "DRV"),
+          archetype: (car.dna && car.dna.radio_archetype) || "",
+          driverName: car.name || car.cleanName || (car.card && car.card.clean_name) || "",
           actions: ctx && ctx.actions,
         });
         return true;

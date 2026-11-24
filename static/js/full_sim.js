@@ -279,11 +279,29 @@
   }
 
   function speakCommentary(text) {
-    if (!fs.voiceOn || !window.speechSynthesis) return;
+    if (!fs.voiceOn) return;
+    const raw = String(text || "").trim();
+    if (!raw) return;
+    let role = "crofty";
+    let tone = "info";
+    if (/BRUNDLE/i.test(raw)) role = "brundle";
+    else if (/STEWARDS|RACE CONTROL|SAFETY CAR|RED FLAG|PENALTY|BLACK & WHITE/i.test(raw)) { role = "stewards"; tone = "warn"; }
+    if (/LIGHTS OUT|WINS|CHEQUERED|SWITCHBACK|LATE ON THE BRAKES|MONSTER/i.test(raw)) tone = "win";
+
+    if (window.F1Sfx && window.F1Sfx.speak) {
+      window.F1Sfx.speak({
+        text: raw.slice(0, 210),
+        role,
+        tone,
+        channel: role === "stewards" ? "stewards" : "commentary",
+        priority: role === "stewards" ? "high" : "normal",
+      });
+      return;
+    }
+    if (!window.speechSynthesis) return;
     try {
-      const clean = String(text || "").replace(/[^\w\s.,!?'’:+%-]/g, "").trim();
-      if (!clean) return;
-      if (window.speechSynthesis.speaking) return; // never queue stale backlog
+      const clean = raw.replace(/[^\w\s.,!?'’:+%-]/g, "").trim();
+      if (!clean || window.speechSynthesis.speaking) return;
       const utt = new SpeechSynthesisUtterance(clean.slice(0, 160));
       utt.rate = 1.08;
       utt.pitch = 1.02;
@@ -2522,7 +2540,10 @@
       fs.voiceOn = !fs.voiceOn;
       const vb = getEl("fsim-voice-btn");
       if (vb) vb.classList.toggle("is-on", fs.voiceOn);
-      if (!fs.voiceOn && window.speechSynthesis) window.speechSynthesis.cancel();
+      if (!fs.voiceOn) {
+        if (window.F1Sfx && window.F1Sfx.stopVoice) window.F1Sfx.stopVoice();
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+      }
       showToast(fs.voiceOn ? "🎙 Live Voice Commentary ON" : "🎙 Voice Commentary OFF", "info");
     });
 

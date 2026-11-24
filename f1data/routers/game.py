@@ -95,6 +95,50 @@ def api_sim_driver_dna(drivers: str = Query("")):
     return {"ok": True, "count": len(dna), "driver_dna": dna}
 
 
+@router.get("/api/tts/status")
+def api_tts_status():
+    """Return live status of the Hybrid Gemini TTS + Neural Edge-TTS broadcast voice engine."""
+    from ..voice_engine import get_voice_status
+    return get_voice_status()
+
+
+@router.post("/api/tts/speak")
+async def api_tts_speak(request: Request):
+    """Synthesize natural neural F1 commentary or cockpit team radio audio (Gemini TTS -> Edge-TTS fallback)."""
+    from ..voice_engine import synthesize_speech
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    text = str(body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Missing text")
+    try:
+        res = synthesize_speech(
+            text=text,
+            role=str(body.get("role") or "crofty"),
+            archetype=str(body.get("archetype") or ""),
+            driver_name=str(body.get("driver_name") or ""),
+            tone=str(body.get("tone") or ""),
+            engine=str(body.get("engine") or "auto"),
+            reply_text=str(body.get("reply_text") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return Response(
+        content=res["audio"],
+        media_type=res["mime"],
+        headers={
+            "X-TTS-Engine": res["engine"],
+            "X-TTS-Voice": res["voice"],
+            "X-TTS-Cached": "1" if res["cached"] else "0",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
 @router.post("/api/sim/interviews")
 async def api_sim_interviews(request: Request):
     """Generate context-aware post-race driver reports & press-pen interviews ONLY after the Chequered Flag."""

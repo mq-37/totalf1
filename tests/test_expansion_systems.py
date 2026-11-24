@@ -216,6 +216,22 @@ class TestExpansionSystems(unittest.TestCase):
         self.assertIn("driver_dna", r_bal.json())
         self.assertIn("jim clark", r_bal.json()["driver_dna"])
 
+    def test_hybrid_voice_engine_status_and_casting(self):
+        from f1data.voice_engine import clean_speech_text, _resolve_cast, _pcm16_to_wav
+        self.assertIn("D R S", clean_speech_text("🎙 CROFTY: DRS wide open into P1!"))
+        self.assertEqual(_resolve_cast("crofty")["gemini_voice"], "Fenrir")
+        self.assertEqual(_resolve_cast("driver", archetype="stoic_minimalist", driver_name="Oscar Piastri")["edge_voice"], "en-AU-WilliamMultilingualNeural")
+        wav = _pcm16_to_wav(b"\x00\x00" * 100, sample_rate=24000)
+        self.assertEqual(wav[:4], b"RIFF")
+        self.assertEqual(wav[8:12], b"WAVE")
+
+        r = self._get("/api/tts/status")
+        self.assertEqual(r.status_code, 200)
+        st = r.json()
+        self.assertTrue(st["ok"])
+        self.assertIn("gemini_available", st)
+        self.assertIn("edge_available", st)
+
 
 if __name__ == "__main__":
     unittest.main()

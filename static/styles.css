@@ -132,7 +132,7 @@ body {
   position: fixed;
   top: 58px;
   right: 16px;
-  width: 288px;
+  width: 308px;
   padding: 12px 14px;
   border-radius: 12px;
   background: rgba(14, 19, 30, 0.96);
@@ -143,6 +143,47 @@ body {
   z-index: 2500;
   font-size: 0.82rem;
 }
+.f1-aud-voice-box {
+  margin: 8px 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.f1-aud-vhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+.f1-aud-vhead select {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+.f1-aud-vtests {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.f1-aud-vbadge {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.7);
+}
+.f1-aud-vbadge.is-gem { color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); }
+.f1-aud-vbadge.is-edge { color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.3); }
 .f1-audio-popover.hidden { display: none; }
 .f1-aud-head {
   display: flex;
