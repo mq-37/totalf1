@@ -253,3 +253,16 @@ body:has(.ladder-shell) .main-content > .container { max-width: none; width: 100
 .ld-tier-opt strong { font-size: 0.74rem; }
 .ld-tier-opt small { font-size: 0.64rem; color: #94a3b8; line-height: 1.3; }
 .ld-modal-foot { display: flex; justify-content: flex-end; }
+
+/* PR 4: SPARE PARTS PILLS, INBOX DILEMMAS & FIA PADDOCK POLITICS */
+.ld-parts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 6px; }
+.ld-part-pill {
+  padding: 5px 7px; border-radius: 6px;
+  background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.22);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ld-part-pill.is-empty { border-color: rgba(248, 113, 113, 0.65); background: rgba(127, 29, 29, 0.28); }
+.ld-part-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.66rem; color: #e2e8f0; }
+.ld-dilemma { border-color: rgba(250, 204, 21, 0.55) !important; background: rgba(113, 63, 18, 0.16) !important; }
+.ld-fia-prec { font-size: 0.65rem; color: #cbd5e1; padding: 5px 7px; border-radius: 6px; background: rgba(15, 23, 42, 0.72); border-left: 2px solid #38bdf8; margin: 5px 0; }
+.ld-tp-votes { display: flex; flex-direction: column; gap: 5px; }

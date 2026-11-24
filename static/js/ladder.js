@@ -146,12 +146,32 @@
       `).join("")}
     `;
 
-    document.getElementById("cmd-inbox").innerHTML = (st.inbox || []).map((m) => `
+    const activeDilemmas = (st.dilemmas || []).filter((d) => !d.resolved);
+    const dilemmaHtml = activeDilemmas.length ? activeDilemmas.map((d) => `
+      <div class="ld-item ld-dilemma">
+        <div class="ld-item-top"><strong>⚡ ${esc(d.title)}</strong><span class="ld-tag ld-tag-warn">${esc(d.tag)} · ACTION</span></div>
+        <p><b style="color:#fde047">${esc(d.sender)}:</b> ${esc(d.body)}</p>
+        <div class="ld-ctrl-row">
+          ${(d.choices || []).map((c) => `<button type="button" class="ld-btn ld-btn-sm btn-dilemma" data-did="${esc(d.id)}" data-cid="${esc(c.id)}">${esc(c.label)}</button>`).join("")}
+        </div>
+      </div>
+    `).join("") : "";
+
+    const inboxEl = document.getElementById("cmd-inbox");
+    inboxEl.innerHTML = dilemmaHtml + (st.inbox || []).map((m) => `
       <div class="ld-item">
         <div class="ld-item-top"><strong>${esc(m.title)}</strong><span class="ld-tag">${esc(m.tag)} · R${m.round}</span></div>
         <p><b style="color:#cbd5e1">${esc(m.sender)}:</b> ${esc(m.body)}</p>
       </div>
     `).join("") + ((st.silly_season_log || []).length ? `<h4 class="ld-subhead">Silly Season Wire</h4>` + st.silly_season_log.slice(0, 5).map((s) => `<div class="ld-ev">${esc(s.text)}</div>`).join("") : "");
+    inboxEl.querySelectorAll(".btn-dilemma").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        const res = await api(`/api/ladder/${currentSaveId}/dilemma/resolve`, "POST", { dilemma_id: b.dataset.did, choice_id: b.dataset.cid });
+        currentView = res.view;
+        toast(res.message, !res.ok);
+        renderAll();
+      } catch (e) { toast(e.message, true); }
+    }));
 
     const cal = st.tiers[st.tier].calendar;
     const deb = st.weekend.last_race_debrief;
@@ -551,14 +571,31 @@
       }));
     }
 
-    // Dual-Ledger Accounting & Cost Cap
+    // Dual-Ledger Accounting, Spare Parts Stock & Cost Cap
     const eco = st.economy;
-    document.getElementById("eco-ledger").innerHTML = `
+    const parts = currentView.spare_parts || [];
+    const partsHtml = parts.length ? `
+      <div class="ld-item" style="border-color:rgba(249,115,22,0.45)">
+        <div class="ld-item-top"><strong>Spare Parts Stock${u.cost_cap ? " (Counts vs Cost Cap)" : ""}</strong><span class="ld-tag ld-tag-warn">CRASH BUFFER</span></div>
+        <div class="ld-parts-grid">
+          ${parts.map((p) => `
+            <div class="ld-part-pill${p.stock === 0 ? " is-empty" : ""}">
+              <div class="ld-part-top"><b>${esc(p.short)}</b><span class="ld-mono">${p.stock}×</span></div>
+              <button type="button" class="ld-btn ld-btn-sm btn-build-part" data-pid="${esc(p.id)}" title="${esc(p.name)} (Emergency if 0: ${fmtMoney(p.emergency_cost_k)})">+1 (${fmtMoney(p.unit_cost_k)})</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    ` : "";
+
+    const ecoEl = document.getElementById("eco-ledger");
+    ecoEl.innerHTML = `
       <div class="ld-item">
         <div class="ld-item-top"><strong>Cash On Hand</strong><span class="ld-mono">${fmtMoney(eco.cash_k)}</span></div>
         <p>Sponsor/Rd: <b>${fmtMoney(eco.sponsor_per_round_k)}</b> · Crash Repairs YTD: <b style="color:#f87171">${fmtMoney(eco.repair_bills_ytd_k)}</b></p>
         ${u.cost_cap ? `<p><b>FIA Cost Cap:</b> ${fmtMoney(eco.cost_cap_spent_k)} / ${fmtMoney(eco.cost_cap_limit_k)} · Exempt Salaries: ${fmtMoney(eco.exempt_spent_k)}</p>` : ""}
       </div>
+      ${partsHtml}
       ${(eco.ledger || []).slice(0, 12).map((row) => `
         <div class="ld-item" style="padding:5px 8px">
           <div class="ld-item-top" style="margin:0">
@@ -568,6 +605,14 @@
         </div>
       `).join("")}
     `;
+    ecoEl.querySelectorAll(".btn-build-part").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        const res = await api(`/api/ladder/${currentSaveId}/parts/manufacture`, "POST", { part_id: b.dataset.pid });
+        currentView = res.view;
+        toast(res.message, !res.ok);
+        renderAll();
+      } catch (e) { toast(e.message, true); }
+    }));
   }
 
   function renderRosterTab() {
@@ -743,23 +788,36 @@
       }));
     }
 
-    // 3. FIA Governance Voting (F1)
+    // 3. FIA Governance Voting (F1 — Paddock Profiles + Regulation Architect + FIA Docs Precedent)
     const fiaEl = document.getElementById("pol-fia");
     if (!u.fia_voting) {
-      fiaEl.innerHTML = `<div class="ld-item"><p>FIA Regulation Commission voting unlocks in <b>Tier 5 (Formula 1)</b>, where AI teams vote by competitive self-interest on aero resets, cost-cap tweaks &amp; sprint rules.</p></div>`;
+      fiaEl.innerHTML = `<div class="ld-item"><p>FIA Regulation Commission voting unlocks in <b>Tier 5 (Formula 1)</b>, where real Team Principals vote by leadership style, car strengths &amp; job stress.</p></div>`;
     } else {
       const gov = st.fia_governance;
       const p = gov.active_proposal;
+      const tally = gov.last_tally;
+      const prec = (tally && tally.fia_precedent) || currentView.fia_precedent;
+      const tpVotes = (tally && tally.votes) ? tally.votes : [];
       fiaEl.innerHTML = `
         <div class="ld-item">
           <div class="ld-item-top"><strong>${esc(p.title)}</strong><span class="ld-tag">${esc(p.category)}</span></div>
           <p>${esc(p.desc)}</p>
+          ${prec ? `<p class="ld-fia-prec"><b>FIA Precedent (${prec.year} ${esc(prec.event_name)}):</b> ${esc(prec.title)} — <i>${esc(prec.excerpt)}</i></p>` : ""}
           <div class="ld-ctrl-row">
             <button type="button" class="ld-btn ld-btn-sm btn-fia-vote" data-v="yes" ${gov.voted ? "disabled" : ""}>Vote YES</button>
             <button type="button" class="ld-btn ld-btn-sm btn-fia-vote" data-v="no" ${gov.voted ? "disabled" : ""}>Vote NO</button>
           </div>
-          ${gov.last_tally ? `<p style="margin-top:6px;color:#38bdf8">Last Vote Tally: ${gov.last_tally.yes} YES – ${gov.last_tally.no} NO (${gov.last_tally.passed ? "PASSED" : "REJECTED"})</p>` : ""}
+          ${tally ? `<p style="margin-top:6px;color:#38bdf8"><b>Commission Tally:</b> ${tally.yes} YES – ${tally.no} NO (Needed ${tally.needed || 7} · FIA: ${esc(tally.fia_vote || "YES")} · <b>${tally.passed ? "PASSED" : "REJECTED"}</b>)</p>` : ""}
         </div>
+        ${tpVotes.length ? `<div class="ld-tp-votes">${tpVotes.map((v) => `
+          <div class="ld-item" style="padding:5px 8px">
+            <div class="ld-item-top" style="margin:0">
+              <span style="font-size:0.69rem"><b>${esc(v.name)}</b> (${esc(v.team)})</span>
+              <span class="ld-tag ${v.vote === "YES" ? "ld-tag-ok" : "ld-tag-warn"}">${esc(v.vote)}</span>
+            </div>
+            <p style="margin:2px 0 0;font-size:0.64rem">${esc(v.leadership_label)} · Stress ${v.job_stress}% · ${esc(v.reason)}</p>
+          </div>
+        `).join("")}</div>` : ""}
       `;
       fiaEl.querySelectorAll(".btn-fia-vote").forEach((b) => b.addEventListener("click", async () => {
         try {

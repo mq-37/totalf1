@@ -265,11 +265,39 @@ async def api_ladder_rd(save_id: str, request: Request):
     return JSONResponse({"ok": ok, "message": msg, "view": leng.serialize_ladder_view(state)})
 
 
+@router.post("/api/ladder/{save_id}/parts/manufacture")
+async def api_ladder_parts_manufacture(save_id: str, request: Request):
+    state = _load_or_404(save_id)
+    body = await request.json()
+    ok, msg = leng.manufacture_spare_part(state, str((body or {}).get("part_id") or ""))
+    if ok:
+        ldb.save_state(_base_dir(), state)
+    return JSONResponse({"ok": ok, "message": msg, "view": leng.serialize_ladder_view(state)})
+
+
+@router.post("/api/ladder/{save_id}/dilemma/resolve")
+async def api_ladder_dilemma_resolve(save_id: str, request: Request):
+    state = _load_or_404(save_id)
+    body = await request.json()
+    ok, msg = leng.resolve_dilemma(
+        state,
+        str((body or {}).get("dilemma_id") or ""),
+        str((body or {}).get("choice_id") or ""),
+    )
+    if ok:
+        ldb.save_state(_base_dir(), state)
+    return JSONResponse({"ok": ok, "message": msg, "view": leng.serialize_ladder_view(state)})
+
+
 @router.post("/api/ladder/{save_id}/fia/vote")
 async def api_ladder_fia_vote(save_id: str, request: Request):
     state = _load_or_404(save_id)
     body = await request.json()
-    ok, msg = leng.vote_fia_proposal(state, str(body.get("vote") or "yes"))
+    ok, msg = leng.vote_fia_proposal(
+        state,
+        str((body or {}).get("vote") or "yes"),
+        lobbied_tp_ids=(body or {}).get("lobbied_tp_ids"),
+    )
     if ok:
         ldb.save_state(_base_dir(), state)
     return JSONResponse({"ok": ok, "message": msg, "view": leng.serialize_ladder_view(state)})

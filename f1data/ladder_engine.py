@@ -23,6 +23,7 @@ from typing import Any
 
 from .circuits import CIRCUITS, get_circuit
 from .feeders import FEEDER_ROSTER_SEED
+from . import ladder_economy as _eco
 from . import ladder_world_ai as _world_ai
 from .rating_engine import compute_fair_attributes
 from .weather_radar import build_weather_radar_and_pit_plan
@@ -946,7 +947,11 @@ def build_new_ladder(
         ],
         "silly_season_log": [],
         "season_history": [],
+        "dilemmas": [],
     }
+    _eco.ensure_spare_parts(state, reset=True)
+    _eco.ensure_f1_paddock_roster(state)
+    _eco.generate_round_dilemma(state, rng)
     return state
 
 
@@ -1332,12 +1337,12 @@ def commit_race_results(
                 st_k = rng.choice(["pace", "racecraft", "tyre_care", "consistency"])
                 d["stats"][st_k] = min(99, d["stats"][st_k] + 1)
 
-            # Crash-damage repair invoice (F4+)
+            # Crash-damage spare-parts stock deduction & emergency manufacture (F4+)
             dmg_k = 0.0
+            crash_info: dict[str, Any] = {}
             if tcfg["unlocks"]["crash_damage_economy"] and crash_dmg:
-                ws_lv = int(state["facilities"].get("regional_workshop", state["facilities"].get("composite_factory", 1)))
-                disc = max(0.55, 1.0 - (ws_lv - 1) * 0.11)
-                dmg_k = round(tcfg["repair_scale_k"] * rng.uniform(0.7, 1.65) * disc, 1)
+                crash_info = _eco.consume_crash_parts(state, rng, heavy=(dnf and rng.random() < 0.45))
+                dmg_k = float(crash_info["bill_k"])
                 crash_bill_k += dmg_k
 
             player_results.append({
@@ -1347,6 +1352,8 @@ def commit_race_results(
                 "dnf": dnf,
                 "pts": pts,
                 "crash_bill_k": dmg_k,
+                "parts_consumed": crash_info.get("consumed", []),
+                "emergency_parts": crash_info.get("emergency_parts", []),
                 "obeyed_orders": row.get("obeyed_orders", True),
             })
 
@@ -1417,10 +1424,13 @@ def commit_race_results(
         tier_obj["round"] = state["round"]
         state["weekend"] = _fresh_weekend_state(tier, tier_obj["calendar"][state["round"] - 1])
         state["weekend"]["last_race_debrief"] = debrief
+        _eco.generate_round_dilemma(state, rng)
     else:
         wk["phase"] = "season_end"
         wk["last_race_debrief"] = debrief
         _prepare_season_end_offers(state, rng)
+
+    _eco.step_ladder_paddock_stress(state, season_end=season_complete)
 
     # Periodic Silly Season AI rumor / movement!
     if rng.random() < 0.45:
@@ -1628,38 +1638,18 @@ def develop_f1_upgrade(state: dict[str, Any], vector: str, name: str = "") -> tu
     return True, f"Manufactured {pkg_name} (CFD predicted +{predicted} {vector}) — run Practice to validate Wind-Tunnel correlation!"
 
 
-def vote_fia_proposal(state: dict[str, Any], vote: str) -> tuple[bool, str]:
+def manufacture_spare_part(state: dict[str, Any], part_id: str) -> tuple[bool, str]:
+    return _eco.manufacture_spare_part(state, part_id, _record_ledger)
+
+
+def resolve_dilemma(state: dict[str, Any], dilemma_id: str, choice_id: str) -> tuple[bool, str]:
+    return _eco.resolve_dilemma(state, dilemma_id, choice_id, _record_ledger, _add_inbox)
+
+
+def vote_fia_proposal(state: dict[str, Any], vote: str, lobbied_tp_ids: list[str] | None = None) -> tuple[bool, str]:
     if not TIER_CONFIG[state["tier"]]["unlocks"]["fia_voting"]:
         return False, "FIA Commission Regulation Voting unlocks in Formula 1."
-    gov = state["fia_governance"]
-    if gov.get("voted"):
-        return False, "You already voted on this season's FIA proposal."
-    prop = gov["active_proposal"]
-    rng = random.Random(state["rng_seed"] + state["season"] * 77)
-    yes_votes = 1 if vote == "yes" else 0
-    no_votes = 1 if vote != "yes" else 0
-    for tm in state["tiers"]["f1"]["teams"]:
-        if tm.get("is_player"):
-            continue
-        # Self-interested AI vote based on car rating & proposal type
-        ai_yes = rng.random() < (0.62 if tm["car_rating"] < 85 else 0.42)
-        if ai_yes:
-            yes_votes += 1
-        else:
-            no_votes += 1
-    passed = yes_votes > no_votes
-    gov["voted"] = True
-    gov["last_tally"] = {"yes": yes_votes, "no": no_votes, "passed": passed}
-    if passed:
-        gov["passed_rules"].append({"season": state["season"], "title": prop["title"]})
-        imp = prop.get("impact", {})
-        if "cost_cap_delta_k" in imp:
-            state["economy"]["cost_cap_limit_k"] = max(110000.0, state["economy"]["cost_cap_limit_k"] + imp["cost_cap_delta_k"])
-        for vec_k in ("low_speed_df", "high_speed_eff", "drag", "tyre_pres", "cooling"):
-            if vec_k in imp:
-                state["rd"]["philosophy"][vec_k] = round(_clamp(state["rd"]["philosophy"][vec_k] + imp[vec_k], 55.0, 99.0), 1)
-    _add_inbox(state, "FIA Commission", "FIA", f"Vote {'PASSED' if passed else 'REJECTED'}: {prop['title']}", f"Tally: {yes_votes} YES vs {no_votes} NO.")
-    return True, f"Proposal {'PASSED' if passed else 'REJECTED'} ({yes_votes}–{no_votes})."
+    return _eco.vote_fia_proposal_with_paddock(state, vote, _add_inbox, lobbied_tp_ids=lobbied_tp_ids)
 
 
 # =============================================================================
@@ -1891,6 +1881,9 @@ def choose_career_fork_or_promote(
             ci["winner"] = None
 
     state["weekend"] = _fresh_weekend_state(state["tier"], state["tiers"][state["tier"]]["calendar"][0])
+    _eco.ensure_spare_parts(state, reset=True)
+    _eco.ensure_f1_paddock_roster(state)
+    _eco.generate_round_dilemma(state, rng)
     _add_inbox(state, "Motorsport Council", state["tier"].upper(), f"Season {state['season']} ({state['year']}) Underway!", msg)
     return True, msg
 
@@ -1953,10 +1946,18 @@ def serialize_ladder_view(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     from .weekend_engine import get_ladder_practice_rules
+    _eco.ensure_spare_parts(state)
+    _eco.ensure_dilemmas(state)
+    fia_prec = None
+    if tier == "f1" and state.get("fia_governance", {}).get("active_proposal"):
+        ap = state["fia_governance"]["active_proposal"]
+        fia_prec = _eco.fetch_fia_technical_precedent(str(ap.get("category") or "Aero"), seed=int(state.get("rng_seed") or 1) + int(state.get("season") or 1) * 19)
     return {
         "state": state,
         "tier_config": tcfg,
         "practice_rules": get_ladder_practice_rules(tier),
+        "spare_parts": _eco.get_spare_parts_view(state),
+        "fia_precedent": fia_prec,
         "all_tiers_meta": [
             {
                 "id": tid, "rank": TIER_CONFIG[tid]["rank"], "name": TIER_CONFIG[tid]["name"],
