@@ -546,8 +546,30 @@
     if (ab === "championship_aura" && car.lap >= fs.totalLaps - 3) lapS -= 0.35;
     if (ab === "giant_killer" && car.pos > 3) lapS -= 0.22;
 
-    if (fs.safetyCarLaps > 0) lapS = circuit.base_lap_s * 1.32;
-    else if (fs.vscLaps > 0) lapS = circuit.base_lap_s * 1.22;
+    // True Safety Car Pack Bunching + Leader Restart Control (P1 backs up pack in S3 on final SC lap!)
+    if (fs.safetyCarLaps > 0) {
+      const pFrac = (((car.totalProg || 0) % 1) + 1) % 1;
+      if (car.pos === 1) {
+        if (fs.safetyCarLaps === 1 && pFrac >= 0.94) {
+          lapS = circuit.base_lap_s * 0.95; // P1 FLOORS IT before the control line!
+          car.aiStatus = "🟢 RESTART JUMP!";
+        } else if (fs.safetyCarLaps === 1 && pFrac >= 0.72) {
+          lapS = circuit.base_lap_s * 1.62; // P1 backs up pack before restart!
+          car.aiStatus = "⚠ BACKING UP PACK";
+        } else {
+          lapS = circuit.base_lap_s * 1.38;
+        }
+      } else {
+        // Trailing cars catch the nose-to-tail Safety Car queue smoothly!
+        const intS = Number(car.intervalS || 0);
+        if (intS > 1.8) lapS = circuit.base_lap_s * 1.03;
+        else if (intS > 0.65) lapS = circuit.base_lap_s * 1.16;
+        else if (fs.safetyCarLaps === 1 && pFrac >= 0.72 && pFrac < 0.94) lapS = circuit.base_lap_s * 1.56;
+        else lapS = circuit.base_lap_s * 1.38;
+      }
+    } else if (fs.vscLaps > 0) {
+      lapS = circuit.base_lap_s * 1.24;
+    }
 
     lapS += (Math.random() - 0.5) * 0.42;
     return Math.max(circuit.base_lap_s * 0.84, lapS);
@@ -1389,7 +1411,12 @@
           car.inPit = 0; car.pitDuration = 0;
           car.compound = car.nextCompound;
           car.tyreLife = 100;
-          car.tyreTemp = 84;
+          // Authentic compound blanket exit temps (Softs fire up fast -> undercut; Hards start cold -> overcut risk!)
+          const exitTempMap = { soft: 74, medium: 66, hard: 56, inter: 64, wet: 58 };
+          car.tyreTemp = exitTempMap[car.compound] || 66;
+          car.tyreGraining = 0;
+          car.tyreBlistering = 0;
+          car.outLapTimer = 1.0;
           if (era.refuelling) {
             const lapsRem = Math.max(2, fs.totalLaps - car.lap);
             car.fuelKg = Math.min(era.start_fuel_kg || 65, lapsRem * (era.fuel_burn_per_lap_kg || 2.3) * 1.15);
@@ -1470,11 +1497,31 @@
       const comp = COMPOUNDS[car.compound] || COMPOUNDS.medium;
       const beh = ENG.getDriverBehaviorModifiers(car, fs.wetness);
       const lapFrac = simDt / fs.circuit.base_lap_s;
-      const targetTemp = fs.safetyCarLaps > 0 ? 78 : (comp.optTemp + (car.paceMode === "push" ? 16 : (car.paceMode === "conserve" ? -12 : 0)) - fs.wetness * 0.12);
-      car.tyreTemp += (targetTemp - car.tyreTemp) * Math.min(1, dt * 0.22);
-      const thermalWear = car.tyreTemp > 114 ? 1.25 : 1.0;
+      const targetTemp = fs.safetyCarLaps > 0 ? 74 : (comp.optTemp + (car.paceMode === "push" ? 16 : (car.paceMode === "conserve" ? -12 : 0)) - fs.wetness * 0.12);
+      // Compound-authentic thermal warm-up rate (Softs warm 2x faster than Hards!)
+      const warmRate = car.tyreTemp < targetTemp
+        ? (car.compound === "soft" ? 0.34 : (car.compound === "medium" ? 0.21 : 0.12))
+        : 0.22;
+      car.tyreTemp += (targetTemp - car.tyreTemp) * Math.min(1, dt * warmRate);
+      // Live Graining (pushing hard on cold rubber) & Blistering (running overheated > 115°C)!
+      if (car.tyreTemp < 78 && car.paceMode === "push" && fs.safetyCarLaps === 0) {
+        car.tyreGraining = Math.min(100, (car.tyreGraining || 0) + lapFrac * 42);
+      } else if ((car.tyreGraining || 0) > 0) {
+        car.tyreGraining = Math.max(0, car.tyreGraining - lapFrac * 24); // Drives through graining phase!
+      }
+      if (car.tyreTemp > 115 && fs.safetyCarLaps === 0) {
+        car.tyreBlistering = Math.min(100, (car.tyreBlistering || 0) + lapFrac * (car.tyreTemp - 114) * 4.5);
+      } else if ((car.tyreBlistering || 0) > 0) {
+        car.tyreBlistering = Math.max(0, car.tyreBlistering - lapFrac * 8);
+      }
+      const thermalWear = (car.tyreTemp > 114 ? 1.25 : 1.0) * (1 + ((car.tyreBlistering || 0) / 100) * 0.35);
       const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * comp.wear * thermalWear * beh.tyreWearMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
       car.tyreLife = Math.max(5, car.tyreLife - (wearMult * lapFrac * baseWearPerLap));
+
+      // Keep Safety Car bunching responsive every tick (not just on lap crossing!)
+      if (fs.safetyCarLaps > 0) {
+        car.currentLapS = computeCarLapTime(car, fs.circuit, fs.wetness);
+      }
 
       if (era.refuelling && Number.isFinite(car.fuelKg)) {
         const burn = (era.fuel_burn_per_lap_kg || 2.3) * (car.paceMode === "push" ? 1.12 : (car.paceMode === "conserve" ? 0.90 : 1.0));
@@ -1508,6 +1555,7 @@
         if (car.lap >= 2 && fs.safetyCarLaps === 0 && Math.random() < mistakeProb) {
           const lossS = 0.9 + Math.random() * 1.4;
           car.totalProg -= lossS / fs.circuit.base_lap_s;
+          car.lockupSmokeTimer = 1.65;
           ENG.applyPsychologyEvent(car, "mistake");
           if (car.pos <= 8) {
             const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "a heavy braking zone";
@@ -1650,12 +1698,25 @@
 
         const mustFulfillRule = era.two_compound_rule !== false && !car.usedWet && car.dryCompoundsUsed.size < 2 && lapsLeft <= Math.max(3, Math.round(fs.totalLaps * 0.14)) && lapsLeft >= 2;
         const fuelPit = era.refuelling && Number.isFinite(car.fuelKg) && car.fuelKg <= (era.fuel_burn_per_lap_kg || 2.3) * 1.8 && lapsLeft >= 2;
-        const scOpportunistic = (fs.safetyCarLaps > 0 || fs.vscLaps > 0) && car.tyreLife < 56 && lapsSincePit >= minStint && lapsLeft >= 4;
-        const cliffPit = car.tyreLife < (car.aiPlan === "aggressive" ? 26 : 21) && lapsLeft >= 3 && lapsSincePit >= minStint;
+        const scOpportunistic = (fs.safetyCarLaps > 0 || fs.vscLaps > 0) && car.tyreLife < 58 && lapsSincePit >= minStint && lapsLeft >= 4;
+        const cliffPit = car.tyreLife < (car.aiPlan === "aggressive" ? 27 : 22) && lapsLeft >= 3 && lapsSincePit >= minStint;
         const wingPit = car.wingDamaged && lapsLeft >= 4 && lapsSincePit >= 2;
+        // Real Undercut Strategy: Stuck within 2.4s behind a rival in pit window -> box 1 lap early on fresh rubber!
+        const rivalAhead = sortedNow[Math.max(0, (car.pos || 2) - 2)];
+        const gapToRival = (rivalAhead && rivalAhead.idx !== car.idx && !rivalAhead.dnf) ? (rivalAhead.totalProg - car.totalProg) * fs.circuit.base_lap_s : 99;
+        const undercutPit = fs.safetyCarLaps === 0 && fs.wetness < 22 && gapToRival > 0.4 && gapToRival <= 2.4 && car.tyreLife < 44 && car.tyreLife >= 26 && lapsSincePit >= minStint && lapsLeft >= 5 && Math.random() < 0.28;
 
-        if (weatherTarget || mustFulfillRule || fuelPit || scOpportunistic || cliffPit || wingPit) {
-          let extraPit = car.wingDamaged ? 4.5 : 0;
+        if (weatherTarget || mustFulfillRule || fuelPit || scOpportunistic || cliffPit || wingPit || undercutPit) {
+          // Real Teammate Double-Stacking in Shared Pit Box (+3.2s hold!)
+          const teammate = fs.cars.find((o) => o.idx !== car.idx && !o.dnf && o.card.hero_team === car.card.hero_team && o.inPit > 0);
+          const isDoubleStack = Boolean(teammate);
+          let extraPit = (car.wingDamaged ? 4.5 : 0) + (isDoubleStack ? 3.2 : 0);
+          if (isDoubleStack) {
+            car.pitErrorReason = "Double-Stack +3.2s";
+            if (!fastMode && car.pos <= 10) addCommentary(car.lap + 1, `⚠ DOUBLE STACK! ${car.card.clean_name} queues +3.2s behind teammate ${teammate.card.code3} in the ${car.card.hero_team} pit box!`, "warn");
+          } else if (undercutPit && !fastMode && car.pos <= 10) {
+            addCommentary(car.lap + 1, `⚡ UNDERCUT ATTEMPT! ${car.card.clean_name} boxes early to undercut ${rivalAhead.card.clean_name} (+${gapToRival.toFixed(1)}s)!`, "info");
+          }
           if (era.refuelling) {
             const needKg = Math.min(era.start_fuel_kg || 65, Math.max(8, lapsLeft * (era.fuel_burn_per_lap_kg || 2.3)));
             extraPit += needKg * (era.refuel_sec_per_kg || 0.14);
@@ -1668,6 +1729,12 @@
             ENG.applyPsychologyEvent(car, "slow_pit");
           } else {
             ENG.applyPsychologyEvent(car, "fast_pit");
+          }
+          // Rare Pit-Lane Speeding Stewards Penalty (+5s, ~1.8% on aggressive push entry)
+          if (car.paceMode === "push" && Math.random() < 0.018) {
+            car.timePenaltyS = (car.timePenaltyS || 0) + 5;
+            if (!fastMode) showStewardsBanner("⚖️ FIA STEWARDS · +5s PENALTY", `${car.card.clean_name} — Speeding in Pit Lane (84.2 kph in 80 kph zone)`, "penalty");
+            addCommentary(car.lap + 1, `⚖️ FIA PENALTY: +5s for ${car.card.clean_name} — Pit-Lane Speeding!`, "warn");
           }
           car.inPit = effPit + extraPit;
           car.pitDuration = car.inPit;
@@ -1688,6 +1755,29 @@
         car.currentLapS = computeCarLapTime(car, fs.circuit, fs.wetness);
       }
     });
+
+    // Dynamic CPU Team Orders: Faster teammate on fresher tyres within 0.85s -> clean Pit-Wall swap!
+    if (fs.safetyCarLaps === 0 && fs.vscLaps === 0 && !fs.chequeredFlag && leaderLap >= 2 && leaderLap < fs.totalLaps - 1) {
+      for (let i = 1; i < sortedNow.length; i++) {
+        const front = sortedNow[i - 1], back = sortedNow[i];
+        if (front.dnf || back.dnf || front.inPit > 0 || back.inPit > 0) continue;
+        if (front.card.hero_team !== back.card.hero_team) continue;
+        const gapS = (front.totalProg - back.totalProg) * fs.circuit.base_lap_s;
+        if (gapS > 0.15 && gapS <= 0.85 && ((back.tyreLife - front.tyreLife) >= 18 || (front.currentLapS - back.currentLapS) >= 0.75)) {
+          const toKey = `to_${front.idx}_${back.idx}`;
+          if (!fs.overtakeCooldown[toKey] || fs.raceClock >= fs.overtakeCooldown[toKey]) {
+            fs.overtakeCooldown[toKey] = fs.raceClock + 95;
+            const swapDelta = (gapS + 0.25) / fs.circuit.base_lap_s;
+            back.totalProg += swapDelta * 0.55;
+            front.totalProg -= swapDelta * 0.45;
+            addCommentary(leaderLap + 1, `📻 TEAM ORDERS (${front.card.hero_team}): ${front.card.clean_name} yields cleanly to faster teammate ${back.card.clean_name} on fresher rubber!`, "info");
+            if (fs.radio && !fastMode && front.pos <= 10) {
+              fs.radio.emit("team_order", { idx: front.idx, code3: front.card.code3, name: front.card.clean_name, color: front.card.hero_color, engineer: front.engineer, dna: front.dna, eraKey: (fs.eraRule && fs.eraRule.key) || "2026", lap: front.lap }, { lap: leaderLap + 1, rival: back.card.clean_name });
+            }
+          }
+        }
+      }
+    }
 
     // Process FIA Stewards & Incident Events
     if (R && fs.geom) {

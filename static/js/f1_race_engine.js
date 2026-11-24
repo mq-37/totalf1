@@ -294,10 +294,19 @@
     delta += (100 - life) * 0.018;
     if (life < 22) delta += (22 - life) * 0.16;
 
-    // Pirelli thermal window (84-114°C optimal)
+    // Pirelli thermal window (84-114°C optimal) + Out-Lap Cold Tyre & Graining/Blistering physics!
     const temp = Number(opts.tyreTemp ?? 96);
-    if (temp > 114) delta += (temp - 114) * 0.08;
-    else if (temp < 84) delta += (84 - temp) * 0.06;
+    if (temp > 114) delta += (temp - 114) * 0.085;
+    else if (temp < 84) {
+      const coldPenaltyMult = opts.compound === "hard" ? 0.095 : (opts.compound === "medium" ? 0.075 : 0.055);
+      delta += (84 - temp) * coldPenaltyMult;
+    }
+    if (opts.car) {
+      const grain = Number(opts.car.tyreGraining || 0);
+      const blist = Number(opts.car.tyreBlistering || 0);
+      if (grain > 12) delta += Math.min(1.05, (grain - 12) * 0.013);
+      if (blist > 12) delta += Math.min(1.25, (blist - 12) * 0.016);
+    }
 
     // Weather crossover penalty/bonus
     const wetness = Number(opts.wetness || 0);

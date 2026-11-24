@@ -2295,6 +2295,13 @@
 
       let targetLat = baseLat;
       let speedMod = 1.0 + tacticSpeedBonus;
+      // Authentic Dirty-Air Mid-Corner Downforce Loss (0.28s..1.35s wake in corners -> creates real DRS Trains!)
+      const inCornerDirtyAir = !safetyActive && ahead && aheadGapS >= 0.25 && aheadGapS <= 1.35 && poseNow.curv >= 0.24 && Math.abs(curLat - (ahead.latOffset || 0)) < 2.8;
+      if (inCornerDirtyAir) {
+        const wakeIntensity = 1.0 - Math.max(0, Math.min(1, (aheadGapS - 0.25) / 1.1));
+        speedMod -= 0.014 + wakeIntensity * 0.022;
+        if (car.tyreTemp != null) car.tyreTemp = Math.min(132, car.tyreTemp + dt * (1.2 + wakeIntensity * 2.4));
+      }
       let bState = "clean";
       let bTag = "";
       let obsBadge = wetOffLineActive ? "🌧 OFF-LINE" : "";

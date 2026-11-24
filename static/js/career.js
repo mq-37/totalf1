@@ -1743,8 +1743,26 @@
       const beh = ENG.getDriverBehaviorModifiers(car, cr.wetness);
       lapS += beh.paceDelta;
     }
-    if (cr.safetyCarLaps > 0) lapS = c.base_lap_s * 1.32;
-    else if (cr.vscLaps > 0) lapS = c.base_lap_s * 1.22;
+    if (cr.safetyCarLaps > 0) {
+      // Phase A: True Safety Car pack bunching + leader restart pacing
+      const baseSc = c.base_lap_s * 1.38;
+      if (car.pos === 1) {
+        const progFrac = ((car.totalProg % 1) + 1) % 1;
+        if (cr.safetyCarLaps === 1 && progFrac >= 0.72 && progFrac < 0.94) {
+          return c.base_lap_s * 1.62;
+        }
+        if (cr.safetyCarLaps === 1 && progFrac >= 0.94) {
+          return c.base_lap_s * 0.96;
+        }
+        return baseSc;
+      }
+      const gapAhead = Number(car.intervalS || 0);
+      if (gapAhead > 1.8) return c.base_lap_s * 1.04;
+      if (gapAhead > 0.7) return c.base_lap_s * 1.18;
+      if (gapAhead < 0.35) return c.base_lap_s * 1.46;
+      return baseSc;
+    }
+    else if (cr.vscLaps > 0) lapS = c.base_lap_s * 1.24;
     return Math.max(c.base_lap_s * 0.84, lapS + (Math.random() - 0.5) * 0.40);
   }
 
@@ -2257,11 +2275,17 @@
       }
       car._prevLap = car.lap;
       car._prevSec = Math.floor((((car.totalProg % 1) + 1) % 1) * 3);
+      if (cr.safetyCarLaps > 0 && !car.dnf && car.inPit <= 0) {
+        car.currentLapS = computeCrLapTime(car);
+      }
       if (car.inPit > 0) {
         car.inPit -= simDt;
         if (car.inPit <= 0) {
           car.inPit = 0; car.pitDuration = 0;
-          car.compound = car.nextCompound; car.tyreLife = 100; car.tyreTemp = 82; car.stops += 1;
+          car.compound = car.nextCompound; car.tyreLife = 100;
+          const exitT = { soft: 74, medium: 66, hard: 56, inter: 64, wet: 58 };
+          car.tyreTemp = exitT[car.compound] || 66;
+          car.stops += 1;
           car.lastPitLap = car.lap;
           if (!Array.isArray(car.stints)) car.stints = [COMPOUNDS[car.compound].code];
           car.stints.push(COMPOUNDS[car.compound].code);

@@ -209,6 +209,15 @@
           tone: "win",
           category: "race",
         };
+      case "team_order":
+        return {
+          speaker: eng.short,
+          to: drv,
+          text: `${drv}, let ${rival} through into the next braking zone — they are on a different strategy with fresher tyres. Swap positions.`,
+          engReply: `${drv}: Copy, understood — moving off line on the straight.`,
+          tone: "info",
+          category: "strategy",
+        };
       case "safety_car":
         return {
           speaker: eng.short,
