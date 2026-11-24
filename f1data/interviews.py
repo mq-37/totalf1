@@ -252,7 +252,76 @@ def _build_driver_interview(
         topic2 = "Engineer & Rhythm"
     qas.append({"q": q2, "a": a2, "topic": topic2})
 
-    # Q3: Looking Ahead / Track Affinity / Regulation Era Opinion
+    # Q3: Real Component Wear / Mechanical Symptom Reported on Radio (if any!)
+    comp_issues = stint.get("compIssues") or []
+    comps = stint.get("components") or {}
+    eng_data = stint.get("engineering") or {}
+    fb_data = eng_data.get("feedback") or {}
+    fb_score = int(fb_data.get("score") or 72)
+    fb_tier = str(fb_data.get("tier") or "CLEAR")
+    setup_acc = int(eng_data.get("setupAccuracy") or 80)
+    bal_bias = int(eng_data.get("balanceBias") or 0)
+    kph_loss = int(stint.get("compKphLoss") or 0)
+    comp_loss_s = float(stint.get("compPaceLossS") or 0.0)
+    drv_radios = [r for r in (stint.get("driverRadio") or []) if r.get("text")]
+
+    if comp_issues:
+        worst = sorted(comp_issues, key=lambda x: (0 if x.get("severity") == "critical" else 1, x.get("health", 100)))[0]
+        w_comp = str(worst.get("comp") or "ice")
+        w_lbl = str(worst.get("label") or "Power Unit")
+        w_lap = int(worst.get("lap") or 1)
+        w_hlth = int(worst.get("health") or 55)
+        w_kph = int(worst.get("kphLoss") or kph_loss)
+        reasons.append(f"{w_lbl}: {w_hlth}% (L{w_lap} radio alert)")
+        if w_comp in ("ice", "ers"):
+            q_mech = (
+                f"On Lap {w_lap} we heard you on team radio reporting straight-line power loss "
+                f"({f'~{w_kph} kph down at the speed trap' if w_kph > 0 else 'early clipping'}) — how badly did that {w_lbl} wear compromise your race?"
+            )
+            a_mech = (
+                f"Massively. Once {eng_name} confirmed the {w_lbl} dropped to {w_hlth}% and was costing {comp_loss_s:.2f}s a lap, "
+                f"we had to lift-and-coast and defend offline on every straight. Just relieved it survived to the chequered flag."
+                if not dnf else
+                f"You could feel it going from Lap {w_lap} — losing {max(6, w_kph)} kph on the straight meant we were a sitting duck before it finally gave up."
+            )
+        elif w_comp == "brakes":
+            q_mech = f"You radioed {eng_name} on Lap {w_lap} about a long brake pedal in dirty air — were you nursing glazed carbon discs all stint?"
+            a_mech = f"Yeah, brake health fell to {w_hlth}% and temps spiked every time I sat in a tow. I had to move brake bias rearward and give up 15 metres into the heavy stops."
+        elif w_comp == "floor":
+            q_mech = f"Telemetry flagged floor-edge degradation ({w_hlth}%) after Lap {w_lap} — could you feel the aero balance shift through the fast corners?"
+            a_mech = f"Instantly. The rear downforce just vanished in the high-speed sweepers — costing around {max(0.2, comp_loss_s):.2f}s per lap and chewing the rear tyres."
+        else:
+            q_mech = f"You flagged a {w_lbl} issue on Lap {w_lap} ({w_hlth}% health) — how tricky was it nursing the car home?"
+            a_mech = f"{eng_name} gave me clear mitigation maps straight away. You lose confidence over the kerbs when the {w_lbl} is compromised, so bringing it home P{fin} was all about discipline."
+        qas.append({"q": q_mech, "a": a_mech, "topic": f"Car Wear · {w_lbl}"})
+
+    # Q4: Engineer Setup Convergence & Driver Feedback Quality (Experience × Confidence × Momentum × Quality)
+    bal_desc = "heavy understeer" if bal_bias < -18 else ("snappy oversteer" if bal_bias > 18 else "neutral sweet-spot balance")
+    reasons.append(f"Engineer Feedback: {fb_score}/100 ({fb_tier}) · Setup {setup_acc}%")
+    q_eng = (
+        f"Your race engineer {eng_name} logged a {fb_score}/100 ({fb_tier}) feedback precision rating with {setup_acc}% setup convergence — "
+        f"how did the car's {bal_desc} feel over the stint?"
+    )
+    if setup_acc >= 85 and fb_score >= 76:
+        a_eng = (
+            f"When you and {eng_name} speak the exact same language on aero balance, diff locking, and brake migration, everything clicks. "
+            f"We nailed {setup_acc}% of our target window around {circuit_name} and I could lean on the front end every lap."
+        )
+    elif bal_bias < -18:
+        a_eng = (
+            f"We chased front-end washout ({bal_bias} balance index) all afternoon. I gave {eng_name} detailed corner-entry notes so we know we need more front wing and softer front heave next time."
+        )
+    elif bal_bias > 18:
+        a_eng = (
+            f"The rear was lively (+{bal_bias} oversteer bias), especially on traction exits. {'At least our clear feedback helped adjust diff settings on the fly.' if fb_score >= 70 else 'With my confidence dipping it was hard to isolate whether it was diff lock or tyre temps.'}"
+        )
+    else:
+        a_eng = (
+            f"Pretty solid baseline ({setup_acc}% target hit). {eng_name} kept the telemetry calls super clean, though we can still tighten our ride-height and camber window for qualifying."
+        )
+    qas.append({"q": q_eng, "a": a_eng, "topic": "Setup & Engineering"})
+
+    # Q5: Looking Ahead / Track Affinity / Regulation Era Opinion
     if aff >= 0.7:
         q3 = f"Historically you've always shone around {circuit_name} — did that familiarity give you an extra edge today?"
         a3 = f"There's something about the kerbs and flow here that just fits my driving style. Every time we arrive at {circuit_name}, I start the weekend already believing we can punch above our weight."
@@ -264,7 +333,7 @@ def _build_driver_interview(
         a3 = (
             f"Carry this momentum ({end_mom:+d}) straight into qualifying next weekend — our race pace is genuinely strong."
             if end_mom >= 5
-            else f"We need better track position on Saturday so we aren't burning our tyres in dirty air all Sunday."
+            else f"We need better track position on Saturday so we aren't burning our tyres and brakes in dirty air all Sunday."
         )
     qas.append({"q": q3, "a": a3, "topic": "Looking Ahead"})
 
@@ -290,6 +359,10 @@ def _build_driver_interview(
         "persona": persona,
         "personaLabel": PERSONA_LABELS.get(persona, persona),
         "engineerName": eng_name,
+        "feedbackScore": fb_score,
+        "setupAccuracy": setup_acc,
+        "compIssues": comp_issues,
+        "driverRadio": drv_radios[:8],
         "mood": mood,
         "perspectiveReasons": reasons,
         "headlineQuote": qas[0]["a"],
@@ -304,15 +377,19 @@ def generate_race_interviews(
     max_drivers: int = 8,
 ) -> list[dict[str, Any]]:
     """
-    Generate context-aware post-race driver reports & interviews for key storylines:
-    Podium (P1-P3), Player Team drivers, Biggest Climber, Most Dramatic/Shaken driver.
+    Generate context-aware post-race driver reports & interviews ONLY after the race finishes:
+    Podium (P1-P3), Player Team drivers, Biggest Climber, Most Dramatic/Mechanical-Failure story.
     """
     if not isinstance(telemetry_payload, dict):
+        return []
+    # Strictly lock Post-Race Interviews during an active race (mid-race uses live Radio Logs only!)
+    if telemetry_payload.get("raceFinished") is False:
         return []
     drivers = telemetry_payload.get("drivers") or []
     stints = telemetry_payload.get("stints") or []
     events = telemetry_payload.get("events") or []
     frames = telemetry_payload.get("frames") or []
+    radio_log = telemetry_payload.get("radioLog") or []
     circuit_name = str(telemetry_payload.get("circuitName") or "Grand Prix")
     era_label = str(telemetry_payload.get("eraLabel") or "2026 Rules")
 
@@ -320,7 +397,9 @@ def generate_race_interviews(
     had_sc = any(f.get("sc") for f in frames)
 
     drv_by_idx = {d.get("idx"): d for d in drivers}
-    stint_by_idx = {s.get("idx"): s for s in stints}
+    radio_by_idx: dict[Any, list[dict[str, Any]]] = {}
+    for rm in radio_log:
+        radio_by_idx.setdefault(rm.get("carIdx"), []).append(rm)
     total_cars = max(1, len(stints) or len(drivers))
 
     # Build reports for all drivers so we can select the richest storylines
@@ -335,7 +414,9 @@ def generate_race_interviews(
             "color": s.get("color"),
             "gridPos": s.get("finishPos") or 1,
         }
-        all_reports.append(_build_driver_interview(d, s, events, circuit_name, era_label, had_wet, had_sc, total_cars))
+        s_enriched = dict(s)
+        s_enriched["driverRadio"] = radio_by_idx.get(idx, [])
+        all_reports.append(_build_driver_interview(d, s_enriched, events, circuit_name, era_label, had_wet, had_sc, total_cars))
 
     if not all_reports:
         return []

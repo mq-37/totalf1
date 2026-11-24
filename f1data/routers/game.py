@@ -88,13 +88,20 @@ def api_sim_balance(
 
 @router.post("/api/sim/interviews")
 async def api_sim_interviews(request: Request):
-    """Generate context-aware post-race driver reports & press-pen interviews from telemetry."""
+    """Generate context-aware post-race driver reports & press-pen interviews ONLY after the Chequered Flag."""
     from ..interviews import generate_race_interviews
     body = await request.json()
     telem = body.get("telemetry") if isinstance(body, dict) else None
     if not isinstance(telem, dict):
         raise HTTPException(status_code=400, detail="Missing telemetry payload")
-    return {"ok": True, "interviews": generate_race_interviews(telem)}
+    if telem.get("raceFinished") is False:
+        return {
+            "ok": True,
+            "locked": True,
+            "interviews": [],
+            "message": "Post-race Media Pen interviews unlock only after the Chequered Flag falls. View live Driver Radio & Component Diagnostics while racing.",
+        }
+    return {"ok": True, "locked": False, "interviews": generate_race_interviews(telem)}
 
 
 @router.get("/api/feeders/overview")

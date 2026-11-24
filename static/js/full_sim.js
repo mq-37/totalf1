@@ -1273,7 +1273,7 @@
           car.dirtyAirLaps = 0;
           ENG.applyPsychologyEvent(car, "clean_lap");
         }
-        const mistakeProb = 0.011 * beh.mistakeMult * (fs.wetness >= 30 ? 1.4 : 1.0);
+        const mistakeProb = 0.011 * beh.mistakeMult * (car.compMistakeMult || 1.0) * (fs.wetness >= 30 ? 1.4 : 1.0);
         if (car.lap >= 2 && fs.safetyCarLaps === 0 && Math.random() < mistakeProb) {
           const lossS = 0.9 + Math.random() * 1.4;
           car.totalProg -= lossS / fs.circuit.base_lap_s;
@@ -1281,11 +1281,53 @@
           if (car.pos <= 8) {
             const corner = (fs.circuit.corners && fs.circuit.corners[Math.floor(Math.random() * fs.circuit.corners.length)]) || "a heavy braking zone";
             addCommentary(car.lap + 1, `💨 LOCK-UP! ${car.card.clean_name} runs wide at ${corner} (-${lossS.toFixed(1)}s, confidence rattled)!`, "warn");
-            if (!fastMode && fs.radio && (car.idx === fs.focusIdx || car.pos <= 4)) {
-              fs.radio.emit("mistake", { code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, lap: car.lap }, { lap: car.lap + 1 });
+            if (fs.radio && (car.idx === fs.focusIdx || car.pos <= 6)) {
+              const rObj = { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap };
+              if (!fastMode) fs.radio.emit("mistake", rObj, { lap: car.lap + 1 });
+              else if (fs.telemetry && fs.radio.buildMessage) {
+                const m = fs.radio.buildMessage("mistake", rObj, { lap: car.lap + 1 });
+                fs.telemetry.addRadio({ lap: car.lap + 1, carIdx: car.idx, code3: car.card.code3, speaker: m.speaker, to: m.to, color: car.card.hero_color, category: "race", severity: "warn", text: m.text });
+              }
             }
           }
           if (fs.telemetry) fs.telemetry.addEvent(car.lap + 1, "mistake", `${car.card.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
+        }
+
+        // 6-Component Car Wear & Live Diagnostic Driver <-> Engineer Radio Calls!
+        if (ENG.stepComponentWear) {
+          const compAlerts = ENG.stepComponentWear(car, fs.circuit, era, { totalLaps: fs.totalLaps, wetness: fs.wetness });
+          compAlerts.forEach((al) => {
+            const rType = `comp_${al.comp}`;
+            const rObj = { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap };
+            const rCtx = { lap: al.lap, health: al.health, temp: al.temp, kphLoss: al.kphLoss, severity: al.severity, component: al.comp, feedbackQuality: car.eng?.feedback?.score || 72 };
+            if (fs.telemetry) {
+              fs.telemetry.addEvent(al.lap, "component", `${car.card.code3} ${al.label} (${al.health}%)`, al.kphLoss ? `Losing ~${al.kphLoss} kph on straights (+${al.paceLossS}s/L)` : `Wear alert (+${al.paceLossS}s/L)`, car.idx);
+            }
+            if (fs.radio) {
+              if (!fastMode && (car.idx === fs.focusIdx || car.pos <= 8 || al.severity === "critical")) {
+                fs.radio.emit(rType, rObj, rCtx, al.severity === "critical" && car.idx === fs.focusIdx);
+              } else if (fs.telemetry && fs.radio.buildMessage) {
+                const m = fs.radio.buildMessage(rType, rObj, rCtx);
+                fs.telemetry.addRadio({ lap: al.lap, carIdx: car.idx, code3: car.card.code3, speaker: m.speaker, to: m.to, color: car.card.hero_color, category: "mechanical", component: al.comp, severity: al.severity, text: m.text, engReply: m.engReply || "", feedbackQuality: rCtx.feedbackQuality });
+              }
+            }
+            if (car.pos <= 6 || car.idx === fs.focusIdx) {
+              addCommentary(al.lap, `🔧 RADIO DIAGNOSIS: ${car.card.clean_name} flags ${al.label} wear (${al.health}%${al.kphLoss ? `, -${al.kphLoss} kph straight-line` : ""})!`, "warn");
+            }
+          });
+          // Periodic Engineer Setup Feedback check-ins (Lap 3 & Mid-Race) for rich radio transcript
+          if ((car.lap === 3 || car.lap === Math.max(6, Math.round(fs.totalLaps * 0.55))) && (car.idx === fs.focusIdx || car.pos <= 5)) {
+            if (fs.radio && fs.radio.buildMessage && fs.telemetry) {
+              const rObj = { idx: car.idx, code3: car.card.code3, name: car.card.clean_name, color: car.card.hero_color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap };
+              const rCtx = { lap: car.lap + 1, balanceBias: car.eng?.balanceBias || 0, feedbackQuality: car.eng?.feedback?.score || 72 };
+              if (!fastMode && car.idx === fs.focusIdx) {
+                fs.radio.emit("setup_feedback", rObj, rCtx);
+              } else {
+                const m = fs.radio.buildMessage("setup_feedback", rObj, rCtx);
+                fs.telemetry.addRadio({ lap: car.lap + 1, carIdx: car.idx, code3: car.card.code3, speaker: m.speaker, to: m.to, color: car.card.hero_color, category: "setup", severity: m.tone, text: m.text, engReply: m.engReply || "", feedbackQuality: rCtx.feedbackQuality });
+              }
+            }
+          }
         }
 
         if (car.lap >= fs.totalLaps || fs.chequeredFlag) {
@@ -1618,8 +1660,9 @@
     addCommentary(fs.totalLaps, `🏁 CHEQUERED FLAG at ${fs.circuit.name}! ${podTxt}`, "win");
     playSfx("winLap");
 
-    // Export full telemetry buffer for Phase 4 Race Analytics Studio & Post-Race Interviews
+    // Export full telemetry buffer for Race Data Analysis Studio & Post-Race Interviews (raceFinished = TRUE!)
     if (fs.telemetry) {
+      fs.telemetry.setFinished(true);
       fs.telemetry.recordLapSnapshot(fs.totalLaps, sorted, { wetness: fs.wetness, scActive: false, vscActive: false });
       const finalMeta = sorted.map((c, i) => ({
         idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team, color: c.card.hero_color,
@@ -1627,8 +1670,9 @@
         confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
         momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
         totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+        components: c.components, compIssues: c.compIssues, compPaceLossS: c.compPaceLossS, compKphLoss: c.compKphLoss, eng: c.eng,
       }));
-      window.F1_FULLSIM_LAST_TELEMETRY = fs.telemetry.exportPayload(finalMeta);
+      window.F1_FULLSIM_LAST_TELEMETRY = fs.telemetry.exportPayload(finalMeta, { raceFinished: true });
     }
 
     // Award Era-Authentic Championship Points if in Season Mode
@@ -1885,6 +1929,13 @@
         currentLapS: selCir.base_lap_s,
       };
       ENG.initDriverPsychology(car, drvPsych[dKey], combinedAff, null);
+      if (ENG.initCarEngineering) {
+        ENG.initCarEngineering(car, selCir, {
+          experience: card.experience,
+          seasons: card.experience_seasons || 4,
+          overall: card.overall,
+        });
+      }
       car.currentLapS = computeCarLapTime(car, selCir, fs.wetness);
       return car;
     });
@@ -1894,7 +1945,7 @@
       selCir,
       fs.cars.map((c) => ({
         idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team,
-        color: c.card.hero_color, persona: c.persona, trackAffinity: c.trackAffinity,
+        color: c.card.hero_color, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer,
       })),
       fs.totalLaps,
       fs.eraRule
@@ -2105,9 +2156,10 @@
           confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
           momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
           totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+          components: c.components, compIssues: c.compIssues, compPaceLossS: c.compPaceLossS, compKphLoss: c.compKphLoss, eng: c.eng,
         }));
         if (fs.telemetry) {
-          payload = fs.telemetry.exportPayload(meta);
+          payload = fs.telemetry.exportPayload(meta, { raceFinished: fs.finished });
           // Append live in-progress snapshot so opening Telemetry on Lap 1 shows live data immediately!
           const curLap = Math.max(1, Math.max(...sortedNow.map((c) => c.lap), 0) + 1);
           const lastFr = payload.frames[payload.frames.length - 1];
@@ -2171,6 +2223,7 @@
       fs.radio = window.F1RadioEngine.createRadioController(getEl("fsim-radio-card"), {
         sfxEnabled: () => fs.sfxOn,
         voiceEnabled: () => fs.voiceOn,
+        onEmit: (entry) => { if (fs.telemetry && fs.telemetry.addRadio) fs.telemetry.addRadio(entry); },
       });
     }
     function setBroadcast3DMode(mode) {

@@ -118,8 +118,18 @@ class TestExpansionSystems(unittest.TestCase):
             "frames": [{"lap": 1, "wetness": 0, "sc": False}, {"lap": 15, "wetness": 0, "sc": False}],
             "events": [],
         }
+        # Mid-race payload MUST lock post-race interviews
+        mid_payload = dict(payload, raceFinished=False)
+        r_mid = self._post("/api/sim/interviews", json={"telemetry": mid_payload})
+        self.assertEqual(r_mid.status_code, 200)
+        self.assertTrue(r_mid.json().get("locked"))
+        self.assertEqual(len(r_mid.json().get("interviews") or []), 0)
+
+        # Post-race payload unlocks grounded interviews (including Setup & Engineering + Component wear!)
+        payload["raceFinished"] = True
         r = self._post("/api/sim/interviews", json={"telemetry": payload})
         self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json().get("locked"))
         ivs = r.json()["interviews"]
         self.assertEqual(len(ivs), 2)
         lec = next(x for x in ivs if x["code3"] == "LEC")
@@ -127,8 +137,8 @@ class TestExpansionSystems(unittest.TestCase):
         self.assertEqual(lec["mood"], "elated")
         self.assertIn(nor["mood"], ("shaken", "frustrated"))
         self.assertGreater(lec["rating"], nor["rating"])
-        self.assertEqual(len(lec["qas"]), 3)
-        self.assertTrue(len(lec["perspectiveReasons"]) >= 3)
+        self.assertGreaterEqual(len(lec["qas"]), 4)
+        self.assertTrue(len(lec["perspectiveReasons"]) >= 4)
 
     def test_feeder_series_custom_seasons_and_career_ops_board(self) -> None:
         # Public feeder overview

@@ -2373,6 +2373,25 @@
             if (cr.telemetry) cr.telemetry.addEvent(car.lap + 1, "mistake", `${car.code3} Lock-up`, `Lost ${lossS.toFixed(1)}s`, car.idx);
           }
         }
+        if (ENG && ENG.stepComponentWear) {
+          const compAlerts = ENG.stepComponentWear(car, cr.circuit, ENG.DEFAULT_ERA_RULES, { totalLaps: cr.totalLaps, wetness: cr.wetness });
+          compAlerts.forEach((al) => {
+            const rType = `comp_${al.comp}`;
+            const rObj = { idx: car.idx, code3: car.code3, name: car.cleanName, color: car.color, confidence: car.confidence, engineer: car.engineer, eng: car.eng, lap: car.lap };
+            const rCtx = { lap: al.lap, health: al.health, temp: al.temp, kphLoss: al.kphLoss, severity: al.severity, component: al.comp, feedbackQuality: car.eng?.feedback?.score || 72 };
+            if (cr.telemetry) cr.telemetry.addEvent(al.lap, "component", `${car.code3} ${al.label} (${al.health}%)`, al.kphLoss ? `Losing ~${al.kphLoss} kph on straights (+${al.paceLossS}s/L)` : `Wear alert (+${al.paceLossS}s/L)`, car.idx);
+            if (cr.radio) {
+              if (!fastMode && (car.isPlayerTeam || car.pos <= 4)) cr.radio.emit(rType, rObj, rCtx, car.isPlayerTeam && al.severity === "critical");
+              else if (cr.telemetry && cr.radio.buildMessage) {
+                const m = cr.radio.buildMessage(rType, rObj, rCtx);
+                cr.telemetry.addRadio({ lap: al.lap, carIdx: car.idx, code3: car.code3, speaker: m.speaker, to: m.to, color: car.color, category: "mechanical", component: al.comp, severity: al.severity, text: m.text, engReply: m.engReply || "", feedbackQuality: rCtx.feedbackQuality });
+              }
+            }
+            if (car.isPlayerTeam && !fastMode) {
+              getEl("cr-radio-latest").textContent = `🔧 ${car.code3} RADIO: ${al.label} wear (${al.health}%${al.kphLoss ? `, -${al.kphLoss} kph straight-line` : ""})!`;
+            }
+          });
+        }
         if (car.lap >= cr.totalLaps || cr.chequeredFlag) {
           const completedLaps = Math.min(cr.totalLaps, car.lap);
           if (completedLaps >= cr.totalLaps && !crHasTwoComp(car)) {
@@ -2862,6 +2881,7 @@
     const sorted = ENG.sortRaceStandings(cr.cars, true);
     let recorderPayload = null;
     if (cr.telemetry) {
+      cr.telemetry.setFinished(true);
       cr.telemetry.recordLapSnapshot(cr.totalLaps, sorted, { wetness: cr.wetness, scActive: false, vscActive: false });
       const finalMeta = sorted.map((c, i) => ({
         idx: c.idx, code3: c.code3, name: c.cleanName, team: c.teamName, color: c.color,
@@ -2869,8 +2889,9 @@
         confidence: c.confidence, peakConfidence: c.peakConfidence, minConfidence: c.minConfidence,
         momentum: c.momentum, overtakesMade: c.overtakesMade, mistakesCount: c.mistakesCount,
         totalPitDelayS: c.totalPitDelayS, bestLapS: c.bestLapS,
+        components: c.components, compIssues: c.compIssues, compPaceLossS: c.compPaceLossS, compKphLoss: c.compKphLoss, eng: c.eng,
       }));
-      recorderPayload = cr.telemetry.exportPayload(finalMeta);
+      recorderPayload = cr.telemetry.exportPayload(finalMeta, { raceFinished: true });
       window.F1_CAREER_LAST_TELEMETRY = recorderPayload;
     }
     const standings = sorted.map((c, i) => ({
@@ -3044,6 +3065,13 @@
         currentLapS: cr.circuit.base_lap_s,
       };
       ENG.initDriverPsychology(car, drvPsych[dKey], aff, g.is_player_team ? cr.setupConf : 70);
+      if (ENG.initCarEngineering) {
+        ENG.initCarEngineering(car, cr.circuit, {
+          experience: 55 + ((g.driver && g.driver.seasons) || 3) * 4,
+          overall: (g.driver && g.driver.overall) || 76,
+          poolHealth: g.is_player_team ? 94 : 95,
+        });
+      }
       car.currentLapS = computeCrLapTime(car);
       return car;
     });
@@ -3052,7 +3080,7 @@
       cr.circuit,
       cr.cars.map((c) => ({
         idx: c.idx, code3: c.code3, name: c.cleanName, team: c.teamName,
-        color: c.color, isTeam: c.isPlayerTeam, persona: c.persona, trackAffinity: c.trackAffinity,
+        color: c.color, isTeam: c.isPlayerTeam, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer,
       })),
       cr.totalLaps,
       ENG.DEFAULT_ERA_RULES
@@ -3726,8 +3754,9 @@
   }
   if (window.F1RadioEngine && getEl("cr-radio-card")) {
     cr.radio = window.F1RadioEngine.createRadioController(getEl("cr-radio-card"), {
-      sfxEnabled: () => true,
+      sfxEnabled: () => (window.F1Sfx ? window.F1Sfx.isEnabled() : true),
       voiceEnabled: () => false,
+      onEmit: (entry) => { if (cr.telemetry && cr.telemetry.addRadio) cr.telemetry.addRadio(entry); },
     });
   }
   document.querySelectorAll("[data-cr-3d]").forEach((btn) => {

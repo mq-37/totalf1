@@ -146,13 +146,125 @@
           to: drv,
           text: `Last lap, Lap ${lap}! Empty the battery, everything you've got to the flag!`,
           tone: "win",
+          category: "race",
         };
+      case "comp_ice": {
+        const kph = (ctx && ctx.kphLoss) || 8;
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `${eng.short}, losing ~${kph} kph at the end of the main straight — feels like ICE cylinder derate or exhaust heat clipping!`
+            : `${eng.short}, I'm losing power down the straight! Car feels flat above 7th gear, check the engine!`,
+          engReply: `${eng.short}: Copy ${drv}, confirmed on telemetry — ICE thermal derate (+${Math.round(kph * 0.9)}°C, health ${ctx?.health || 55}%). Switch Strat Mode 4 & lift-and-coast 35m!`,
+          tone: ctx && ctx.severity === "critical" ? "warn" : "info",
+          category: "mechanical",
+          component: "ice",
+        };
+      }
+      case "comp_ers": {
+        const kph = (ctx && ctx.kphLoss) || 6;
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `Battery derating 150m early out of the hairpin — MGU-K harvest is clipping on exit, costing ~${kph} kph on the straight!`
+            : `No deployment out of the slow corners! Feels like the hybrid battery isn't harvesting properly.`,
+          engReply: `${eng.short}: Understood ${drv}, MGU-K inverter temp elevated (${ctx?.temp || 92}°C · ${ctx?.health || 58}%). Going Harvest Map 3 to stabilize deploy.`,
+          tone: "warn",
+          category: "mechanical",
+          component: "ers",
+        };
+      }
+      case "comp_gearbox": {
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `Syncro hesitation shifting 4th to 5th on traction exit — hydraulic pressure feels sluggish!`
+            : `Shifts feel clunky coming off the apex, losing drive out of the tight turns!`,
+          engReply: `${eng.short}: Copy, gearbox hydraulic wear at ${ctx?.health || 56}% (${ctx?.temp || 114}°C). Short-shift 4th/5th slightly — keeping you out of neutral.`,
+          tone: "warn",
+          category: "mechanical",
+          component: "gearbox",
+        };
+      }
+      case "comp_brakes": {
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `Front-left carbon disc glazing into the heavy braking zone — pedal went long by 15m! Moving bias 1.5% rearward.`
+            : `Brakes feel super spongy into the hairpin! Nearly locked up twice in dirty air.`,
+          engReply: `${eng.short}: Telemetry confirms brake duct temp ${ctx?.temp || 640}°C (health ${ctx?.health || 55}%). Pull out of slipstream on straights & lift-coast 40m.`,
+          tone: "warn",
+          category: "mechanical",
+          component: "brakes",
+        };
+      }
+      case "comp_floor": {
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `Lost ~12 points of rear downforce through the high-speed sweepers — floor edge seal must be damaged from that kerb!`
+            : `Rear end suddenly feels super loose in the fast corners — zero aero bite!`,
+          engReply: `${eng.short}: Confirmed — aero load sensor shows floor edge degradation (${ctx?.health || 58}%). Compensating with diff entry +1 click.`,
+          tone: "warn",
+          category: "mechanical",
+          component: "floor",
+        };
+      }
+      case "comp_suspension": {
+        const sharp = ((ctx && ctx.feedbackQuality) || 70) >= 78;
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: sharp
+            ? `Heavy front-right steering vibration over the apex kerbs — damper rebound feels off on turn-in!`
+            : `Steering feels heavy and bumpy through the chicane, car isn't riding the kerbs cleanly.`,
+          engReply: `${eng.short}: Copy ${drv}, front suspension strain at ${ctx?.health || 58}%. Stay off the high sausage kerbs to protect the wishbone.`,
+          tone: "warn",
+          category: "mechanical",
+          component: "suspension",
+        };
+      }
+      case "setup_feedback": {
+        const bal = Number((ctx && ctx.balanceBias) || 0);
+        const fbq = Number((ctx && ctx.feedbackQuality) || 72);
+        const isMid = lap >= 7;
+        const balTxt = bal < -18
+          ? (fbq >= 78
+            ? (isMid ? `As fuel burns off, mid-corner front washout (-${Math.abs(bal)}) is growing — let's add +2 clicks front wing at the next stop.` : `Early balance check: front axle pushing wide in medium-speed apexes (-${Math.abs(bal)} understeer).`)
+            : `Front isn't turning in well, still fighting understeer through the tight turns.`)
+          : (bal > 18
+            ? (fbq >= 78
+              ? (isMid ? `Rear getting livelier on worn rubber (+${bal} oversteer) — going +2% on-throttle diff lock to calm traction exits.` : `Rear stepping out slightly on power (+${bal} oversteer) — diff entry feels a click too open.`)
+              : `Rear feels snappy on exit, hard to put the power down cleanly!`)
+            : (isMid
+              ? `Mid-stint check: aero balance & brake migration still bang on target — rear degradation is super manageable.`
+              : `Opening stint feedback: aero balance & diff feel right in the sweet spot! Car is rotating predictably on entry and exit.`));
+        return {
+          speaker: drv,
+          to: eng.short,
+          text: balTxt,
+          engReply: `${eng.short}: Copy ${drv} — Signal Quality ${fbq}/100 logged to Pit Wall setup model.`,
+          tone: Math.abs(bal) <= 18 ? "win" : "info",
+          category: "setup",
+        };
+      }
       default:
         return {
           speaker: eng.short,
           to: drv,
           text: (ctx && ctx.text) || `Copy ${drv}, looking strong out there.`,
           tone: "info",
+          category: "race",
         };
     }
   }
@@ -209,20 +321,40 @@
 
     return {
       emit(type, car, ctx, force) {
+        const msg = buildMessage(type, car, ctx);
+        const color = car.color || (car.card && car.card.hero_color) || "#e10600";
+        if (typeof o.onEmit === "function") {
+          try {
+            o.onEmit({
+              lap: (ctx && ctx.lap) || ((car.lap || 0) + 1),
+              carIdx: car.idx ?? -1,
+              code3: car.code3 || (car.card && car.card.code3) || "DRV",
+              speaker: msg.speaker,
+              to: msg.to,
+              color,
+              category: msg.category || (type.startsWith("comp_") ? "mechanical" : (type === "setup_feedback" ? "setup" : "race")),
+              component: msg.component || (ctx && ctx.component) || "",
+              severity: (ctx && ctx.severity) || msg.tone || "info",
+              text: msg.text,
+              engReply: msg.engReply || "",
+              feedbackQuality: (ctx && ctx.feedbackQuality) ?? (car.eng && car.eng.feedback ? car.eng.feedback.score : null),
+            });
+          } catch (_) {}
+        }
         const now = performance.now();
         if (!force && now - lastEmitTs < minCooldownMs) return false;
         lastEmitTs = now;
-        const msg = buildMessage(type, car, ctx);
         showCard({
           speaker: msg.speaker,
           to: msg.to,
           text: msg.text,
           tone: msg.tone,
-          color: car.color || (car.card && car.card.hero_color) || "#e10600",
+          color,
           actions: ctx && ctx.actions,
         });
         return true;
       },
+      buildMessage,
       hide() {
         clearTimeout(hideTimer);
         if (containerEl) containerEl.classList.add("hidden");

@@ -318,9 +318,231 @@
     if (opts.car) {
       const beh = getDriverBehaviorModifiers(opts.car, wetness);
       delta += beh.paceDelta;
+      // Live 6-Component Car Wear & Setup Convergence pace impact!
+      if (opts.car.compPaceLossS) delta += opts.car.compPaceLossS;
+      if (opts.car.eng && Number.isFinite(opts.car.eng.setupPaceDeltaS)) delta += opts.car.eng.setupPaceDeltaS;
     }
 
     return delta;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6-Component Car Health, Wear Diagnostics & F1 Race Engineer Setup Science
+  // ---------------------------------------------------------------------------
+  const CAR_COMPONENTS = {
+    ice:        { key: "ice",        label: "ICE Power Unit",    short: "ICE",  area: "Powertrain",  color: "#ef4444", baseTemp: 108 },
+    ers:        { key: "ers",        label: "ERS / MGU-K",       short: "ERS",  area: "Hybrid",      color: "#22c55e", baseTemp: 72  },
+    gearbox:    { key: "gearbox",    label: "Gearbox & Hydr.",   short: "GBX",  area: "Drivetrain",  color: "#f59e0b", baseTemp: 98  },
+    brakes:     { key: "brakes",     label: "Carbon Brakes",     short: "BRK",  area: "Braking",     color: "#f97316", baseTemp: 460 },
+    floor:      { key: "floor",      label: "Aero Floor / Edge", short: "FLR",  area: "Aerodynamics",color: "#38bdf8", baseTemp: 62  },
+    suspension: { key: "suspension", label: "Suspension & Steer",short: "SUSP", area: "Chassis",     color: "#a855f7", baseTemp: 58  },
+  };
+
+  function _circuitSetupTargets(circuit) {
+    const aeroStr = String((circuit && circuit.aero) || "MED").toUpperCase();
+    const isHighAero = aeroStr.includes("HIGH") || (circuit && (circuit.turns || 14) >= 16);
+    const isLowAero = aeroStr.includes("LOW") || (circuit && (circuit.top_speed_kph || 320) >= 338);
+    const isStreet = Boolean(circuit && (circuit.biome === "street" || circuit.biome === "night_street" || circuit.biome === "harbour"));
+    const wearLvl = Number((circuit && circuit.tyre_wear) || 3);
+    return {
+      aeroBalance:  isHighAero ? 78 : (isLowAero ? 34 : 58),   // Front/Rear Wing CoP %
+      rideHeight:   isStreet ? 72 : (isLowAero ? 38 : 54),     // Kerb compliance vs floor seal
+      diffLock:     isHighAero ? 68 : (isLowAero ? 46 : 58),   // On/off-throttle rotation
+      brakeBias:    isLowAero ? 74 : (isStreet ? 62 : 66),     // Heavy stop stability
+      camberWindow: clamp(42 + wearLvl * 11, 40, 88),          // Apex grip vs thermal deg
+    };
+  }
+
+  function computeFeedbackQuality(car) {
+    const exp = clamp(Number((car && car.experienceScore) ?? 68), 35, 99);
+    const engR = clamp(Number((car && car.engineer && car.engineer.rating) ?? 82), 55, 99);
+    const chem = clamp(Number((car && car.engineer && car.engineer.chemistry) ?? 72), 40, 99);
+    const engEff = engR * 0.65 + chem * 0.35;
+    const ovr = clamp(Number((car && car.overallQuality) ?? 76), 55, 99);
+    const conf = clamp(Number((car && car.confidence) ?? 62), 10, 99);
+    const momNorm = clamp(50 + Number((car && car.momentum) ?? 0) * 0.5, 5, 99);
+
+    // Weighted Engineering Signal Formula: Experience 28% · Engineer 24% · Quality 18% · Confidence 18% · Momentum 12%
+    const wExp  = +(exp * 0.28).toFixed(1);
+    const wEng  = +(engEff * 0.24).toFixed(1);
+    const wQual = +(ovr * 0.18).toFixed(1);
+    const wConf = +(conf * 0.18).toFixed(1);
+    const wMom  = +(momNorm * 0.12).toFixed(1);
+    const score = clamp(Math.round(wExp + wEng + wQual + wConf + wMom), 28, 99);
+    const noiseBand = +clamp(18.5 - (score - 30) * 0.23, 2.0, 17.5).toFixed(1);
+    const tier = score >= 84 ? "RAZOR-SHARP" : (score >= 70 ? "CLEAR" : (score >= 54 ? "MODERATE" : "NOISY"));
+
+    return {
+      score,
+      tier,
+      noiseBand,
+      weights: {
+        experience: { pct: 28, raw: Math.round(exp), contrib: wExp, color: "#38bdf8" },
+        engineer:   { pct: 24, raw: Math.round(engEff), contrib: wEng, color: "#a855f7" },
+        quality:    { pct: 18, raw: Math.round(ovr), contrib: wQual, color: "#facc15" },
+        confidence: { pct: 18, raw: Math.round(conf), contrib: wConf, color: "#22c55e" },
+        momentum:   { pct: 12, raw: Math.round(momNorm), contrib: wMom, color: "#f97316" },
+      },
+    };
+  }
+
+  function initCarEngineering(car, circuit, meta) {
+    const m = meta || {};
+    car.experienceScore = clamp(Number(m.experience ?? (58 + (m.seasons || 3) * 3.4)), 40, 99);
+    car.overallQuality = clamp(Number(m.overall ?? 76), 55, 99);
+    const fb = computeFeedbackQuality(car);
+    const targets = _circuitSetupTargets(circuit);
+
+    // Setup convergence depends directly on Feedback Quality + small realistic weekend variance
+    const actual = {};
+    let errSum = 0;
+    Object.keys(targets).forEach((k) => {
+      const spread = fb.noiseBand * 1.15;
+      const offset = (Math.random() - 0.5) * 2 * spread;
+      actual[k] = Math.round(clamp(targets[k] + offset, 12, 95));
+      errSum += Math.abs(actual[k] - targets[k]);
+    });
+    const avgErr = errSum / 5;
+    const setupAccuracy = Math.round(clamp(100 - avgErr * 1.85, 48, 99));
+    // Understeer (-100) <-> Oversteer (+100) balance signature
+    const balanceBias = Math.round(clamp((actual.aeroBalance - targets.aeroBalance) * 1.4 - (actual.diffLock - targets.diffLock) * 0.9, -85, 85));
+    const setupPaceDeltaS = +((78 - setupAccuracy) * 0.011).toFixed(3); // ~ -0.23s elite setup .. +0.33s poor setup
+
+    // 6-Component initial race health (87..100% — reflects season pool wear!)
+    const poolBase = Number(m.poolHealth ?? 95);
+    const components = {};
+    Object.keys(CAR_COMPONENTS).forEach((ck) => {
+      const def = CAR_COMPONENTS[ck];
+      const h = clamp(Math.round(poolBase - 4 + Math.random() * 9), 78, 100);
+      components[ck] = {
+        health: h,
+        temp: def.baseTemp + Math.round((Math.random() - 0.5) * 8),
+        warned: false,
+        criticalWarned: false,
+        paceLossS: 0,
+      };
+    });
+
+    car.components = components;
+    car.compPaceLossS = 0;
+    car.compKphLoss = 0;
+    car.compMistakeMult = 1.0;
+    car.compIssues = [];
+    car.eng = {
+      targets,
+      actual,
+      setupAccuracy,
+      balanceBias,
+      setupPaceDeltaS,
+      feedback: fb,
+      ggPoints: [], // Dynamic G-G Friction Circle telemetry samples
+    };
+    return car;
+  }
+
+  function stepComponentWear(car, circuit, era, opts) {
+    if (!car || !car.components || car.dnf || car.finishedRace) return [];
+    const o = opts || {};
+    const totalLaps = Math.max(8, Number(o.totalLaps || 15));
+    const scalePerLap = 18.0 / totalLaps; // Normalized wear so 15-lap & 50-lap races both reveal meaningful degradation arcs!
+    const isPush = car.paceMode === "push";
+    const isConserve = car.paceMode === "conserve";
+    const isDirty = (car.dirtyAirLaps || 0) >= 2;
+    const isStreet = Boolean(circuit && (circuit.biome === "street" || circuit.biome === "night_street" || circuit.biome === "harbour"));
+    const isHighSpeed = Boolean(circuit && (circuit.top_speed_kph || 320) >= 332);
+    const eraRel = Number((era && era.reliability_dnf_mult) || 1.0);
+    const qualProtect = 1.18 - ((car.overallQuality || 76) / 100) * 0.34;
+    const lapNum = (car.lap || 0) + 1;
+
+    // Refresh live weighted feedback quality from updated confidence & momentum!
+    const fb = computeFeedbackQuality(car);
+    if (car.eng) car.eng.feedback = fb;
+
+    const wearRates = {
+      ice:        (0.75 + (isHighSpeed ? 0.55 : 0.15) + (isPush ? 0.65 : (isConserve ? -0.25 : 0)) + (isDirty ? 0.48 : 0)) * eraRel,
+      ers:        (0.68 + (car.ersMode === "overtake" ? 0.72 : 0.10) + (isDirty ? 0.35 : 0)) * eraRel,
+      gearbox:    (0.60 + (isStreet ? 0.52 : 0.18) + (isPush ? 0.32 : 0)) * eraRel,
+      brakes:     (0.72 + (isStreet || isHighSpeed ? 0.45 : 0.18) + (isDirty ? 0.52 : 0) + (isPush ? 0.38 : 0)),
+      floor:      (0.45 + (isStreet ? 0.35 : 0.15) + (car.mistakesCount > 0 ? 0.40 : 0)),
+      suspension: (0.48 + (isStreet ? 0.48 : 0.14) + (car.mistakesCount > 0 ? 0.38 : 0)),
+    };
+
+    const alerts = [];
+    let totalPaceLoss = 0;
+    let totalKphLoss = 0;
+    let mistakeMult = 1.0;
+
+    // Feedback quality determines how early a driver + engineer detect subtle wear!
+    const warnThresh = fb.score >= 82 ? 68 : (fb.score >= 65 ? 62 : 55);
+    const critThresh = fb.score >= 82 ? 44 : 38;
+
+    Object.keys(CAR_COMPONENTS).forEach((ck) => {
+      const cState = car.components[ck];
+      const def = CAR_COMPONENTS[ck];
+      const jitter = 0.65 + Math.random() * 0.85;
+      const drop = wearRates[ck] * scalePerLap * qualProtect * jitter;
+      cState.health = +clamp(cState.health - drop, 8, 100).toFixed(1);
+
+      // Dynamic component operating temperature (°C)
+      const heatBoost = (isPush ? 8 : 0) + (isDirty ? 11 : 0) + Math.max(0, (70 - cState.health) * 0.45);
+      const targetTemp = def.baseTemp + heatBoost * (ck === "brakes" ? 4.2 : 1.0) - ((o.wetness || 0) * (ck === "brakes" ? 0.9 : 0.12));
+      cState.temp = Math.round(cState.temp + (targetTemp - cState.temp) * 0.42);
+
+      // Calculate authentic physical performance penalty once wear crosses 68%
+      let pLoss = 0;
+      if (cState.health < 68) {
+        const sev = (68 - cState.health) / 60; // 0..1
+        if (ck === "ice") {
+          pLoss = sev * 0.68;
+          totalKphLoss += Math.round(sev * 16);
+        } else if (ck === "ers") {
+          pLoss = sev * 0.48;
+          totalKphLoss += Math.round(sev * 9);
+        } else if (ck === "gearbox") {
+          pLoss = sev * 0.52;
+        } else if (ck === "brakes") {
+          pLoss = sev * 0.44;
+          mistakeMult += sev * 0.55;
+        } else if (ck === "floor") {
+          pLoss = sev * 0.58;
+        } else if (ck === "suspension") {
+          pLoss = sev * 0.42;
+          mistakeMult += sev * 0.35;
+        }
+      }
+      cState.paceLossS = +pLoss.toFixed(2);
+      totalPaceLoss += pLoss;
+
+      if (!cState.warned && cState.health <= warnThresh) {
+        cState.warned = true;
+        const issue = { lap: lapNum, comp: ck, label: def.label, severity: "warn", health: Math.round(cState.health), temp: cState.temp, kphLoss: ck === "ice" || ck === "ers" ? Math.max(4, Math.round((68 - cState.health) * 0.35)) : 0, paceLossS: cState.paceLossS, earlyDetect: fb.score >= 82 };
+        car.compIssues.push(issue);
+        alerts.push(issue);
+      } else if (!cState.criticalWarned && cState.health <= critThresh) {
+        cState.criticalWarned = true;
+        const issue = { lap: lapNum, comp: ck, label: def.label, severity: "critical", health: Math.round(cState.health), temp: cState.temp, kphLoss: ck === "ice" || ck === "ers" ? Math.max(9, Math.round((68 - cState.health) * 0.5)) : 0, paceLossS: cState.paceLossS, earlyDetect: fb.score >= 82 };
+        car.compIssues.push(issue);
+        alerts.push(issue);
+      }
+    });
+
+    car.compPaceLossS = +totalPaceLoss.toFixed(3);
+    car.compKphLoss = totalKphLoss;
+    car.compMistakeMult = +mistakeMult.toFixed(2);
+
+    // Record G-G Friction Circle sample for unique Engineer Lab telemetry plot
+    if (car.eng && car.eng.ggPoints.length < 48) {
+      const gripMod = (car.tyreLife / 100) * 0.4 + ((car.components.floor.health || 90) / 100) * 0.6;
+      const latMax = 3.8 + gripMod * 1.4 - ((o.wetness || 0) / 100) * 1.4;
+      const brkMax = 4.2 + ((car.components.brakes.health || 90) / 100) * 1.1;
+      const angle = (lapNum * 1.17 + (car.idx || 0) * 0.7) % (Math.PI * 2);
+      const rad = 0.55 + Math.random() * 0.44;
+      const gx = +(Math.cos(angle) * latMax * rad).toFixed(2);
+      const gy = +(Math.sin(angle) * (Math.sin(angle) < 0 ? brkMax : 1.75) * rad).toFixed(2);
+      car.eng.ggPoints.push({ lap: lapNum, gx, gy, tyreTemp: Math.round(car.tyreTemp || 96) });
+    }
+
+    return alerts;
   }
 
   /**
@@ -333,6 +555,7 @@
       eraKey: (eraRules && eraRules.key) || "2026",
       eraLabel: (eraRules && eraRules.label) || "2026 Rules",
       totalLaps: totalLaps || 15,
+      raceFinished: false,
       drivers: (cars || []).map((c, i) => ({
         idx: c.idx != null ? c.idx : i,
         code3: c.code3,
@@ -344,10 +567,17 @@
         persona: c.persona || "team_player",
         trackAffinity: Number(c.trackAffinity || 0),
         engineerName: c.engineer ? c.engineer.name : "Race Engineer",
+        engineerShort: c.engineer ? c.engineer.short : "ENG",
+        engineerRating: c.engineer ? (c.engineer.rating || 84) : 84,
       })),
       frames: [],   // Per-lap full-grid telemetry snapshots for smooth scrubbing
-      events: [],   // Key race story pins: overtake, pit, sc, mistake, rain, dnf, radio
+      events: [],   // Key race story pins: overtake, pit, sc, mistake, rain, dnf, component
+      radioLog: [], // Complete in-race Driver <-> Engineer radio transcript
       lastRecordedLap: -1,
+
+      setFinished(val) {
+        this.raceFinished = Boolean(val);
+      },
 
       recordLapSnapshot(lapNum, sortedCars, env) {
         if (lapNum <= this.lastRecordedLap) return;
@@ -359,41 +589,74 @@
           wetness: Math.round((env && env.wetness) || 0),
           sc: Boolean(env && env.scActive),
           vsc: Boolean(env && env.vscActive),
-          cars: sortedCars.map((c, rank) => ({
-            idx: c.idx,
-            pos: rank + 1,
-            gap: rank === 0 ? 0 : +Math.max(0, (leader.totalProg - c.totalProg) * baseLapS).toFixed(2),
-            lapTime: Number.isFinite(c.lastLapTime) && c.lastLapTime < 400 ? +c.lastLapTime.toFixed(2) : null,
-            s1: c.sectorTimes ? +Number(c.sectorTimes[0] || 0).toFixed(2) : 0,
-            s2: c.sectorTimes ? +Number(c.sectorTimes[1] || 0).toFixed(2) : 0,
-            s3: c.sectorTimes ? +Number(c.sectorTimes[2] || 0).toFixed(2) : 0,
-            comp: c.compound,
-            tyreLife: Math.round(c.tyreLife ?? 100),
-            ers: Math.round(c.ers ?? 50),
-            conf: Math.round(c.confidence ?? 60),
-            mom: Math.round(c.momentum ?? 0),
-            stops: c.stops || 0,
-            dnf: Boolean(c.dnf),
-          })),
+          cars: sortedCars.map((c, rank) => {
+            const compSnap = {};
+            if (c.components) {
+              Object.keys(c.components).forEach((k) => {
+                compSnap[k] = { h: Math.round(c.components[k].health), t: Math.round(c.components[k].temp), loss: c.components[k].paceLossS || 0 };
+              });
+            }
+            return {
+              idx: c.idx,
+              pos: rank + 1,
+              gap: rank === 0 ? 0 : +Math.max(0, (leader.totalProg - c.totalProg) * baseLapS).toFixed(2),
+              lapTime: Number.isFinite(c.lastLapTime) && c.lastLapTime < 400 ? +c.lastLapTime.toFixed(2) : null,
+              s1: c.sectorTimes ? +Number(c.sectorTimes[0] || 0).toFixed(2) : 0,
+              s2: c.sectorTimes ? +Number(c.sectorTimes[1] || 0).toFixed(2) : 0,
+              s3: c.sectorTimes ? +Number(c.sectorTimes[2] || 0).toFixed(2) : 0,
+              comp: c.compound,
+              tyreLife: Math.round(c.tyreLife ?? 100),
+              ers: Math.round(c.ers ?? 50),
+              conf: Math.round(c.confidence ?? 60),
+              mom: Math.round(c.momentum ?? 0),
+              stops: c.stops || 0,
+              dnf: Boolean(c.dnf),
+              components: compSnap,
+              fbScore: c.eng && c.eng.feedback ? c.eng.feedback.score : 70,
+              compLossS: +(c.compPaceLossS || 0).toFixed(2),
+            };
+          }),
         };
         this.frames.push(snap);
       },
 
       addEvent(lap, type, title, detail, carIdx) {
-        if (this.events.length > 260) return;
+        if (this.events.length > 320) return;
         this.events.push({ lap: Math.max(1, Math.round(lap || 1)), type, title, detail: detail || "", carIdx: carIdx ?? -1 });
       },
 
-      exportPayload(finalSorted) {
+      addRadio(entry) {
+        if (!entry || this.radioLog.length > 260) return;
+        this.radioLog.push({
+          lap: Math.max(1, Math.round(entry.lap || 1)),
+          carIdx: entry.carIdx ?? -1,
+          code3: entry.code3 || "DRV",
+          speaker: entry.speaker || "DRV",
+          to: entry.to || "ENG",
+          color: entry.color || "#38bdf8",
+          category: entry.category || "race", // mechanical | setup | strategy | race
+          component: entry.component || "",
+          severity: entry.severity || "info", // info | warn | critical | win
+          text: entry.text || "",
+          engReply: entry.engReply || "",
+          feedbackQuality: entry.feedbackQuality ?? null,
+        });
+      },
+
+      exportPayload(finalSorted, extraOpts) {
+        const eo = extraOpts || {};
+        const isFin = eo.raceFinished != null ? Boolean(eo.raceFinished) : this.raceFinished;
         return {
           circuitId: this.circuitId,
           circuitName: this.circuitName,
           eraKey: this.eraKey,
           eraLabel: this.eraLabel,
           totalLaps: this.totalLaps,
+          raceFinished: isFin,
           drivers: this.drivers,
           frames: this.frames,
           events: this.events,
+          radioLog: this.radioLog.slice(),
           stints: (finalSorted || []).map((c) => ({
             idx: c.idx,
             code3: c.code3,
@@ -412,6 +675,11 @@
             mistakes: c.mistakesCount || 0,
             pitDelayS: +(c.totalPitDelayS || 0).toFixed(1),
             bestLapS: Number.isFinite(c.bestLapS) && c.bestLapS < 400 ? +c.bestLapS.toFixed(2) : null,
+            components: c.components || null,
+            compIssues: c.compIssues || [],
+            compPaceLossS: +(c.compPaceLossS || 0).toFixed(2),
+            compKphLoss: c.compKphLoss || 0,
+            engineering: c.eng || null,
           })),
         };
       },
@@ -540,6 +808,7 @@
 
   global.F1RaceEngine = {
     COMPOUNDS,
+    CAR_COMPONENTS,
     DEFAULT_ERA_RULES,
     RISK_PROFILES,
     esc,
@@ -557,6 +826,9 @@
     applyPsychologyEvent,
     getDriverBehaviorModifiers,
     computeLapModifiers,
+    computeFeedbackQuality,
+    initCarEngineering,
+    stepComponentWear,
     createTelemetryRecorder,
     drawDeoverlappedLabels,
     sortRaceStandings,
