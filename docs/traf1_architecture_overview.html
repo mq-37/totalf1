@@ -67,10 +67,10 @@
       max-width: 1140px; margin: 0 auto; padding: 10px 24px;
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
     }
-    .brand { display: flex; align-items: center; gap: 9px; font-weight: 900; letter-spacing: 0.06em; font-size: 0.9rem; color: #f8fafc; }
+    .brand { display: flex; align-items: center; gap: 9px; font-weight: 900; letter-spacing: 0.06em; font-size: 0.84rem; color: #f8fafc; white-space: nowrap; }
     .brand-badge { padding: 3px 8px; border-radius: 6px; background: var(--red); color: #fff; font-size: 0.7rem; letter-spacing: 0.1em; }
-    .nav-links { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.75rem; font-weight: 700; transition: color 0.18s; }
+    .nav-links { display: flex; align-items: center; gap: 11px; flex-wrap: nowrap; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.72rem; font-weight: 700; transition: color 0.18s; white-space: nowrap; }
     .nav-links a:hover { color: #f8fafc; }
     .nav-cta {
       padding: 5px 12px; border-radius: 999px;
@@ -216,7 +216,7 @@
       border: 1px solid rgba(148, 163, 184, 0.16); border-left: 3px solid var(--sc, var(--blue));
       margin-bottom: 8px; font-size: 0.77rem;
     }
-    .rf-step strong { display: block; font-size: 0.79rem; margin-bottom: 2px; }
+    .rf-step > strong:first-child { display: block; font-size: 0.79rem; margin-bottom: 2px; }
     .rf-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
     .rf-stat { padding: 7px 9px; border-radius: 8px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148,163,184,0.16); }
     .rf-stat-top { display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 800; margin-bottom: 4px; }
@@ -618,7 +618,7 @@
             <div class="rf-stat"><div class="rf-stat-top"><span>FAULT DNF (LOW)</span><span style="color:#4ade80">5.9%</span></div><div class="rf-track"><div class="rf-fill" style="width:24%;background:#22c55e"></div></div></div>
           </div>
           <details class="deep-dive" style="margin-top:10px">
-            <summary>Inspect Exact JSON Payload (<code>telemetry</code> + <code>stats</code>)</summary>
+            <summary><span>Inspect Exact JSON Payload (<code>telemetry</code> + <code>stats</code>)</span></summary>
             <pre class="json-pre">{
   "fair_overall": 99.0, "driver_skill": 86.5, "car_strength_est": 91.0,
   "stats": { "pace": 92, "racecraft": 92, "reliability": 89, "duels": 88,
