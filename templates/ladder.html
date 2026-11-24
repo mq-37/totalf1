@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Pit Wall: The Ladder — 5-Tier Motorsport Manager · Local F1{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="/static/css/ladder.css?v={{ asset_v }}">
+{% endblock %}
+{% block content %}
+<div id="ladder-app" class="ladder-shell">
+  <!-- LEFT PERSISTENT 5-TIER LADDER RAIL -->
+  <aside class="ladder-rail">
+    <div class="lr-brand">
+      <span class="lr-kicker">PIT WALL</span>
+      <h1>THE LADDER</h1>
+      <p id="lr-team-subtitle">Select or Start Career</p>
+    </div>
+
+    <div class="lr-rungs" id="lr-rungs">
+      {% for t in tiers_meta %}
+      <div class="lr-rung" data-rung="{{ t.id }}" style="--rung-col:{{ t.color }}">
+        <span class="lr-rung-num">{{ t.rank }}</span>
+        <div class="lr-rung-txt">
+          <strong>{{ t.short }}</strong>
+          <small>{{ t.machinery.split('(')[0].strip() }}</small>
+        </div>
+        <span class="lr-rung-dot"></span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="lr-kpis" id="lr-kpis">
+      <div class="lr-kpi"><span>CASH BALANCE</span><b id="kpi-cash">$0k</b></div>
+      <div class="lr-kpi"><span>REPUTATION</span><b id="kpi-rep">0 / 100</b></div>
+      <div class="lr-kpi"><span>SEASON / RD</span><b id="kpi-season">S1 · R1</b></div>
+      <div class="lr-kpi" id="kpi-cap-wrap" style="display:none"><span>F1 COST CAP</span><b id="kpi-cap">$0M / $135M</b></div>
+      <div class="lr-kpi"><span>CAREER PATH</span><b id="kpi-path">Owner-Ladder</b></div>
+    </div>
+
+    <div class="lr-actions">
+      <button type="button" id="btn-open-new" class="ld-btn ld-btn-primary"><i class="fas fa-plus"></i> New Ladder</button>
+      <select id="sel-saves" class="ld-select" aria-label="Load saved Ladder career">
+        <option value="">Load Saved Career...</option>
+      </select>
+    </div>
+  </aside>
+
+  <!-- RIGHT MAIN COMMAND WORKSPACE -->
+  <section class="ladder-main">
+    <header class="ladder-topbar">
+      <nav class="ladder-tabs" role="tablist">
+        <button type="button" class="ld-tab active" data-ld-tab="command"><i class="fas fa-satellite-dish"></i> Command</button>
+        <button type="button" class="ld-tab" data-ld-tab="weekend"><i class="fas fa-flag-checkered"></i> Live Pit Wall</button>
+        <button type="button" class="ld-tab" data-ld-tab="factory"><i class="fas fa-industry"></i> Garage &amp; R&amp;D</button>
+        <button type="button" class="ld-tab" data-ld-tab="roster"><i class="fas fa-users"></i> Drivers &amp; Scouts</button>
+        <button type="button" class="ld-tab" data-ld-tab="world"><i class="fas fa-globe"></i> 5-Tier &amp; SL</button>
+        <button type="button" class="ld-tab" data-ld-tab="politics"><i class="fas fa-landmark"></i> Politics &amp; Fork</button>
+      </nav>
+      <div class="ld-top-status">
+        <span id="ld-tier-pill" class="ld-pill">KARTING</span>
+        <span id="ld-next-gp" class="ld-next-gp">Ready</span>
+        <button type="button" id="btn-go-weekend" class="ld-btn ld-btn-red"><i class="fas fa-play"></i> Race Weekend</button>
+      </div>
+    </header>
+
+    <div id="ld-toast" class="ld-toast hidden"></div>
+
+    <!-- TAB 1: COMMAND & INBOX -->
+    <div class="ld-panel active" data-ld-panel="command">
+      <div class="ld-grid-3">
+        <div class="ld-card">
+          <h3><i class="fas fa-unlock-alt"></i> Tier Unlock Matrix</h3>
+          <div id="cmd-unlocks" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-inbox"></i> Paddock Inbox &amp; Silly Season</h3>
+          <div id="cmd-inbox" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-calendar-alt"></i> Calendar &amp; Last Debrief</h3>
+          <div id="cmd-calendar" class="ld-scroll-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: RACE WEEKEND & LIVE PIT WALL -->
+    <div class="ld-panel" data-ld-panel="weekend">
+      <div class="ld-weekend-layout">
+        <!-- Left: 2D Live Track Map + Phase Setup / Quali Overlay -->
+        <div class="ld-card ld-track-col">
+          <div class="ld-pitwall-header">
+            <div>
+              <strong id="pw-circuit-title">Circuit</strong>
+              <span id="pw-phase-badge" class="ld-pill">PREP</span>
+            </div>
+            <div class="ld-time-controls" id="pw-time-controls">
+              <button type="button" class="ld-spd" data-spd="1">1×</button>
+              <button type="button" class="ld-spd" data-spd="2">2×</button>
+              <button type="button" class="ld-spd active" data-spd="4">4×</button>
+              <button type="button" class="ld-spd" data-spd="8">8×</button>
+              <button type="button" class="ld-spd" data-spd="16">16×</button>
+              <button type="button" id="pw-pause-btn" class="ld-btn ld-btn-sm">Pause</button>
+              <button type="button" id="pw-autopause-btn" class="ld-btn ld-btn-sm active" title="Auto-pause on Rain Onset, Safety Car, Pit Window, Radio Pushback">Auto-Pause: ON</button>
+              <button type="button" id="pw-simend-btn" class="ld-btn ld-btn-sm ld-btn-red">Sim End</button>
+            </div>
+          </div>
+
+          <!-- Pre-Race Setup / Qualifying Panel (shown before Lights Out) -->
+          <div id="pw-prep-box" class="ld-prep-box"></div>
+
+          <!-- Live 2D Track Canvas + Critical Auto-Pause Banner -->
+          <div id="pw-live-wrap" class="ld-live-wrap hidden">
+            <canvas id="ladder-track-canvas" class="ld-track-canvas"></canvas>
+            <div id="pw-pause-banner" class="ld-pause-banner hidden"></div>
+            <div class="ld-radar-strip" id="pw-radar-strip"></div>
+            <div class="ld-drivers-deck" id="pw-drivers-deck"></div>
+          </div>
+        </div>
+
+        <!-- Right: Live Timing Tower + Event / Radio Feed -->
+        <div class="ld-card ld-tower-col">
+          <div class="ld-tower-head">
+            <h3><i class="fas fa-list-ol"></i> Live Timing</h3>
+            <span id="pw-lap-counter" class="ld-mono">LAP 0/0</span>
+          </div>
+          <div id="pw-timing-tower" class="ld-scroll-body ld-tower-list"></div>
+          <h4 class="ld-subhead"><i class="fas fa-broadcast-tower"></i> Pit Wall &amp; Race Control</h4>
+          <div id="pw-event-feed" class="ld-event-feed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: GARAGE, FACILITIES & F1 R&D CORRELATION -->
+    <div class="ld-panel" data-ld-panel="factory">
+      <div class="ld-grid-3">
+        <div class="ld-card">
+          <h3><i class="fas fa-wrench"></i> Tier Facilities</h3>
+          <div id="fac-list" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-wind"></i> F1 Car Philosophy &amp; Wind-Tunnel Correlation</h3>
+          <div id="rd-panel" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-file-invoice-dollar"></i> Dual-Ledger Accounting &amp; Cost Cap</h3>
+          <div id="eco-ledger" class="ld-scroll-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: DRIVERS, FOG-OF-WAR SCOUTING & STAFF GARDENING LEAVE -->
+    <div class="ld-panel" data-ld-panel="roster">
+      <div class="ld-grid-3">
+        <div class="ld-card">
+          <h3><i class="fas fa-helmet-safety"></i> Active Lineup (Ego, Trust &amp; SL)</h3>
+          <div id="roster-active" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-binoculars"></i> Fog-of-War Driver Market</h3>
+          <div id="roster-market" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-user-tie"></i> Staff &amp; Gardening Leave Poaching</h3>
+          <div id="roster-staff" class="ld-scroll-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: LIVING 5-TIER ECOSYSTEM & ROLLING 3-YEAR SUPER LICENSE -->
+    <div class="ld-panel" data-ld-panel="world">
+      <div class="ld-world-bar" id="world-tier-btns"></div>
+      <div class="ld-grid-2 ld-world-grid">
+        <div class="ld-card">
+          <h3 id="world-teams-title"><i class="fas fa-trophy"></i> Constructors Championship</h3>
+          <div id="world-teams" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3 id="world-drivers-title"><i class="fas fa-id-badge"></i> Drivers &amp; Rolling 3-Year Super License Ledger</h3>
+          <div id="world-drivers" class="ld-scroll-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: POLITICS, F1 ACADEMY AFFILIATES & THE HYBRID CAREER FORK -->
+    <div class="ld-panel" data-ld-panel="politics">
+      <div class="ld-grid-3">
+        <div class="ld-card">
+          <h3><i class="fas fa-code-branch"></i> Ladder Promotion &amp; Hybrid Career Fork</h3>
+          <div id="pol-fork" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-handshake"></i> F1 Academy Affiliate Contracts (F3/F2)</h3>
+          <div id="pol-academy" class="ld-scroll-body"></div>
+        </div>
+        <div class="ld-card">
+          <h3><i class="fas fa-gavel"></i> FIA Governance &amp; Regulation Voting (F1)</h3>
+          <div id="pol-fia" class="ld-scroll-body"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- NEW LADDER CAREER WIZARD MODAL -->
+<div id="new-ladder-modal" class="ld-modal hidden" role="dialog" aria-modal="true">
+  <div class="ld-modal-card">
+    <div class="ld-modal-head">
+      <div>
+        <span class="lr-kicker">NEW PERSISTENT CAREER</span>
+        <h2>Pit Wall: The Ladder</h2>
+      </div>
+      <button type="button" id="btn-close-modal" class="ld-btn ld-btn-sm">✕</button>
+    </div>
+    <p class="ld-modal-sub">Start as a grassroots Karting mechanic-owner and climb all 5 rungs — or jump straight into any tier to test its ruleset.</p>
+    <div class="ld-form-grid">
+      <label>Team Name <input type="text" id="in-team-name" value="Apex Motorsport" maxlength="32"></label>
+      <label>Principal Name <input type="text" id="in-principal-name" value="Alex Vance" maxlength="32"></label>
+      <label>Livery Colour <input type="color" id="in-color" value="#e10600"></label>
+    </div>
+    <div class="ld-tier-picker" id="in-tier-picker">
+      {% for t in tiers_meta %}
+      <button type="button" class="ld-tier-opt{% if t.id == 'karting' %} active{% endif %}" data-start-tier="{{ t.id }}" style="--rung-col:{{ t.color }}">
+        <span class="ld-to-num">Tier {{ t.rank }}</span>
+        <strong>{{ t.name }}</strong>
+        <small>{{ t.headline }}</small>
+      </button>
+      {% endfor %}
+    </div>
+    <div class="ld-modal-foot">
+      <button type="button" id="btn-create-ladder" class="ld-btn ld-btn-red"><i class="fas fa-flag-checkered"></i> Launch Ladder Career</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    window.__LADDER_SAVES__ = {{ saves | tojson }};
+  </script>
+  <script src="/static/js/f1_track_renderer.js?v={{ asset_v }}"></script>
+  <script src="/static/js/ladder_race_sim.js?v={{ asset_v }}"></script>
+  <script src="/static/js/ladder.js?v={{ asset_v }}"></script>
+{% endblock %}

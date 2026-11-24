@@ -55,7 +55,7 @@ _FLAGS_DIR = BASE_DIR / "data" / "flags"
 if _FLAGS_DIR.exists():
     app.mount("/data/flags", StaticFiles(directory=str(_FLAGS_DIR)), name="data_flags")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-ASSET_VERSION = "20261124k"
+ASSET_VERSION = "20261124l"
 templates.env.globals["asset_v"] = ASSET_VERSION
 
 
@@ -410,10 +410,11 @@ def _career_base_dir() -> Path:
 
 
 # Mount modular APIRouters (keeping f1data.server:app as single ASGI entrypoint)
-from .routers import archive as _r_archive, cards as _r_cards, career as _r_career, dev as _r_dev, f1db as _r_f1db, game as _r_game
+from .routers import archive as _r_archive, cards as _r_cards, career as _r_career, dev as _r_dev, f1db as _r_f1db, game as _r_game, ladder as _r_ladder
 app.include_router(_r_archive.router)
 app.include_router(_r_cards.router)
 app.include_router(_r_game.router)
 app.include_router(_r_career.router)
 app.include_router(_r_dev.router)
 app.include_router(_r_f1db.router)
+app.include_router(_r_ladder.router)

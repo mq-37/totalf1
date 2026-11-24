@@ -35,11 +35,12 @@
           </div>
         </div>
 
-        <div class="nav-group{% if path == '/play' or path == '/sim' %} active{% endif %}">
-          <button type="button" class="nav-link nav-trigger{% if path == '/play' or path == '/sim' %} active{% endif %}" aria-expanded="false">
+        <div class="nav-group{% if path == '/play' or path == '/sim' or path == '/ladder' %} active{% endif %}">
+          <button type="button" class="nav-link nav-trigger{% if path == '/play' or path == '/sim' or path == '/ladder' %} active{% endif %}" aria-expanded="false">
             <i class="fas fa-gamepad"></i> Play <i class="fas fa-chevron-down nav-caret"></i>
           </button>
           <div class="nav-menu">
+            <a href="/ladder" class="nav-sublink{% if path == '/ladder' %} active{% endif %}"><i class="fas fa-stairs"></i> Pit Wall: The Ladder</a>
             <a href="/play" class="nav-sublink{% if path == '/play' %} active{% endif %}"><i class="fas fa-gamepad"></i> F1 Card Arena</a>
             <a href="/sim" class="nav-sublink{% if path == '/sim' %} active{% endif %}"><i class="fas fa-tv"></i> Full CPU Broadcast Sim</a>
           </div>
