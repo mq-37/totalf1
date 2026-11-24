@@ -24,6 +24,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,7 @@ _CACHE_DIR = _BASE_DIR / "data" / "tts_cache"
 _CACHE_LOCK = threading.Lock()
 _NAT_LOCK = threading.Lock()
 _NAT_CACHE: dict[str, str] | None = None
+_GEMINI_COOLDOWN_UNTIL: float = 0.0
 _MAX_CACHE_FILES = 250
 
 DEFAULT_GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
@@ -72,25 +74,25 @@ NATIONALITY_PROFILES: dict[str, dict[str, str]] = {
     "MON": {
         "label": "Monégasque",
         "accent_prompt": "English spoken with a refined French-Monégasque accent (like a driver from Monaco, never American)",
-        "edge_voice": "en-GB-ThomasNeural",
+        "edge_voice": "fr-FR-RemyMultilingualNeural",
         "gemini_voice": "Aoede",
     },
     "FRA": {
         "label": "French",
         "accent_prompt": "English spoken with a natural French accent (never American)",
-        "edge_voice": "en-GB-ThomasNeural",
+        "edge_voice": "fr-FR-RemyMultilingualNeural",
         "gemini_voice": "Aoede",
     },
     "ITA": {
         "label": "Italian",
         "accent_prompt": "English spoken with an authentic, expressive Italian accent (never American)",
-        "edge_voice": "en-GB-RyanNeural",
+        "edge_voice": "it-IT-GiuseppeMultilingualNeural",
         "gemini_voice": "Schedar",
     },
     "ESP": {
         "label": "Spanish",
         "accent_prompt": "English spoken with a crisp, authentic Spanish accent (never American)",
-        "edge_voice": "en-GB-ThomasNeural",
+        "edge_voice": "it-IT-GiuseppeMultilingualNeural",
         "gemini_voice": "Schedar",
     },
     "GER": {
@@ -120,13 +122,13 @@ NATIONALITY_PROFILES: dict[str, dict[str, str]] = {
     "NZL": {
         "label": "New Zealand",
         "accent_prompt": "a crisp New Zealand Kiwi English accent (never American)",
-        "edge_voice": "en-AU-WilliamMultilingualNeural",
+        "edge_voice": "en-NZ-MitchellNeural",
         "gemini_voice": "Umbriel",
     },
     "BEL": {
         "label": "Belgian",
         "accent_prompt": "English spoken with a smooth Belgian European accent (never American)",
-        "edge_voice": "en-GB-ThomasNeural",
+        "edge_voice": "fr-FR-RemyMultilingualNeural",
         "gemini_voice": "Umbriel",
     },
     "DEN": {
@@ -222,7 +224,7 @@ NATIONALITY_PROFILES: dict[str, dict[str, str]] = {
     "IND": {
         "label": "Indian",
         "accent_prompt": "English spoken with a crisp Indian English accent (never American)",
-        "edge_voice": "en-GB-RyanNeural",
+        "edge_voice": "en-IN-PrabhatNeural",
         "gemini_voice": "Orus",
     },
     "MAS": {
@@ -240,13 +242,13 @@ NATIONALITY_PROFILES: dict[str, dict[str, str]] = {
     "RSA": {
         "label": "South African",
         "accent_prompt": "a crisp South African English accent (never American)",
-        "edge_voice": "en-GB-ThomasNeural",
+        "edge_voice": "en-ZA-LukeNeural",
         "gemini_voice": "Charon",
     },
     "CAN": {
         "label": "Canadian",
         "accent_prompt": "a natural Canadian English accent",
-        "edge_voice": "en-GB-RyanNeural",
+        "edge_voice": "en-CA-LiamNeural",
         "gemini_voice": "Umbriel",
     },
     "RUS": {
@@ -593,7 +595,7 @@ def _resolve_cast(
         nat_code = lookup_nationality(engineer_name=engineer_name, explicit_nat=nationality)
         prof = NATIONALITY_PROFILES.get(nat_code, NATIONALITY_PROFILES["GBR"])
         base["gemini_voice"] = "Umbriel" if nat_code in ("GBR", "IRL", "SCO") else prof["gemini_voice"]
-        base["edge_voice"] = "en-IE-ConnorNeural" if nat_code == "IRL" else ("en-GB-ThomasNeural" if nat_code != "USA" else "en-US-AndrewMultilingualNeural")
+        base["edge_voice"] = prof["edge_voice"] if nat_code in ("IRL", "ITA", "FRA", "MON", "AUS", "NZL") else ("en-GB-ThomasNeural" if nat_code != "USA" else "en-US-AndrewMultilingualNeural")
         base["gemini_style"] = (
             f"Speak in {prof['accent_prompt']}. Deliver calmly, concisely, and decisively like a "
             f"Formula 1 race engineer speaking over pit-wall headset radio"
@@ -751,8 +753,10 @@ def synthesize_speech(
         nationality=nationality,
     )
 
+    global _GEMINI_COOLDOWN_UNTIL
     req_eng = (engine or "auto").strip().lower()
     gem_ok = bool(get_gemini_api_key())
+    gem_ready = gem_ok and (time.time() >= _GEMINI_COOLDOWN_UNTIL)
     edge_ok = bool(find_edge_tts_bin())
 
     order: list[str] = []
@@ -761,10 +765,12 @@ def synthesize_speech(
     elif req_eng == "edge":
         order = ["edge"]
     else:
-        if gem_ok:
+        if gem_ready:
             order.append("gemini")
         if edge_ok:
             order.append("edge")
+        if not order and gem_ok:
+            order.append("gemini")
 
     if not order:
         raise RuntimeError("No server TTS backend available (configure GEMINI_API_KEY or install edge-tts)")
@@ -811,7 +817,11 @@ def synthesize_speech(
             }
         except Exception as exc:
             last_err = str(exc)
-            LOGGER.warning("TTS backend '%s' failed (%s); trying fallback if available.", eng, exc)
+            if eng == "gemini" and "HTTP 429" in last_err:
+                _GEMINI_COOLDOWN_UNTIL = time.time() + 90.0
+                LOGGER.warning("Gemini TTS quota/rate limit (429) — cooling down 90s and using European/British Edge-TTS.")
+            else:
+                LOGGER.warning("TTS backend '%s' failed (%s); trying fallback if available.", eng, exc)
             continue
 
     raise RuntimeError(last_err or "TTS synthesis failed")
