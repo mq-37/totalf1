@@ -624,6 +624,9 @@
     var bullDecalMesh = { visible: false };
     var ferrariBandMesh = { visible: false };
     var duracellCapMesh = { visible: false };
+    var triStripeMesh = { visible: false };
+    var pinstripeMesh = { visible: false };
+    var chevronCanopyMesh = { visible: false };
 
     function addMesh(geo, mat, pos, rot, shadow) {
       var m = new THREE.Mesh(geo, mat);
@@ -1275,6 +1278,70 @@
     duracellCapMesh = durCap;
     root.add(durCap);
 
+    /* Bespoke 3-Ribbon Parallel Racing Stripes (Martini Tricolour & Gulf Heritage) */
+    var triGrp = new THREE.Group();
+    [-0.072, 0.072].forEach(function (xOff) {
+      var sideRib = buildLoft([
+        superRing(2.58, xOff * 0.45, 0.018, 0.236, 0.252, 2.0, 2.0, 10),
+        superRing(2.08, xOff * 0.72, 0.020, 0.332, 0.354, 2.0, 2.0, 10),
+        superRing(1.50, xOff * 0.95, 0.022, 0.468, 0.494, 2.0, 2.0, 10),
+        superRing(0.85, xOff * 1.15, 0.024, 0.576, 0.606, 2.0, 2.0, 10)
+      ], true, true);
+      triGrp.add(new THREE.Mesh(sideRib, mats.sidepodSwoosh));
+    });
+    triGrp.visible = false;
+    triStripeMesh = triGrp;
+    root.add(triGrp);
+
+    /* Bespoke Razor-Thin Pinstripe Rail Kit (Lotus JPS Gold / Aston Lime / Carbon Stealth / Brawn Neon) */
+    var pinGrp = new THREE.Group();
+    [-1, 1].forEach(function (side) {
+      /* Floor outer edge razor pinstripe */
+      var flPin = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 2.32), mats.sidepodSwoosh);
+      flPin.position.set(side * 0.795, 0.095, -0.22);
+      pinGrp.add(flPin);
+      /* Upper sidepod ridge razor pinstripe */
+      var podPin = new THREE.Mesh(
+        buildLoft([
+          superRing(0.56, side * 0.50, 0.014, 0.545, 0.568, 2.0, 2.0, 8),
+          superRing(0.02, side * 0.58, 0.014, 0.582, 0.604, 2.0, 2.0, 8),
+          superRing(-0.68, side * 0.49, 0.014, 0.512, 0.532, 2.0, 2.0, 8),
+          superRing(-1.32, side * 0.34, 0.012, 0.402, 0.422, 2.0, 2.0, 8)
+        ], true, true),
+        mats.airboxRim
+      );
+      pinGrp.add(podPin);
+      /* Nose flank fine pinstripe */
+      var nPin = new THREE.Mesh(
+        buildLoft([
+          superRing(2.58, side * 0.088, 0.010, 0.225, 0.242, 2.0, 2.0, 8),
+          superRing(1.75, side * 0.188, 0.012, 0.345, 0.368, 2.0, 2.0, 8),
+          superRing(1.02, side * 0.268, 0.012, 0.455, 0.480, 2.0, 2.0, 8)
+        ], true, true),
+        mats.sidepodSwoosh
+      );
+      pinGrp.add(nPin);
+    });
+    pinGrp.visible = false;
+    pinstripeMesh = pinGrp;
+    root.add(pinGrp);
+
+    /* Bespoke Angled Chevron Canopy (McLaren Marlboro Day-Glo / Jordan Hornet / Renault Mild Seven) */
+    var chevGrp = new THREE.Group();
+    var chevBody = new THREE.Mesh(
+      buildLoft([
+        superRing(0.68, 0, 0.312, 0.42, 0.630, 2.5, 2.8, 18),
+        superRing(-0.20, 0, 0.318, 0.46, 0.695, 2.4, 2.6, 18),
+        superRing(-0.88, 0, 0.282, 0.48, 0.735, 2.1, 2.4, 18),
+        superRing(-1.45, 0, 0.218, 0.38, 0.610, 2.0, 2.2, 18)
+      ], true, true),
+      mats.sidepodLower
+    );
+    chevGrp.add(chevBody);
+    chevGrp.visible = false;
+    chevronCanopyMesh = chevGrp;
+    root.add(chevGrp);
+
     /* Nose pitot sensor */
     addMesh(new THREE.CylinderGeometry(0.005, 0.006, 0.14, 6), mats.chrome, [0, 0.56, 1.32]);
 
@@ -1621,11 +1688,17 @@
         }
       });
 
-      /* Reset signature 3D motifs */
+      /* Reset signature 3D motifs & exposed carbon weave maps */
       noseCapMesh.visible = false;
       bullDecalMesh.visible = false;
       ferrariBandMesh.visible = false;
       duracellCapMesh.visible = false;
+      triStripeMesh.visible = false;
+      pinstripeMesh.visible = false;
+      chevronCanopyMesh.visible = false;
+      ['bodyMain', 'sidepodBody', 'sidepodLower', 'airboxBody', 'sharkFin'].forEach(function (k) {
+        if (mats[k]) { mats[k].map = null; mats[k].needsUpdate = true; }
+      });
 
       /* Baseline modern mapping */
       mats.bodyMain.color.copy(cMain);
@@ -1794,6 +1867,290 @@
         mats.rearWingMain.color.copy(cMain);
         mats.rearWingFlap.color.copy(cSec);
         mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'mclaren_papaya') {
+        /* Signature Modern McLaren: Matte Papaya Orange nose & spine + Raw Woven Carbon sidepod flanks + Sky Blue accents */
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodBody.map = carbonTex;
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cMain);
+        mats.noseStripe.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFin.map = carbonTex;
+        mats.sharkFinEdge.color.copy(cMain);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cMain);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'mclaren_marlboro') {
+        /* Iconic 1974-1996 McLaren MP4/4: Pearl White base + Bold Day-Glo Red forward chevron & wings */
+        noseCapMesh.visible = true;
+        chevronCanopyMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cMain);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cMain);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cMain);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cMain);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'aston_wings') {
+        /* Signature Aston Martin Aramco: Metallic British Racing Green + Razor Highlighter-Lime pinstripes & woven carbon undercut */
+        pinstripeMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.noseStripe.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'alpine_bwt') {
+        /* Signature BWT Alpine: Metallic Alpine Blue + Bold Neon BWT Pink sidepod shoulders & nose flash + Carbon floor */
+        noseCapMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodLower.color.copy(cAcc);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cMain);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cAcc);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cMain);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cMain);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'lotus_jps') {
+        /* Iconic John Player Special Lotus: Mirror-Gloss Piano Black + Razor Brushed-Gold double pinstripes & rims */
+        pinstripeMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cSec);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cSec);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'gulf_heritage') {
+        /* Iconic Gulf Racing Heritage: Powder Blue bodywork + Full-length Marigold Orange centre stripe & nose tip */
+        noseCapMesh.visible = true;
+        triStripeMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cAcc);
+        mats.noseStripe.color.copy(cAcc);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cAcc);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cAcc);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cAcc);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'martini_tri') {
+        /* Classic Martini / Heritage Tricolour: Pearl White bodywork + 3-Ribbon Red/Navy/Sky stripes down the spine */
+        triStripeMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseStripe.color.copy(cAcc);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cMain);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'renault_mildseven') {
+        /* 2005-2006 Championship Renault R25/R26: Electric Sky Blue + Canary Yellow engine canopy & wings */
+        noseCapMesh.visible = true;
+        chevronCanopyMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cMain);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cMain);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cMain);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cMain);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'brawn_neon') {
+        /* Iconic 2009 Brawn GP BGP 001: Pearl White + Vivid Neon Chartreuse pinstripes & nose + Piano Black rear wing */
+        pinstripeMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseStripe.color.copy(cAcc);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cAcc);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'haas_carbon') {
+        /* Modern Haas Stealth: Crisp Gloss White nose/engine cover + Raw Exposed Woven Carbon sidepods + Crimson Red trim */
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodBody.map = carbonTex;
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.noseStripe.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cMain);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'jordan_hornet') {
+        /* Iconic Jordan Buzzin' Hornets: Vivid Hornet Yellow + Dramatic Matte-Black Nose & Engine Chevron + Red Endplates */
+        noseCapMesh.visible = true;
+        chevronCanopyMesh.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.noseTip.color.copy(cSec);
+        mats.noseStripe.color.copy(cSec);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cMain);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cSec);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cSec);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cMain);
+      } else if (st === 'carbon_stealth') {
+        /* Winter Testing / Night-Race Stealth: Full Exposed Woven Carbon-Fibre chassis + Neon Accent Pinstripes */
+        pinstripeMesh.visible = true;
+        mats.bodyMain.color.set('#1a1e26');
+        mats.bodyMain.map = carbonTex;
+        mats.sidepodBody.color.set('#1a1e26');
+        mats.sidepodBody.map = carbonTex;
+        mats.sidepodLower.color.set('#11141a');
+        mats.sidepodLower.map = carbonTex;
+        mats.airboxBody.color.set('#1a1e26');
+        mats.airboxBody.map = carbonTex;
+        mats.sharkFin.color.set('#1a1e26');
+        mats.sharkFin.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.noseStripe.color.copy(cAcc);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFinEdge.color.copy(cAcc);
+        mats.halo.color.copy(cAcc);
+        mats.frontWing1.color.set('#14171e');
+        mats.frontWing2.color.set('#1a1e26');
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.set('#14171e');
+        mats.rearWingMain.color.set('#14171e');
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.set('#14171e');
         mats.rearEndplateCap.color.copy(cAcc);
         mats.rimAccent.color.copy(cAcc);
       } else if (st === 'two-tone') {
@@ -2172,7 +2529,10 @@
     ERAS: CAR_ERAS,
     LIVERY_STYLES: [
       'modern', 'two-tone', 'racing-stripe', 'chevron', 'classic',
-      'redbull', 'ferrari_hp', 'merc_arrow', 'williams_duracell', 'audi_slash', 'cadillac_split'
+      'redbull', 'ferrari_hp', 'merc_arrow', 'williams_duracell', 'audi_slash', 'cadillac_split',
+      'mclaren_papaya', 'mclaren_marlboro', 'aston_wings', 'alpine_bwt', 'lotus_jps',
+      'gulf_heritage', 'martini_tri', 'renault_mildseven', 'brawn_neon', 'haas_carbon',
+      'jordan_hornet', 'carbon_stealth'
     ],
     CAMERA_PRESETS: {
       hero:  { theta:  0.76, phi: 0.24, radius: 6.30, targetY: 0.44 },

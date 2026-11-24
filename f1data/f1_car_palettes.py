@@ -26,6 +26,18 @@ LIVERY_STYLES = (
     "williams_duracell",
     "audi_slash",
     "cadillac_split",
+    "mclaren_papaya",
+    "mclaren_marlboro",
+    "aston_wings",
+    "alpine_bwt",
+    "lotus_jps",
+    "gulf_heritage",
+    "martini_tri",
+    "renault_mildseven",
+    "brawn_neon",
+    "haas_carbon",
+    "jordan_hornet",
+    "carbon_stealth",
 )
 
 CAR_ERAS = ("1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s")
@@ -84,16 +96,25 @@ def infer_team_era(
 _STYLE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
     (("racing bulls", "vcarb"), "redbull"),
     (("red bull", "rbr"), "redbull"),
-    (("ferrari",), "ferrari_hp"),
-    (("mercedes",), "merc_arrow"),
+    (("mclaren",), "mclaren_papaya"),
+    (("aston martin",), "aston_wings"),
+    (("alpine",), "alpine_bwt"),
     (("williams",), "williams_duracell"),
     (("audi",), "audi_slash"),
     (("cadillac",), "cadillac_split"),
-    (("mclaren", "alpine", "sauber", "kick", "alphatauri", "virgin", "marussia", "force india", "racing point"), "two-tone"),
+    (("haas",), "haas_carbon"),
+    (("lotus",), "lotus_jps"),
+    (("brawn",), "brawn_neon"),
+    (("jordan",), "jordan_hornet"),
+    (("sauber", "kick", "alphatauri", "virgin", "marussia", "force india", "racing point"), "two-tone"),
     (("brabham", "tyrrell", "ligier", "matra", "talbot", "prost", "minardi", "stewart", "penske", "zakspeed", "aguri"), "racing-stripe"),
-    (("jordan", "benetton", "renault", "brawn", "toro rosso", "arrows", "footwork", "spyker", "toleman", "larrousse", "leyton"), "chevron"),
-    (("lotus", "maserati", "alfa", "porsche", "vanwall", "lancia", "cooper", "brm", "jaguar", "shadow", "wolf", "march", "iso"), "classic"),
-    (("aston martin", "haas", "toyota", "honda", "bar"), "modern"),
+    (("benetton", "toro rosso", "arrows", "footwork", "spyker", "toleman", "larrousse", "leyton"), "chevron"),
+    (("maserati", "alfa", "porsche", "vanwall", "lancia", "cooper", "brm", "jaguar", "shadow", "wolf", "march", "iso"), "classic"),
+    (("toyota", "honda", "bar"), "modern"),
+    # Works PU constructors checked after customer teams
+    (("ferrari",), "ferrari_hp"),
+    (("mercedes",), "merc_arrow"),
+    (("renault",), "renault_mildseven"),
 ]
 
 

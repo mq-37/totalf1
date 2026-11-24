@@ -1299,7 +1299,8 @@ def update_team_livery(
     """Customize & persist the player constructor's 5-slot 3D livery, pattern style, and chassis era."""
     _ensure_career_v2(state)
     pt = get_player_team(state)
-    valid_styles = {"modern", "two-tone", "racing-stripe", "chevron", "classic"}
+    from .f1_car_palettes import LIVERY_STYLES
+    valid_styles = set(LIVERY_STYLES)
     valid_eras = {"1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s", "2020s"}
     st = livery_style if livery_style in valid_styles else "two-tone"
     er = car_era if car_era in valid_eras else "2020s"

@@ -127,10 +127,10 @@ def _resolve_mclaren(y: int) -> dict[str, Any]:
     if y >= 2018:
         return {
             "palette": {"main": "#FF8000", "secondary": "#14171D", "accent": "#47C7FC", "pop": "#FFFFFF", "detail": "#9E4F00"},
-            "style": "two-tone",
+            "style": "mclaren_papaya",
             "finish": "matte",
             "motif": "papaya",
-            "label": f"{y} McLaren F1 Team (Papaya Orange & Exposed Carbon)",
+            "label": f"{y} McLaren F1 Team (Matte Papaya Orange & Exposed Carbon)",
         }
     if 1997 <= y <= 2014:
         return {
@@ -143,7 +143,7 @@ def _resolve_mclaren(y: int) -> dict[str, Any]:
     if 1974 <= y <= 1996:
         return {
             "palette": {"main": "#F8FAFC", "secondary": "#EE1C25", "accent": "#111318", "pop": "#FFCC00", "detail": "#991B1B"},
-            "style": "chevron",
+            "style": "mclaren_marlboro",
             "finish": "gloss",
             "motif": "marlboro_chevron",
             "label": f"{y} McLaren (Iconic White & Day-Glo Red Chevron)",
@@ -165,6 +165,14 @@ def _resolve_williams(y: int) -> dict[str, Any]:
             "finish": "gloss",
             "motif": "duracell_airbox",
             "label": f"{y} Williams Racing (Royal Navy, Electric Blue & Copper Airbox)",
+        }
+    if 2014 <= y <= 2018:
+        return {
+            "palette": {"main": "#F8FAFC", "secondary": "#002366", "accent": "#E10600", "pop": "#38BDF8", "detail": "#1E293B"},
+            "style": "martini_tri",
+            "finish": "gloss",
+            "motif": "martini",
+            "label": f"{y} Williams Martini Racing (Pearl White & Tricolour Stripes)",
         }
     if 1994 <= y <= 1997:
         return {
@@ -194,17 +202,17 @@ def _resolve_williams(y: int) -> dict[str, Any]:
 def _resolve_aston(y: int) -> dict[str, Any]:
     return {
         "palette": {"main": "#00594F", "secondary": "#101418", "accent": "#CEDC00", "pop": "#FFFFFF", "detail": "#003B34"},
-        "style": "modern",
+        "style": "aston_wings",
         "finish": "metallic",
         "motif": "brg_lime",
-        "label": f"{y} Aston Martin Aramco (Metallic British Racing Green & Lime)",
+        "label": f"{y} Aston Martin Aramco (Metallic British Racing Green & Lime Pinstripes)",
     }
 
 
 def _resolve_alpine(y: int) -> dict[str, Any]:
     return {
         "palette": {"main": "#0072CE", "secondary": "#FD4BC7", "accent": "#14171D", "pop": "#FFFFFF", "detail": "#0A3A6E"},
-        "style": "two-tone",
+        "style": "alpine_bwt",
         "finish": "metallic",
         "motif": "alpine_bwt",
         "label": f"{y} BWT Alpine F1 Team (Alpine Blue, BWT Pink & Carbon)",
@@ -252,10 +260,10 @@ def _resolve_racing_bulls(y: int) -> dict[str, Any]:
 def _resolve_haas(y: int) -> dict[str, Any]:
     return {
         "palette": {"main": "#F4F5F7", "secondary": "#14161A", "accent": "#DA291C", "pop": "#FFFFFF", "detail": "#475569"},
-        "style": "two-tone",
+        "style": "haas_carbon",
         "finish": "gloss",
         "motif": "haas",
-        "label": f"{y} MoneyGram Haas F1 Team (White, Carbon & Haas Red)",
+        "label": f"{y} MoneyGram Haas F1 Team (White, Woven Carbon & Haas Red)",
     }
 
 
@@ -263,10 +271,10 @@ def _resolve_lotus(y: int) -> dict[str, Any]:
     if 1972 <= y <= 1986 or y >= 2012:
         return {
             "palette": {"main": "#0E0E10", "secondary": "#D4AF37", "accent": "#FACC15", "pop": "#FFFFFF", "detail": "#070708"},
-            "style": "classic",
+            "style": "lotus_jps",
             "finish": "gloss",
             "motif": "jps_gold",
-            "label": f"{y} Team Lotus (Black & Gold Pinstripe)",
+            "label": f"{y} Team Lotus (John Player Special Black & Gold Pinstripe)",
         }
     if 1987 <= y <= 1990:
         return {
@@ -289,10 +297,10 @@ def _resolve_renault(y: int) -> dict[str, Any]:
     if 2002 <= y <= 2006:
         return {
             "palette": {"main": "#38A1E8", "secondary": "#FFCC00", "accent": "#FFFFFF", "pop": "#0B1F4B", "detail": "#1E40AF"},
-            "style": "chevron",
+            "style": "renault_mildseven",
             "finish": "gloss",
             "motif": "mild_seven",
-            "label": f"{y} Mild Seven Renault F1 (Sky Blue & Yellow)",
+            "label": f"{y} Mild Seven Renault F1 (Sky Blue & Canary Yellow)",
         }
     return {
         "palette": {"main": "#FFCC00", "secondary": "#111318", "accent": "#FFFFFF", "pop": "#FDE047", "detail": "#090A0D"},
@@ -306,10 +314,10 @@ def _resolve_renault(y: int) -> dict[str, Any]:
 def _resolve_brawn(y: int) -> dict[str, Any]:
     return {
         "palette": {"main": "#F8FAFC", "secondary": "#111318", "accent": "#D8FF00", "pop": "#FFFFFF", "detail": "#334155"},
-        "style": "chevron",
+        "style": "brawn_neon",
         "finish": "gloss",
         "motif": "brawn_09",
-        "label": "2009 Brawn GP (Pearl White, Neon Yellow & Black)",
+        "label": "2009 Brawn GP (Pearl White, Neon Chartreuse & Black)",
     }
 
 
@@ -317,7 +325,7 @@ def _resolve_benetton(y: int) -> dict[str, Any]:
     if y >= 1994:
         return {
             "palette": {"main": "#38A1E8", "secondary": "#FFFFFF", "accent": "#16A34A", "pop": "#FFCC00", "detail": "#1D4ED8"},
-            "style": "chevron",
+            "style": "renault_mildseven",
             "finish": "gloss",
             "motif": "mild_seven",
             "label": f"{y} Mild Seven Benetton (Sky Blue & White)",
@@ -334,29 +342,33 @@ def _resolve_benetton(y: int) -> dict[str, Any]:
 def _resolve_jordan(y: int) -> dict[str, Any]:
     return {
         "palette": {"main": "#FFCC00", "secondary": "#111318", "accent": "#E10600", "pop": "#FFFFFF", "detail": "#713F12"},
-        "style": "chevron",
+        "style": "jordan_hornet",
         "finish": "gloss",
         "motif": "hornet",
-        "label": f"{y} Jordan Grand Prix (Buzzin Hornets Yellow & Black)",
+        "label": f"{y} Jordan Grand Prix (Buzzin Hornets Yellow & Black Nose)",
     }
 
 
+# IMPORTANT: Customer constructors MUST come BEFORE works engine suppliers (ferrari, mercedes, renault)
+# so names like "McLaren Mercedes", "Williams Mercedes", "Aston Martin Aramco Mercedes",
+# "Haas Ferrari", "Brawn Mercedes", and "Alpine Renault" resolve to the constructor, NOT the PU supplier!
 FAMILY_RESOLVERS: list[tuple[tuple[str, ...], Any]] = [
     (("racing bulls", "vcarb", "toro rosso", "alphatauri", "str "), _resolve_racing_bulls),
     (("red bull", "rbr"), _resolve_red_bull),
-    (("ferrari",), _resolve_ferrari),
-    (("mercedes",), _resolve_mercedes),
     (("mclaren",), _resolve_mclaren),
-    (("williams",), _resolve_williams),
     (("aston martin",), _resolve_aston),
+    (("williams",), _resolve_williams),
     (("alpine",), _resolve_alpine),
     (("audi",), _resolve_audi),
     (("cadillac",), _resolve_cadillac),
     (("haas",), _resolve_haas),
-    (("lotus",), _resolve_lotus),
     (("brawn",), _resolve_brawn),
+    (("lotus",), _resolve_lotus),
     (("benetton",), _resolve_benetton),
     (("jordan",), _resolve_jordan),
+    # Engine-supplier works constructors last
+    (("ferrari",), _resolve_ferrari),
+    (("mercedes",), _resolve_mercedes),
     (("renault",), _resolve_renault),
 ]
 
