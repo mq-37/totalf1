@@ -86,6 +86,15 @@ def api_sim_balance(
     return get_track_balance_bundle(srv.DATA_DB, circuit_id, era_key or era, drv_list or None)
 
 
+@router.get("/api/sim/driver-dna")
+def api_sim_driver_dna(drivers: str = Query("")):
+    """Return data-deduced + curated iconic F1 Driver DNA profiles (1950-2026)."""
+    from ..driver_dna import get_driver_dna_map
+    names = [s.strip() for s in drivers.split("|") if s.strip()] if drivers.strip() else None
+    dna = get_driver_dna_map(srv.DATA_DB, names)
+    return {"ok": True, "count": len(dna), "driver_dna": dna}
+
+
 @router.post("/api/sim/interviews")
 async def api_sim_interviews(request: Request):
     """Generate context-aware post-race driver reports & press-pen interviews ONLY after the Chequered Flag."""

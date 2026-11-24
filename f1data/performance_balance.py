@@ -434,6 +434,10 @@ def get_track_balance_bundle(
             flat_team_aff[tkey] = round(max(-2.4, min(3.2, (t_avg - 0.48) * 7.5 * shrink_t)), 2)
         drv_psych_map = cache["driver_psych"]
 
+    from .driver_dna import get_driver_dna_map
+    req_names = [d.get("driver") or d.get("name") or "" for d in (drivers or [])] if drivers else None
+    dna_map = get_driver_dna_map(db_path, req_names)
+
     return {
         "circuit_id": cid,
         "era_key": ek,
@@ -443,4 +447,5 @@ def get_track_balance_bundle(
         "driver_affinity": flat_drv_aff,
         "team_affinity": flat_team_aff,
         "driver_psychology": drv_psych_map,
+        "driver_dna": dna_map,
     }

@@ -632,6 +632,7 @@
         engineerName: c.engineer ? c.engineer.name : "Race Engineer",
         engineerShort: c.engineer ? c.engineer.short : "ENG",
         engineerRating: c.engineer ? (c.engineer.rating || 84) : 84,
+        dna: c.dna || null,
       })),
       frames: [],   // Per-lap full-grid telemetry snapshots for smooth scrubbing
       events: [],   // Key race story pins: overtake, pit, sc, mistake, rain, dnf, component

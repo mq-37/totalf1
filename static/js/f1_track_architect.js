@@ -786,19 +786,21 @@
       car.liveGear = 1;
       car.liveLongG = 0;
 
-      // Launch Reaction & Traction DNA (skill-weighted: clutch + racecraft + pace)
+      // Launch Reaction & Traction DNA (data-deduced Driver DNA + skill-weighted clutch/pace)
       const st = (car.card && car.card.game && car.card.game.stats) || car.driver || {};
       const clutch = Number(st.clutch ?? st.racecraft ?? 72);
       const pace = Number(st.pace ?? 72);
       const launchSkill = clamp((clutch * 0.6 + pace * 0.4) / 100, 0.45, 0.99);
-      const jitter = (Math.random() - 0.5) * 0.14;
+      const jitter = (Math.random() - 0.5) * 0.08;
       const antiStall = Math.random() < 0.025; // Rare 2.5% clutch anti-stall drama!
+      const dnaReact = (car.dna && Number.isFinite(Number(car.dna.launch_reaction_s))) ? Number(car.dna.launch_reaction_s) : null;
+      const baseReact = dnaReact != null ? dnaReact : (0.34 - launchSkill * 0.16);
       car.launchReactionS = antiStall
         ? (0.58 + Math.random() * 0.28)
-        : clamp(0.34 - launchSkill * 0.16 + jitter, 0.14, 0.44);
+        : clamp(baseReact + jitter, 0.14, 0.42);
       car.launchTraction = antiStall
         ? 0.72
-        : clamp(0.86 + launchSkill * 0.24 + (Math.random() - 0.5) * 0.08, 0.78, 1.16);
+        : clamp(0.86 + launchSkill * 0.22 + (dnaReact != null ? (0.22 - dnaReact) * 0.45 : 0) + (Math.random() - 0.5) * 0.06, 0.78, 1.18);
       car.launchAntiStall = antiStall;
       car.launchScale = 0;
       car.launchElapsed = 0;

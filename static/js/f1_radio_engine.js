@@ -51,6 +51,14 @@
 
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+  function isClassicNoRadioEra(car, ctx) {
+    const raw = (ctx && ctx.eraKey) || (car && car.eraKey) || "2026";
+    const s = String(raw).toLowerCase();
+    const m = s.match(/(19\d{2}|20\d{2})/);
+    if (m) return Number(m[1]) < 1985;
+    return s.includes("1950") || s.includes("1960") || s.includes("1970") || s.includes("classic");
+  }
+
   function buildMessage(type, car, ctx) {
     const eng = car.engineer || { name: "Race Engineer", short: "ENG", personality: "calm" };
     const drv = car.code3 || "DRV";
@@ -58,93 +66,162 @@
     const rival = (ctx && ctx.rival) || "the car ahead";
     const lap = (ctx && ctx.lap) || (car.lap + 1);
     const conf = Math.round(car.confidence ?? 60);
+    const dna = (car && car.dna) || (ctx && ctx.dna) || {};
+    const rArch = dna.radio_archetype || "rhythmic_strategist";
+    const noRadio = isClassicNoRadioEra(car, ctx);
+
+    // Pre-1985 Authentic Pit-Wall Chalkboard & Marshal Channel for non-mechanical events!
+    if (noRadio && !String(type).startsWith("comp_")) {
+      const boardLines = {
+        overtake: `PIT BOARD → ${drv}: P${car.pos || 1} (+PASS ${rival}) · HOLD RHYTHM`,
+        tyre_cliff: `MARSHAL OBS: ${fullName} sliding heavily on worn tread — pit crew preparing fresh rubber!`,
+        mistake: `MARSHAL OBS: ${fullName} locks up into the braking zone — recovers cleanly onto track.`,
+        confidence_zone: `PIT BOARD → ${drv}: FASTEST LAP · GAP GROWING · KEEP IT SMOOTH`,
+        slow_pit: `PIT LANE: Slow knock-off wheel nut costs ${fullName} precious seconds in the bay!`,
+        fast_pit: `PIT LANE: Crisp mechanical service — ${fullName} rejoins cleanly!`,
+        rain: `PIT BOARD → ${drv}: RAIN AHEAD · WET TYRES READY IN GARAGE`,
+        refuel: `PIT BOARD → ${drv}: BOX THIS LAP · FUEL CHURN READY`,
+        safety_car: `MARSHAL POST: YELLOW FLAGS WAVED · HOLD POSITION`,
+        final_lap: `PIT BOARD → ${drv}: L1 TO GO · BRING IT HOME`,
+        setup_feedback: `PIT WALL LOG: ${fullName} chassis balance ${Math.round((ctx && ctx.balanceBias) || 0)} · Signal ${Math.round((ctx && ctx.feedbackQuality) || 74)}/100.`,
+      };
+      return {
+        speaker: "PIT BOARD",
+        to: drv,
+        text: boardLines[type] || `PIT BOARD → ${drv}: LAP ${lap} · STAY SMOOTH`,
+        tone: (type === "overtake" || type === "confidence_zone" || type === "fast_pit" || type === "final_lap") ? "win" : (type === "tyre_cliff" || type === "mistake" || type === "rain" ? "warn" : "info"),
+        category: type === "setup_feedback" ? "setup" : "race",
+      };
+    }
 
     switch (type) {
-      case "overtake":
+      case "overtake": {
+        const byArch = {
+          clinical_perfectionist: [
+            `Got ${rival}. Front-left was graining slightly in the wake — give me Diff Entry +1 now we have clean air.`,
+            `Done on ${rival}. Mode 4, recharge on the back straight and let's manage the target delta.`,
+          ],
+          rhythmic_strategist: [
+            `Clean pass on ${rival}. Tyres are coming back to me nicely — keep me posted on the gap behind.`,
+            `Through past ${rival}! Let's stay on Plan B, Target +2 and build a rhythm.`,
+          ],
+          tactical_chessmaster: [
+            `Past ${rival}! Wait — check the undercut window on the car ahead, I think Plan C is two seconds strong here.`,
+            `Got ${rival} cleanly. Tell me if they box opposite — we can box to overtake if they cover.`,
+          ],
+          expressive_telemetry: [
+            `YES! Late on the brakes past ${rival}! What a move — car is alive on turn-in, let's push!`,
+            `Boom! Got ${rival} on the switchback! Give me Strat Mode 4 and the gap to the next car!`,
+          ],
+          stoic_minimalist: [
+            `Copy. Past ${rival}.`,
+            `Yeah, got ${rival}. Balance is fine, keep me posted on gaps.`,
+          ],
+        };
         return {
           speaker: drv,
           to: eng.short,
-          text: conf >= 76
-            ? pick([`YES! Got ${rival} cleanly! Car feels hooked up, let's hunt the next one!`, `Boom! Late on the brakes past ${rival} — give me the gap ahead!`])
-            : pick([`Through past ${rival}. Tyres are hanging in there.`, `Done! Clean pass on ${rival}, settling into rhythm now.`]),
+          text: pick(byArch[rArch] || byArch.rhythmic_strategist),
+          engReply: `${eng.short}: Copy ${drv}, clean move. ${conf >= 75 ? "Push now, clean air ahead — Strat Mode 4." : "Manage rear temps, Target +1."}`,
           tone: "win",
+          category: "race",
         };
-      case "tyre_cliff":
+      }
+      case "tyre_cliff": {
+        const byArch = {
+          clinical_perfectionist: `${eng.short}, rear surface temp is spiked and front-left is graining in mid-speed — two clicks front wing on the stop.`,
+          rhythmic_strategist: `${eng.short}, these tyres are gone mate — zero rear traction on exit. Check Plan B window.`,
+          tactical_chessmaster: `Box to overtake now? My rears hit the cliff and the undercut is worth 1.8s here — check traffic!`,
+          expressive_telemetry: `No grip! Rear is sliding everywhere off the apex — Multi-function Yellow G6 isn't saving it, we need to box!`,
+          stoic_minimalist: `Yeah, the rear is a bit spicy now. Tyres are done. Box when ready.`,
+        };
         return {
           speaker: drv,
           to: eng.short,
-          text: pick([
-            `${eng.short}, my rears are completely gone! I'm sliding everywhere — we need to box!`,
-            `Zero traction out of the slow corners, these tyres have hit the cliff!`,
-          ]),
+          text: byArch[rArch] || byArch.rhythmic_strategist,
+          engReply: `${eng.short}: Copy ${drv}, box this lap — box opposite ${rival} if they stay out. Confirm pit confirm button.`,
           tone: "warn",
+          category: "strategy",
         };
+      }
       case "mistake":
         return {
           speaker: eng.short,
           to: drv,
           text: eng.personality === "fiery"
-            ? `${drv}, breathe! Reset the brake bias one click forward and forget that lock-up. Keep your head in it.`
-            : `All good ${fullName.split(" ")[0]}, tiny lock-up, zero damage. Stay calm, your pace is still strong.`,
+            ? `${drv}, breathe! B-Bal +1.5% forward, Diff Entry +2, Mid -1. Forget that lock-up and hit your braking markers.`
+            : `All good ${fullName.split(" ")[0]}, small lock-up, tyres look okay on temp. Lift and coast 30m into T1 to settle the fronts.`,
           tone: "warn",
+          category: "race",
         };
       case "confidence_zone":
         return {
           speaker: eng.short,
           to: drv,
-          text: pick([
-            `Purple sectors! You're in the zone right now — keep hitting those apexes!`,
-            `Mega stint ${drv}, fastest car on track! Keep building this gap.`,
-          ]),
+          text: rArch === "stoic_minimalist"
+            ? `Purple S1 and S2, ${drv}. Gap opening by four tenths a lap.`
+            : pick([
+                `Hammer time ${drv}! Purple sectors — Strat Mode 4, keep hitting those apexes!`,
+                `Mega stint ${drv}, fastest car on track! Target +2 on Plan A, gap building nicely.`,
+              ]),
+          engReply: rArch === "stoic_minimalist" ? `${drv}: Copy. Understood.` : "",
           tone: "win",
+          category: "race",
         };
       case "slow_pit":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Sorry mate, sticky wheel nut cost us time in the box. Head down, clean air ahead — push!`,
+          text: `Sorry mate, sticky wheel nut cost us time in the box. Head down, Recharge Off — push now, overtake available!`,
           tone: "warn",
+          category: "strategy",
         };
       case "fast_pit":
         return {
           speaker: eng.short,
           to: drv,
-          text: `⚡ Lightning stop by the crew! Push hard on this out-lap to lock in the undercut!`,
+          text: `⚡ Lightning stop by the crew! Push hard on this out-lap — overtake available, box-to-overtake is ON!`,
           tone: "win",
+          category: "strategy",
         };
       case "rain":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Radar shows rain intensifying at Turn 1. Keep us posted on grip — Inters are ready in the garage!`,
+          text: `Radar shows rain intensifying at Turn 1. Look for off-line grip off the rubber — Inters are ready in the garage!`,
+          engReply: rArch === "tactical_chessmaster" ? `${drv}: Copy, keep me posted every half-lap — I'll call the crossover.` : "",
           tone: "warn",
+          category: "strategy",
         };
       case "refuel":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Box this lap for fuel & fresh rubber — short-fill strategy puts us lighter than ${rival}!`,
+          text: `Box this lap for fuel & fresh rubber — short-fill Plan B puts us lighter than ${rival}!`,
           tone: "info",
+          category: "strategy",
         };
       case "override_ready":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Within 1.0 second! 2026 Manual Override Mode is ARMED — deploy full battery on the main straight!`,
+          text: `Within 1.0 second! 2026 Manual Override Mode is ARMED — Push now, overtake available on the main straight!`,
           tone: "win",
+          category: "race",
         };
       case "safety_car":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Safety Car deployed! Stay positive on the delta — keep heat in the fronts and standby for pit call.`,
+          text: `Safety Car deployed! Stay positive on the FIA delta — Fail 24 off, keep brake & front tyre temps alive.`,
           tone: "warn",
+          category: "strategy",
         };
       case "final_lap":
         return {
           speaker: eng.short,
           to: drv,
-          text: `Last lap, Lap ${lap}! Empty the battery, everything you've got to the flag!`,
+          text: `Last lap, Lap ${lap}! Strat Mode 1, empty the battery — everything you've got to the flag!`,
           tone: "win",
           category: "race",
         };

@@ -2186,12 +2186,37 @@
         car.brakeLockedLat = car.latOffset || 0;
       }
 
-      // Base optimal racing line (Dry minimum-curvature late-apex vs Wet off-line grip)
+      // Base optimal racing line: V-Line ("Point & Squirt") vs U-Line ("Momentum Arc") + Wet Anti-Rubber Off-Line Grip!
       let baseLat = poseNow.optLat || 0;
-      if (isWet && poseNow.curv > 0.14) {
-        const wetGain = 2.4 + dna.wetIq * 1.1;
-        const wetShift = Math.max(-2.2, Math.min(2.2, -(poseNow.signedCurv || 0) * wetGain));
+      const drvDna = car.dna || null;
+      const vBias = drvDna && drvDna.corner_style_v != null ? ((Number(drvDna.corner_style_v) - 50) / 50) : 0; // -1 (U-Line) .. +1 (V-Line)
+      const wetMastery = drvDna && drvDna.wet_mastery != null ? (Number(drvDna.wet_mastery) / 100) : dna.wetIq;
+      let wetOffLineActive = false;
+      let tacticSpeedBonus = 0;
+
+      if (!isWet && poseNow.curv > 0.18 && Math.abs(vBias) > 0.12) {
+        if (vBias > 0) {
+          // V-Line: brake slightly wider on entry, sharper late-apex bite toward inside kerb!
+          const vDelta = poseNow.lineZone === "brake" ? -cornerSign * (vBias * 0.55) : cornerSign * (vBias * 0.42);
+          baseLat = Math.max(-4.35, Math.min(4.35, baseLat + vDelta));
+          if (poseNow.lineZone === "exit") tacticSpeedBonus += vBias * 0.008;
+        } else {
+          // U-Line: smooth wide sweeping arc with higher mid-corner minimum speed!
+          const uAmt = Math.abs(vBias);
+          baseLat = Math.max(-4.35, Math.min(4.35, baseLat * (1 - uAmt * 0.16)));
+          if (poseNow.lineZone === "apex") tacticSpeedBonus += uAmt * 0.009;
+        }
+      }
+
+      if (isWet && (o.wetness || 0) >= 32 && poseNow.curv > 0.16) {
+        // Wet-Weather "Anti-Rubber" Off-Line Grip Hunting (1.6m-2.6m off slick rubbered dry groove!)
+        const wetGain = 1.9 + wetMastery * 1.45;
+        const wetShift = Math.max(-2.6, Math.min(2.6, -(poseNow.signedCurv || 0) * wetGain));
         baseLat = Math.max(-4.35, Math.min(4.35, baseLat + wetShift));
+        if (wetMastery >= 0.78) {
+          wetOffLineActive = true;
+          tacticSpeedBonus += (wetMastery - 0.72) * 0.065;
+        }
       }
 
       // 2D Wrapped Spatial Neighbourhood Scan (sees ALL cars ahead/behind, including lapped cars & 3-wide!)
@@ -2269,11 +2294,13 @@
       }
 
       let targetLat = baseLat;
-      let speedMod = 1.0;
+      let speedMod = 1.0 + tacticSpeedBonus;
       let bState = "clean";
       let bTag = "";
-      let obsBadge = "";
-      let obsDetail = isWet ? "WET LINE · HUNTING GRIP" : "OPTIMAL LINE · CLEAN PACE";
+      let obsBadge = wetOffLineActive ? "🌧 OFF-LINE" : "";
+      let obsDetail = wetOffLineActive
+        ? `WET ANTI-RUBBER OFF-LINE (+${(tacticSpeedBonus * 100).toFixed(1)}% GRIP)`
+        : (isWet ? "WET LINE · HUNTING GRIP" : (vBias > 0.2 ? "V-LINE · POINT & SQUIRT" : (vBias < -0.2 ? "U-LINE · MOMENTUM ARC" : "OPTIMAL LINE · CLEAN PACE")));
       let sensorTarget = null;
       let commitDur = 0;
       let hardOverride = false;
@@ -2525,6 +2552,40 @@
                   };
                 }
               }
+            }
+          }
+
+          // A2. DIRTY-AIR THERMAL RECOVERY (pull 1.9m out of rival's hot wake on straights when ICE or Brakes overheat!)
+          const iceTemp = (car.components && car.components.ice && car.components.ice.temp) || 100;
+          const brkTemp = (car.components && car.components.brakes && car.components.brakes.temp) || 400;
+          if (!bestPlan && ahead && aheadGapS < 1.15 && aheadGapS > 0.32 && poseNow.curv < 0.14 && (iceTemp >= 115 || brkTemp >= 510)) {
+            const coolSign = (ahead.latOffset || 0) >= 0 ? -1 : 1;
+            const coolLat = Math.max(-4.1, Math.min(4.1, (ahead.latOffset || 0) + coolSign * 2.1));
+            bestPlan = {
+              state: "clean_air", tag: "COOL WAKE", badge: "❄ COOL AIR",
+              detail: `DIRTY-AIR THERMAL RECOVERY (${iceTemp >= 115 ? `ICE ${iceTemp}°C` : `BRK ${brkTemp}°C`})`,
+              latOffset: coolLat,
+              speedMod: 0.996,
+              sensor: null,
+              dur: 1.25,
+            };
+          }
+
+          // B2. BREAKING THE TOW (single legal FIA straight-line weave off slipstream centerline!)
+          if (!bestPlan && behind && behindGapS >= 0.45 && behindGapS <= 1.10 && poseNow.curv < 0.13 && !inBrakingZone && (car.defendMovesThisStraight || 0) < 1) {
+            const ruth = (drvDna && drvDna.defense_ruthless != null) ? (drvDna.defense_ruthless / 100) : dna.craft;
+            if (ruth >= 0.72 && Math.abs((car.latOffset || 0) - (behind.latOffset || 0)) < 1.65) {
+              car.defendMovesThisStraight = 1;
+              const breakSign = (behind.latOffset || 0) >= 0 ? -1 : 1;
+              const breakLat = Math.max(-3.6, Math.min(3.6, breakSign * 2.65));
+              bestPlan = {
+                state: "defend", tag: "BREAK TOW", badge: "⚡ BREAK TOW",
+                detail: `BREAKING SLIPSTREAM TOW VS ${getCode(behind)} (+${behindGapS.toFixed(2)}s)`,
+                latOffset: breakLat,
+                speedMod: 1.003,
+                sensor: null,
+                dur: 1.3,
+              };
             }
           }
 

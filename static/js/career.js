@@ -3013,6 +3013,7 @@
     const drvAff = (balData && balData.driver_affinity) || {};
     const teamAff = (balData && balData.team_affinity) || {};
     const drvPsych = (balData && balData.driver_psychology) || {};
+    const drvDnaMap = (balData && balData.driver_dna) || {};
     cr.simToEndActive = false;
     getEl("cr-simtoend-ovl")?.classList.add("hidden");
 
@@ -3033,13 +3034,15 @@
         pSlotCounter += 1;
       }
       const isWet = COMPOUNDS[comp].wet > 0;
-      const dKey = String(g.clean_name || "").toLowerCase();
+      const dKey = String(g.clean_name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       const tKey = String(g.team_name || "").toLowerCase();
       const aff = Number(drvAff[dKey] || 0) + Number(teamAff[tKey] || 0) * 0.65;
       const engObj = window.F1RadioEngine ? window.F1RadioEngine.assignEngineer(g.team_name, i % 2) : null;
       const car = {
         idx: i,
         engineer: engObj,
+        dna: drvDnaMap[dKey] || null,
+        eraKey: (DATA.state && DATA.state.era === "legends") ? "1990s" : "2026",
         driverId: g.driver_id,
         cleanName: g.clean_name,
         code3: g.code3,
@@ -3106,7 +3109,7 @@
       cr.circuit,
       cr.cars.map((c) => ({
         idx: c.idx, code3: c.code3, name: c.cleanName, team: c.teamName,
-        color: c.color, isTeam: c.isPlayerTeam, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer,
+        color: c.color, isTeam: c.isPlayerTeam, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer, dna: c.dna,
       })),
       cr.totalLaps,
       ENG.DEFAULT_ERA_RULES

@@ -2083,6 +2083,7 @@
     const drvAff = (balData && balData.driver_affinity) || {};
     const teamAff = (balData && balData.team_affinity) || {};
     const drvPsych = (balData && balData.driver_psychology) || {};
+    const drvDnaMap = (balData && balData.driver_dna) || {};
 
     const dist = getEl("fsim-laps-sel")?.value || "15";
     fs.totalLaps = dist === "full" ? (selCir.laps || 55) : (parseInt(dist, 10) || 15);
@@ -2147,16 +2148,19 @@
         comp = i < 5 ? "soft" : (i % 5 === 4 ? "hard" : "medium");
       }
       const isWetStart = COMPOUNDS[comp].wet > 0;
-      const dKey = String(card.clean_name || "").toLowerCase();
+      const dKey = String(card.clean_name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       const tKey = String(card.hero_team || "").toLowerCase();
       const seatNum = teamSeatMap[tKey] || 0;
       teamSeatMap[tKey] = seatNum + 1;
       const engObj = window.F1RadioEngine ? window.F1RadioEngine.assignEngineer(card.hero_team, seatNum) : null;
       const combinedAff = Number(drvAff[dKey] || 0) + Number(teamAff[tKey] || 0) * 0.65;
+      const dnaObj = drvDnaMap[dKey] || null;
       const car = {
         idx: i,
         card,
         engineer: engObj,
+        dna: dnaObj,
+        eraKey: (fs.eraRule && fs.eraRule.key) || "2026",
         pos: i + 1,
         gridPos: i + 1,
         lap: 0,
@@ -2210,7 +2214,7 @@
       selCir,
       fs.cars.map((c) => ({
         idx: c.idx, code3: c.card.code3, name: c.card.clean_name, team: c.card.hero_team,
-        color: c.card.hero_color, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer,
+        color: c.card.hero_color, persona: c.persona, trackAffinity: c.trackAffinity, engineer: c.engineer, dna: c.dna,
       })),
       fs.totalLaps,
       fs.eraRule

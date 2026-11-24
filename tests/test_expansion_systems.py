@@ -196,6 +196,26 @@ class TestExpansionSystems(unittest.TestCase):
                 r_del = self._delete(f"/api/custom-seasons/{sid}")
                 self.assertEqual(r_del.status_code, 200)
 
+    def test_driver_dna_deduction_and_api(self):
+        from f1data.driver_dna import get_driver_dna_map
+        dna_all = get_driver_dna_map(srv.DATA_DB)
+        self.assertGreaterEqual(len(dna_all), 700)
+        self.assertIn("jim clark", dna_all)
+        self.assertIn("max verstappen", dna_all)
+        self.assertLess(dna_all["jim clark"]["corner_style_v"], 35)
+        self.assertGreater(dna_all["max verstappen"]["corner_style_v"], 75)
+
+        r = self._get("/api/sim/driver-dna?drivers=Jim%20Clark|Max%20Verstappen|Alain%20Prost")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["driver_dna"]["alain prost"]["archetype"], "The Professor")
+
+        r_bal = self._get("/api/sim/balance?circuit_id=melbourne&era_key=1960s")
+        self.assertEqual(r_bal.status_code, 200)
+        self.assertIn("driver_dna", r_bal.json())
+        self.assertIn("jim clark", r_bal.json()["driver_dna"])
+
 
 if __name__ == "__main__":
     unittest.main()
