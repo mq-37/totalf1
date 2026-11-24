@@ -374,6 +374,86 @@ def check_ladder_integrity(base_dir: Path) -> dict[str, Any]:
         conn.close()
 
 
+def commit_season_transition(
+    base_dir: Path,
+    save_id: str,
+    state: dict[str, Any],
+    history_record: dict[str, Any] | None = None,
+) -> str:
+    """Atomically commit season-end world transitions (ladder_saves + ladder_history) in ONE WAL transaction."""
+    conn = _connect(base_dir)
+    try:
+        now = time.time()
+        sid = str(save_id or state.get("save_id") or uuid.uuid4().hex[:12])
+        state["save_id"] = sid
+        state["updated_at"] = now
+        if not state.get("created_at"):
+            state["created_at"] = now
+        player = state.get("player", {})
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            """
+            INSERT INTO ladder_saves (
+                save_id, team_name, principal_name, tier, season, round,
+                cash_k, reputation, career_path, state_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(save_id) DO UPDATE SET
+                team_name=excluded.team_name,
+                principal_name=excluded.principal_name,
+                tier=excluded.tier,
+                season=excluded.season,
+                round=excluded.round,
+                cash_k=excluded.cash_k,
+                reputation=excluded.reputation,
+                career_path=excluded.career_path,
+                state_json=excluded.state_json,
+                updated_at=excluded.updated_at
+            """,
+            (
+                sid,
+                str(player.get("team_name") or "Apex Motorsport"),
+                str(player.get("principal_name") or "Team Principal"),
+                str(state.get("tier") or "karting"),
+                int(state.get("season") or 1),
+                int(state.get("round") or 1),
+                float(state.get("economy", {}).get("cash_k") or 0.0),
+                float(player.get("reputation") or 10.0),
+                str(player.get("career_path") or "owner_ladder"),
+                json.dumps(state),
+                float(state["created_at"]),
+                now,
+            ),
+        )
+        if history_record:
+            conn.execute(
+                """
+                INSERT INTO ladder_history (
+                    save_id, season, tier, team_name, team_pos, champion_driver,
+                    points, career_path, summary_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    sid,
+                    int(history_record.get("season") or 1),
+                    str(history_record.get("tier") or "karting"),
+                    str(history_record.get("team_name") or ""),
+                    int(history_record.get("team_pos") or 1),
+                    str(history_record.get("champion_driver") or ""),
+                    float(history_record.get("points") or 0.0),
+                    str(history_record.get("career_path") or "owner_ladder"),
+                    json.dumps(history_record),
+                    now,
+                ),
+            )
+        conn.commit()
+        return sid
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def delete_save(base_dir: Path, save_id: str) -> bool:
     conn = _connect(base_dir)
     try:

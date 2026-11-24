@@ -269,7 +269,6 @@ async def api_ladder_fork(save_id: str, request: Request):
         target_f1_team=body.get("target_f1_team"),
     )
     if ok:
-        if state.get("season_history"):
-            ldb.record_season_history(_base_dir(), save_id, state["season_history"][0])
-        ldb.save_state(_base_dir(), state)
+        hist_rec = state["season_history"][0] if state.get("season_history") else None
+        ldb.commit_season_transition(_base_dir(), save_id, state, history_record=hist_rec)
     return JSONResponse({"ok": ok, "message": msg, "view": leng.serialize_ladder_view(state)})

@@ -23,6 +23,7 @@ from typing import Any
 
 from .circuits import CIRCUITS, get_circuit
 from .feeders import FEEDER_ROSTER_SEED
+from . import ladder_world_ai as _world_ai
 from .rating_engine import compute_fair_attributes
 from .weather_radar import build_weather_radar_and_pit_plan
 
@@ -1666,28 +1667,33 @@ def vote_fia_proposal(state: dict[str, Any], vote: str) -> tuple[bool, str]:
 # =============================================================================
 
 def _prepare_season_end_offers(state: dict[str, Any], rng: random.Random) -> None:
-    """Evaluate promotions & generate F2 -> F1 Hybrid Career Fork offers (Poach vs Constructor Bid vs Mercenary)."""
+    """Evaluate promotions, AI principal firings & generate F2 -> F1 Hybrid Career Fork offers."""
     tier = state["tier"]
     tier_obj = state["tiers"][tier]
     standings = sorted(tier_obj["teams"], key=lambda t: -float(t["points"]))
     player_pos = next((i + 1 for i, t in enumerate(standings) if t.get("is_player")), len(standings))
 
-    offers = []
+    # Run AI Principal board evaluation first so organic F1 dismissals create real poaching vacancies!
+    ai_eval = _world_ai.evaluate_ai_principals_and_poaching(state, rng)
+
+    offers = list(state["player"].get("poach_offers") or [])
     if tier in ("f2", "f1"):
-        # Generate poaching offers from F1 teams!
+        existing_f1 = {o["f1_team"] for o in offers}
         f1_teams = [t for t in state["tiers"]["f1"]["teams"] if not t.get("is_player")]
         eligible_f1 = [t for t in f1_teams if t["car_rating"] <= (84 if state["player"]["reputation"] < 80 else 92)]
         for ft in rng.sample(eligible_f1 or f1_teams, min(3, len(eligible_f1 or f1_teams))):
-            offers.append({
-                "id": f"poach_{ft['id']}",
-                "f1_team": ft["name"],
-                "color": ft["color"],
-                "car_rating": ft["car_rating"],
-                "budget_k": round(128000.0 + (ft["car_rating"] - 76) * 2800.0, 1),
-                "reputation_req": 68 if ft["car_rating"] < 83 else 82,
-            })
+            if ft["name"] not in existing_f1 and len(offers) < 3:
+                offers.append({
+                    "id": f"poach_{ft['id']}",
+                    "f1_team": ft["name"],
+                    "color": ft["color"],
+                    "car_rating": ft["car_rating"],
+                    "budget_k": round(128000.0 + (ft["car_rating"] - 76) * 2800.0, 1),
+                    "reputation_req": 68 if ft["car_rating"] < 83 else 82,
+                })
+                existing_f1.add(ft["name"])
         state["player"]["poach_offers"] = offers
-        if tier == "f2" and (player_pos <= 4 or state["player"]["reputation"] >= 70):
+        if tier == "f2" and (player_pos <= 4 or state["player"]["reputation"] >= 70 or ai_eval["qualified_offers"]):
             state["player"]["fork_ready"] = True
             _add_inbox(
                 state,
@@ -1726,8 +1732,14 @@ def choose_career_fork_or_promote(
             drv["sl_points"] = sum(hist)
             drv["sl_eligible"] = drv["sl_points"] >= 40
 
+    # 1b. Run Living 5-Tier World AI (40-pt SL F1 graduations, inter-tier promotions, Karting regens, AI firings & poaching!)
+    world_summary = _world_ai.run_offseason_world_ai(state, rng, _make_driver)
+    state["last_offseason_summary"] = world_summary
+
     # Age all drivers by 1 year & reset season counters
     for d in state["drivers"].values():
+        if d["id"] in world_summary.get("regens_spawned", []):
+            continue  # Newly spawned 13–15yo Karting regens keep their fresh spawn age
         d["age"] += 1
         d["season_pts"] = 0.0
         d["season_wins"] = 0
