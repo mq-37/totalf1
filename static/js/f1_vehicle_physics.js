@@ -368,6 +368,8 @@
       yaw: phys.yaw,
       pitchRad: phys.pitchRad,
       rollRad: phys.rollRad,
+      wheelSpin: phys.wheelSpin,
+      steerAngle: clamp(-steerAngle * 1.85 - (target.curv || 0) * 14.0, -0.44, 0.44),
       frontRideMm: Math.max(0, Math.round(phys.frontRideMm)),
       rearRideMm: Math.max(0, Math.round(phys.rearRideMm)),
       minRideMm: Math.max(0, Math.round(minRh)),

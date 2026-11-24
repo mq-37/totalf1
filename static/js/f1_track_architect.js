@@ -906,6 +906,106 @@
     return { holding: false, newLight: 0, lightsOutNow: false };
   }
 
+  // ---------------------------------------------------------------------------
+  // 5. Phase B: 3D Circuit Topography (True Elevation, Banking & Iconic Landmarks)
+  // ---------------------------------------------------------------------------
+  // Guarantees y >= 0 everywhere (never clips below ground plane) and smooth C2 taper
+  // to y = 0 & bankRad = 0 across the Start/Finish & Pitlane corridor (0.905..0.095).
+  function gaussianBump(p, center, width) {
+    let d = Math.abs(p - center);
+    if (d > 0.5) d = 1.0 - d;
+    const u = d / Math.max(1e-4, width);
+    return Math.exp(-u * u * 2.2);
+  }
+
+  function rawCircuitElevAndBank(circuit, prog) {
+    const p = ((prog % 1) + 1) % 1;
+    const id = String((circuit && circuit.id) || "").toLowerCase();
+    const biome = String((circuit && circuit.biome) || "parkland").toLowerCase();
+    // Smooth window: strictly 0 across S/F + pitlane (0.908..0.092), ramps smoothly to 1 across 0.142..0.858
+    const sfWin = smoothstep(0.092, 0.142, p) * (1.0 - smoothstep(0.858, 0.908, p));
+
+    let y = 0;
+    let bankRad = 0;
+    let inTunnel = false;
+
+    if (id === "spa") {
+      // Spa-Francorchamps: Eau Rouge / Raidillon steep climb to Kemmel (+28m), sweeping downhill through Pouhon/Stavelot
+      const climb = smoothstep(0.10, 0.21, p) * (1.0 - smoothstep(0.64, 0.84, p));
+      const crest = gaussianBump(p, 0.24, 0.08) * 5.0 + gaussianBump(p, 0.38, 0.10) * 3.0;
+      y = (climb * 24.5 + crest) * sfWin;
+      bankRad = (gaussianBump(p, 0.16, 0.035) * 0.09 - gaussianBump(p, 0.52, 0.05) * 0.07) * sfWin;
+    } else if (id === "austin") {
+      // COTA: Iconic Turn 1 Big Red Hill (+24m) right after pit exit, sweeping Esses descent & back-straight rise
+      const t1Hill = gaussianBump(p, 0.145, 0.055) * 24.5;
+      const midWave = gaussianBump(p, 0.48, 0.11) * 9.5 + gaussianBump(p, 0.72, 0.09) * 11.0;
+      y = (t1Hill + midWave) * sfWin;
+      bankRad = gaussianBump(p, 0.145, 0.03) * 0.08 * sfWin;
+    } else if (id === "spielberg" || id === "zeltweg" || id === "oesterreichring") {
+      // Red Bull Ring / Austrian Alps: steep climb to Turn 3 (+24m) and rolling mountain descent
+      const mountain = gaussianBump(p, 0.36, 0.16) * 24.0 + gaussianBump(p, 0.62, 0.12) * 11.5;
+      y = mountain * sfWin;
+      bankRad = gaussianBump(p, 0.36, 0.05) * 0.07 * sfWin;
+    } else if (id === "interlagos") {
+      // Interlagos: Senna S drop into infield lake basin, then sweeping climb up Junção & Subida dos Boxes
+      const ridge1 = gaussianBump(p, 0.22, 0.09) * 8.5;
+      const ridge2 = gaussianBump(p, 0.78, 0.11) * 16.5;
+      y = (ridge1 + ridge2) * sfWin;
+      bankRad = gaussianBump(p, 0.78, 0.06) * 0.10 * sfWin;
+    } else if (id === "zandvoort") {
+      // Zandvoort: Iconic 18-degree banked Hugenholtzbocht (T3) & Arie Luyendykbocht (T14) + coastal dunes!
+      const dunes = gaussianBump(p, 0.26, 0.08) * 10.5 + gaussianBump(p, 0.54, 0.10) * 8.0 + gaussianBump(p, 0.74, 0.08) * 6.5;
+      y = dunes * sfWin;
+      const hugen = gaussianBump(p, 0.23, 0.045) * 0.28; // ~16 deg banked hairpin
+      const luyen = gaussianBump(p, 0.85, 0.048) * 0.30; // ~17.5 deg banked final corner!
+      bankRad = (hugen + luyen) * sfWin;
+    } else if (id === "suzuka") {
+      // Suzuka: Iconic Figure-8 Overpass bridge (+9.5m) + Esses & Spoon elevation undulation
+      const overpass = gaussianBump(p, 0.64, 0.065) * 9.5;
+      const esses = gaussianBump(p, 0.25, 0.09) * 6.5 + gaussianBump(p, 0.44, 0.08) * 4.5;
+      y = (overpass + esses) * sfWin;
+      bankRad = gaussianBump(p, 0.78, 0.04) * 0.08 * sfWin;
+    } else if (id === "monaco") {
+      // Monaco: Sainte-Dévote -> Beau Rivage climb up to Casino Square (+13m), descending to Fairmont Hairpin & Harbour Tunnel!
+      const casinoHill = gaussianBump(p, 0.24, 0.085) * 13.5;
+      y = casinoHill * sfWin;
+      inTunnel = p >= 0.45 && p <= 0.57;
+    } else if (id === "portimao" || id === "imola" || id === "nurburgring" || id === "kyalami" || id === "watkins" || id === "brandshatch" || id === "istanbul" || id === "mugello") {
+      // Classic rollercoaster natural-terrain circuits
+      const h1 = gaussianBump(p, 0.26, 0.11) * 16.5;
+      const h2 = gaussianBump(p, 0.56, 0.11) * 14.0;
+      const h3 = gaussianBump(p, 0.77, 0.09) * 10.5;
+      y = (h1 + h2 + h3) * sfWin;
+      bankRad = gaussianBump(p, 0.56, 0.05) * 0.07 * sfWin;
+    } else if (biome === "parkland" || biome === "coastal") {
+      // Subtle organic rolling elevation for permanent parkland/coastal circuits
+      const seed = (hashStr(id) % 100) / 100;
+      const wave = (0.5 + 0.5 * Math.sin(p * Math.PI * 4 + seed * 6.28)) * 4.2 + gaussianBump(p, 0.38 + seed * 0.2, 0.12) * 3.8;
+      y = wave * sfWin;
+    } else {
+      // Authentic flat street / desert circuits
+      y = 0;
+    }
+
+    return { y: Math.max(0, y), bankRad, inTunnel };
+  }
+
+  function getCircuitElevationAndBank(circuit, prog) {
+    const base = rawCircuitElevAndBank(circuit, prog);
+    const eps = 0.0025;
+    const prev = rawCircuitElevAndBank(circuit, prog - eps);
+    const next = rawCircuitElevAndBank(circuit, prog + eps);
+    const perimM = Math.max(2200, ((circuit && circuit.length_km) || 5.0) * 660);
+    const ds = Math.max(1.0, perimM * (eps * 2));
+    const slopePitch = clamp(Math.atan2(next.y - prev.y, ds), -0.22, 0.22);
+    return {
+      y: base.y,
+      slopePitch,
+      bankRad: base.bankRad,
+      inTunnel: base.inTunnel,
+    };
+  }
+
   global.F1TrackArchitect = {
     PIT_BOX_COLORS,
     buildPitLayout,
@@ -917,5 +1017,6 @@
     assignCarLaunchProfile,
     createStandingStartState,
     stepStandingStart,
+    getCircuitElevationAndBank,
   };
 })(window);

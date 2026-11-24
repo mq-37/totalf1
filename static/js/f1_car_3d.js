@@ -631,10 +631,12 @@
         { pos: [-xR, 0, zR], rear: true  }
       ];
       root.userData.wheels = root.userData.wheels || [];
+      root.userData.tyreRingMat = mats.tyreRing;
       wSpecs.forEach(function (w) {
         var wg = buildEraWheel(w.rear, mats, wheelStyle);
         var ry = wg.userData.radius || 0.36;
         wg.position.set(w.pos[0], ry, w.pos[2]);
+        wg.rotation.order = 'YXZ';
         wg.userData.isFront = !w.rear;
         wg.userData.radius = ry;
         root.userData.wheels.push(wg);
@@ -1008,7 +1010,16 @@
       });
       /* Wide low 2010s DRS rear wing (angled back-swept endplates) */
       addMesh(buildWingElement({ halfSpan: 0.53, zCenter: -2.34, zTip: -2.34, yCenter: 0.73, yTip: 0.73, chordCenter: 0.25, chordTip: 0.25, thick: 0.024, pitch: 0.20 }), mats.rearWingMain);
-      addMesh(buildWingElement({ halfSpan: 0.52, zCenter: -2.48, zTip: -2.48, yCenter: 0.85, yTip: 0.85, chordCenter: 0.17, chordTip: 0.17, thick: 0.020, pitch: 0.46 }), mats.rearWingFlap);
+      var drsPivot10 = new THREE.Group();
+      drsPivot10.position.set(0, 0.89, -2.54);
+      var drsMesh10 = new THREE.Mesh(
+        buildWingElement({ halfSpan: 0.52, zCenter: 0.06, zTip: 0.06, yCenter: -0.04, yTip: -0.04, chordCenter: 0.17, chordTip: 0.17, thick: 0.020, pitch: 0.46 }),
+        mats.rearWingFlap
+      );
+      drsMesh10.castShadow = true;
+      drsPivot10.add(drsMesh10);
+      root.add(drsPivot10);
+      root.userData.drsFlap = drsPivot10;
       [-1, 1].forEach(function (s) {
         addMesh(buildVerticalPlate([[-2.18, 0.44], [-2.36, 0.32], [-2.52, 0.36], [-2.58, 0.91], [-2.22, 0.91]], s * 0.535, 0.020), mats.rearEndplate);
         addMesh(new THREE.BoxGeometry(0.028, 0.022, 0.36), mats.rearEndplateCap, [s * 0.535, 0.92, -2.40]);
@@ -1311,11 +1322,20 @@
       arch: -0.018, chordCenter: 0.28, chordTip: 0.24, thick: 0.028, pitch: 0.20
     }), mats.rearWingMain);
 
-    /* Upper DRS flap */
-    addMesh(buildWingElement({
-      halfSpan: 0.49, zCenter: -2.54, zTip: -2.54, yCenter: 0.90, yTip: 0.92,
-      arch: -0.012, chordCenter: 0.19, chordTip: 0.17, thick: 0.022, pitch: 0.48
-    }), mats.rearWingFlap);
+    /* Upper DRS flap (hinged pivot at upper trailing edge so DRS physically opens!) */
+    var drsPivot20 = new THREE.Group();
+    drsPivot20.position.set(0, 0.94, -2.60);
+    var drsMesh20 = new THREE.Mesh(
+      buildWingElement({
+        halfSpan: 0.49, zCenter: 0.06, zTip: 0.06, yCenter: -0.04, yTip: -0.02,
+        arch: -0.012, chordCenter: 0.19, chordTip: 0.17, thick: 0.022, pitch: 0.48
+      }),
+      mats.rearWingFlap
+    );
+    drsMesh20.castShadow = true;
+    drsPivot20.add(drsMesh20);
+    root.add(drsPivot20);
+    root.userData.drsFlap = drsPivot20;
 
     /* Lower beam wing above diffuser */
     addMesh(buildWingElement({
@@ -1400,9 +1420,11 @@
       { pos: [-xRear,  0.36, zRear],  rear: true  }
     ];
     root.userData.wheels = root.userData.wheels || [];
+    root.userData.tyreRingMat = mats.tyreRing;
     wheelPositions.forEach(function (w) {
       var wg = buildWheel(w.rear, mats);
       wg.position.set(w.pos[0], w.pos[1], w.pos[2]);
+      wg.rotation.order = 'YXZ';
       wg.userData.isFront = !w.rear;
       wg.userData.radius = 0.36;
       root.userData.wheels.push(wg);

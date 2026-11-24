@@ -71,7 +71,7 @@
     return h >>> 0;
   }
 
-  function buildRibbonGeo(pts, leftOff, rightOff, yElev, closed, uvScale) {
+  function buildRibbonGeo(pts, leftOff, rightOff, yElev, closed, uvScale, useBank) {
     const n = pts.length;
     const count = closed ? n + 1 : n;
     const positions = new Float32Array(count * 2 * 3);
@@ -88,9 +88,11 @@
       }
       const rx = -p.tz;
       const rz = p.tx;
+      const baseY = p.y || 0;
+      const bSin = (useBank && p.bankRad) ? Math.sin(p.bankRad) : 0;
       const vi = i * 6;
-      positions[vi]     = p.x + rx * leftOff;  positions[vi + 1] = yElev; positions[vi + 2] = p.z + rz * leftOff;
-      positions[vi + 3] = p.x + rx * rightOff; positions[vi + 4] = yElev; positions[vi + 5] = p.z + rz * rightOff;
+      positions[vi]     = p.x + rx * leftOff;  positions[vi + 1] = baseY + yElev + bSin * leftOff;  positions[vi + 2] = p.z + rz * leftOff;
+      positions[vi + 3] = p.x + rx * rightOff; positions[vi + 4] = baseY + yElev + bSin * rightOff; positions[vi + 5] = p.z + rz * rightOff;
 
       const ui = i * 4;
       uvs[ui]     = 0; uvs[ui + 1] = dist * sc;
@@ -105,6 +107,35 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildEmbankmentSkirtGeo(pts, innerOff, sign) {
+    const n = pts.length;
+    const count = n + 1;
+    const positions = new Float32Array(count * 2 * 3);
+    const indices = [];
+    for (let i = 0; i < count; i++) {
+      const p = pts[i % n];
+      const rx = -p.tz;
+      const rz = p.tx;
+      const baseY = p.y || 0;
+      const bSin = p.bankRad ? Math.sin(p.bankRad) : 0;
+      const topY = baseY + 0.005 + bSin * innerOff;
+      const skirtW = Math.max(9.0, topY * 1.45 + 7.5);
+      const outerOff = innerOff + sign * skirtW;
+      const vi = i * 6;
+      positions[vi]     = p.x + rx * innerOff; positions[vi + 1] = topY;  positions[vi + 2] = p.z + rz * innerOff;
+      positions[vi + 3] = p.x + rx * outerOff; positions[vi + 4] = -0.35; positions[vi + 5] = p.z + rz * outerOff;
+      if (i < count - 1) {
+        const b = i * 2;
+        indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
     return geo;
@@ -432,14 +463,18 @@
       grp.add(ep);
     });
 
-    // Rear Wing + DRS Upper Flap + Endplates
+    // Rear Wing + Hinged DRS Upper Flap + Endplates
     const rwLower = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.08, 0.34), carbonMat);
     rwLower.position.set(0, 0.86, -2.28);
     grp.add(rwLower);
+    const drsPivot = new THREE.Group();
+    drsPivot.position.set(0, 1.06, -2.38);
     const rwDrs = new THREE.Mesh(new THREE.BoxGeometry(1.40, 0.18, 0.10), paintMat);
-    rwDrs.position.set(0, 1.00, -2.35);
+    rwDrs.position.set(0, -0.06, 0.03);
     rwDrs.name = "drs_flap";
-    grp.add(rwDrs);
+    drsPivot.add(rwDrs);
+    grp.add(drsPivot);
+    grp.userData.drsFlap = drsPivot;
     [-0.72, 0.72].forEach((ex) => {
       const rep = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.56, 0.46), paintMat);
       rep.position.set(ex, 0.84, -2.28);
@@ -455,13 +490,32 @@
     helmet.position.set(0, 0.72, 0.08);
     grp.add(helmet);
 
-    // 4 Wide Pirelli Tyres
+    // 4 Wide Pirelli Tyres (individually articulated for spin & front-wheel steering!)
     const tyreGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.42, 16);
     tyreGeo.rotateZ(Math.PI * 0.5);
-    [[-0.96, 0.36, 1.82], [0.96, 0.36, 1.82], [-1.00, 0.36, -1.52], [1.00, 0.36, -1.52]].forEach(([x, y, z]) => {
-      const w = new THREE.Mesh(tyreGeo, carbonMat);
-      w.position.set(x, y, z);
-      grp.add(w);
+    const spokeGeo = new THREE.BoxGeometry(0.43, 0.06, 0.42);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
+    const ringGeo = new THREE.RingGeometry(0.21, 0.27, 20);
+    grp.userData.wheels = [];
+    grp.userData.tyreRingMat = ringMat;
+    [
+      [-0.96, 0.36,  1.82, true,  -1],
+      [ 0.96, 0.36,  1.82, true,   1],
+      [-1.00, 0.36, -1.52, false, -1],
+      [ 1.00, 0.36, -1.52, false,  1],
+    ].forEach(([x, y, z, isFront, side]) => {
+      const wg = new THREE.Group();
+      wg.position.set(x, y, z);
+      wg.rotation.order = "YXZ";
+      wg.userData.isFront = isFront;
+      const wMesh = new THREE.Mesh(tyreGeo, carbonMat);
+      const spk = new THREE.Mesh(spokeGeo, chromeMat);
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.x = side * 0.214;
+      ring.rotation.y = side > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+      wg.add(wMesh, spk, ring);
+      grp.add(wg);
+      grp.userData.wheels.push(wg);
     });
 
     return grp;
@@ -476,21 +530,24 @@
     shadow.position.set(0, 0.03, 0.15);
     carGrp.add(shadow);
 
-    // 2. Compound-Coloured Pirelli Sidewall Rings flush on all 4 tyres
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
-    const ringGeo = new THREE.RingGeometry(0.21, 0.27, 20);
-    const wheelCoords = [
-      [-1.02, 0.36,  1.72, -Math.PI * 0.5],
-      [ 1.02, 0.36,  1.72,  Math.PI * 0.5],
-      [-1.06, 0.36, -1.64, -Math.PI * 0.5],
-      [ 1.06, 0.36, -1.64,  Math.PI * 0.5],
-    ];
-    wheelCoords.forEach(([x, y, z, ry]) => {
-      const r = new THREE.Mesh(ringGeo, ringMat);
-      r.position.set(x, y, z);
-      r.rotation.y = ry;
-      carGrp.add(r);
-    });
+    // 2. Compound-Coloured Pirelli Sidewall Rings (reuse integrated wheel ringMat when available so rings spin & steer!)
+    let ringMat = carGrp.userData && carGrp.userData.tyreRingMat;
+    if (!ringMat) {
+      ringMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
+      const ringGeo = new THREE.RingGeometry(0.21, 0.27, 20);
+      const wheelCoords = [
+        [-1.02, 0.36,  1.72, -Math.PI * 0.5],
+        [ 1.02, 0.36,  1.72,  Math.PI * 0.5],
+        [-1.06, 0.36, -1.64, -Math.PI * 0.5],
+        [ 1.06, 0.36, -1.64,  Math.PI * 0.5],
+      ];
+      wheelCoords.forEach(([x, y, z, ry]) => {
+        const r = new THREE.Mesh(ringGeo, ringMat);
+        r.position.set(x, y, z);
+        r.rotation.y = ry;
+        carGrp.add(r);
+      });
+    }
 
     // 3. Glowing Carbon Brake Discs (Front Left & Right — glow bright cherry-orange under braking!)
     const brakeMat = new THREE.MeshBasicMaterial({ color: 0xff3d00, transparent: true, opacity: 0.0 });
@@ -1009,6 +1066,10 @@
       state.magSparkSystem = null;
       state.spraySystem = null;
       state.breakdownSmokeSystem = null;
+      state.lockupSmokeSystem = null;
+      state.rainSystem = null;
+      state.dryLineMat = null;
+      state.circuit = null;
       state.safetyCar3D = null;
       state.marshalPanels = [];
       state.debrisGroup = null;
@@ -1017,26 +1078,36 @@
     }
 
     function sample3DTrack(prog) {
-      if (state.trackSpline) return state.trackSpline.sample(prog);
-      const pts = state.trackPts;
-      if (!pts.length) return { x: 0, z: 0, tx: 1, tz: 0, curv: 0, bumpMm: 0 };
-      const n = pts.length;
-      const p = (((prog % 1) + 1) % 1) * n;
-      const i0 = Math.floor(p) % n;
-      const i1 = (i0 + 1) % n;
-      const f = p - Math.floor(p);
-      const a = pts[i0], b = pts[i1];
-      const tx = a.tx + (b.tx - a.tx) * f;
-      const tz = a.tz + (b.tz - a.tz) * f;
-      const tl = Math.max(1e-5, Math.hypot(tx, tz));
-      return {
-        x: a.x + (b.x - a.x) * f,
-        z: a.z + (b.z - a.z) * f,
-        tx: tx / tl,
-        tz: tz / tl,
-        curv: 0,
-        bumpMm: 0,
-      };
+      let base;
+      if (state.trackSpline) {
+        base = state.trackSpline.sample(prog);
+      } else {
+        const pts = state.trackPts;
+        if (!pts.length) return { x: 0, y: 0, z: 0, tx: 1, tz: 0, curv: 0, bumpMm: 0, slopePitch: 0, bankRad: 0, inTunnel: false };
+        const n = pts.length;
+        const p = (((prog % 1) + 1) % 1) * n;
+        const i0 = Math.floor(p) % n;
+        const i1 = (i0 + 1) % n;
+        const f = p - Math.floor(p);
+        const a = pts[i0], b = pts[i1];
+        const tx = a.tx + (b.tx - a.tx) * f;
+        const tz = a.tz + (b.tz - a.tz) * f;
+        const tl = Math.max(1e-5, Math.hypot(tx, tz));
+        base = {
+          x: a.x + (b.x - a.x) * f,
+          z: a.z + (b.z - a.z) * f,
+          tx: tx / tl,
+          tz: tz / tl,
+          curv: 0,
+          bumpMm: 0,
+        };
+      }
+      const ARCH = global.F1TrackArchitect;
+      if (ARCH && ARCH.getCircuitElevationAndBank && state.circuit) {
+        const topo = ARCH.getCircuitElevationAndBank(state.circuit, prog);
+        return Object.assign({}, base, topo);
+      }
+      return Object.assign({ y: 0, slopePitch: 0, bankRad: 0, inTunnel: false }, base);
     }
 
     function sample3DPit(u) {
@@ -1060,6 +1131,7 @@
       if (!circuit || !Array.isArray(circuit.points) || circuit.points.length < 10) return;
       if (state.circuitId === circuit.id && state.worldGroup) return;
       disposeWorld();
+      state.circuit = circuit;
       state.circuitId = circuit.id;
       state.circuitName = circuit.name || circuit.id;
 
@@ -1138,6 +1210,19 @@
         }
       }
       const n = pts.length;
+      const ARCH_T = global.F1TrackArchitect;
+      let maxElev = 0;
+      for (let i = 0; i < n; i++) {
+        const prog = i / n;
+        const topo = (ARCH_T && ARCH_T.getCircuitElevationAndBank)
+          ? ARCH_T.getCircuitElevationAndBank(circuit, prog)
+          : { y: 0, slopePitch: 0, bankRad: 0, inTunnel: false };
+        pts[i].y = topo.y;
+        pts[i].slopePitch = topo.slopePitch;
+        pts[i].bankRad = topo.bankRad;
+        pts[i].inTunnel = topo.inTunnel;
+        if (topo.y > maxElev) maxElev = topo.y;
+      }
       state.trackPts = pts;
 
       // 4. Textured Biome Ground Plane + Harbour/Lake Water with Luxury Yachts!
@@ -1180,15 +1265,25 @@
         }
       }
 
-      // 5. Multi-Layer Track Surface: Runoff Apron + PBR Asphalt + Circuit-Coloured Kerbs + Sponsor Barriers
+      // 5. Multi-Layer Track Surface: Runoff Apron + Embankments + PBR Asphalt + Drying Rubber Line + Banked Kerbs
       const runoffMat = new THREE.MeshStandardMaterial({
         color: circuit.biome === "street" ? 0x475569 : (circuit.biome === "desert" ? 0xc89a64 : 0x2f6d34),
         roughness: 0.9,
         side: THREE.DoubleSide,
       });
-      const runoff = new THREE.Mesh(buildRibbonGeo(pts, -16.5, 16.5, 0.005, true, 0.04), runoffMat);
+      const runoff = new THREE.Mesh(buildRibbonGeo(pts, -16.5, 16.5, 0.005, true, 0.04, true), runoffMat);
       runoff.receiveShadow = true;
       grp.add(runoff);
+
+      if (maxElev > 0.45) {
+        const bankMat = new THREE.MeshStandardMaterial({
+          color: circuit.biome === "desert" ? 0xb58652 : (circuit.biome === "street" ? 0x334155 : 0x2a5f30),
+          roughness: 0.94,
+          side: THREE.DoubleSide,
+        });
+        grp.add(new THREE.Mesh(buildEmbankmentSkirtGeo(pts, -16.5, -1), bankMat));
+        grp.add(new THREE.Mesh(buildEmbankmentSkirtGeo(pts,  16.5,  1), bankMat));
+      }
 
       const roadMat = new THREE.MeshStandardMaterial({
         map: state.asphaltTex,
@@ -1197,14 +1292,67 @@
         side: THREE.DoubleSide,
       });
       state.roadMat = roadMat;
-      const roadMesh = new THREE.Mesh(buildRibbonGeo(pts, -7.4, 7.4, 0.04, true, 0.06), roadMat);
+      const roadMesh = new THREE.Mesh(buildRibbonGeo(pts, -7.4, 7.4, 0.04, true, 0.06, true), roadMat);
       roadMesh.receiveShadow = true;
       grp.add(roadMesh);
 
+      // Dynamic Drying / Rubbered-In Racing Line Ribbon (darkens with grip & pops visibly on drying wet tracks!)
+      const dryLineMat = new THREE.MeshStandardMaterial({
+        color: 0x10151e,
+        roughness: 0.86,
+        metalness: 0.04,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      state.dryLineMat = dryLineMat;
+      const dryLineMesh = new THREE.Mesh(buildRibbonGeo(pts, -2.55, 2.55, 0.056, true, 0.06, true), dryLineMat);
+      grp.add(dryLineMesh);
+
       const kerbTex = makeKerbTexture(theme.kerbA, theme.kerbB);
       const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.62, side: THREE.DoubleSide });
-      grp.add(new THREE.Mesh(buildRibbonGeo(pts, -8.8, -7.25, 0.065, true, 0.22), kerbMat));
-      grp.add(new THREE.Mesh(buildRibbonGeo(pts, 7.25, 8.8, 0.065, true, 0.22), kerbMat));
+      grp.add(new THREE.Mesh(buildRibbonGeo(pts, -8.8, -7.25, 0.065, true, 0.22, true), kerbMat));
+      grp.add(new THREE.Mesh(buildRibbonGeo(pts, 7.25, 8.8, 0.065, true, 0.22, true), kerbMat));
+
+      // Iconic Landmark Geometry: Monaco Illuminated Harbour Tunnel & Suzuka Figure-8 Overpass Piers!
+      if (circuit.id === "monaco") {
+        const tunConcMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.82, metalness: 0.12, side: THREE.DoubleSide });
+        const tunLightMat = new THREE.MeshBasicMaterial({ color: 0xfde68a });
+        const tunPillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.75 });
+        for (let i = 0; i < n; i += 2) {
+          const p = pts[i];
+          if (!p.inTunnel) continue;
+          const next = pts[(i + 2) % n];
+          const segLen = Math.max(5.5, Math.hypot(next.x - p.x, next.z - p.z) * 1.12);
+          const tunGrp = new THREE.Group();
+          tunGrp.position.set(p.x, p.y || 0, p.z);
+          tunGrp.rotation.y = Math.atan2(p.tx, p.tz);
+          // Concrete roof slab + side walls + warm overhead sodium strip lights!
+          const roof = new THREE.Mesh(new THREE.BoxGeometry(20.5, 1.4, segLen), tunConcMat);
+          roof.position.set(0, 7.2, 0);
+          const wallL = new THREE.Mesh(new THREE.BoxGeometry(1.1, 7.4, segLen), tunPillarMat);
+          wallL.position.set(-10.0, 3.6, 0);
+          const wallR = new THREE.Mesh(new THREE.BoxGeometry(1.1, 7.4, segLen), tunPillarMat);
+          wallR.position.set(10.0, 3.6, 0);
+          const strip = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.22, segLen * 0.72), tunLightMat);
+          strip.position.set(0, 6.42, 0);
+          tunGrp.add(roof, wallL, wallR, strip);
+          grp.add(tunGrp);
+        }
+      } else if (circuit.id === "suzuka") {
+        const pierMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.72 });
+        for (let i = 0; i < n; i += 5) {
+          const p = pts[i];
+          if ((p.y || 0) < 4.2) continue;
+          const rx = -p.tz, rz = p.tx;
+          [-8.5, 8.5].forEach((sideOff) => {
+            const pier = new THREE.Mesh(new THREE.BoxGeometry(1.4, p.y + 0.5, 1.4), pierMat);
+            pier.position.set(p.x + rx * sideOff, (p.y - 0.5) * 0.5, p.z + rz * sideOff);
+            grp.add(pier);
+          });
+        }
+      }
 
       // 6. Standardised FIA Circuit Layout Solver (Zero Obstructions across all 79 Tracks!)
       const ARCH = global.F1TrackArchitect;
@@ -1230,9 +1378,10 @@
           }
           const rx = -p.tz, rz = p.tx;
           const wx = p.x + rx * offset, wz = p.z + rz * offset;
+          const wy = (p.y || 0) + (p.bankRad ? Math.sin(p.bankRad) * offset : 0);
           const vi = i * 6;
-          pos[vi] = wx; pos[vi + 1] = 0.0;  pos[vi + 2] = wz;
-          pos[vi + 3] = wx; pos[vi + 4] = 1.55; pos[vi + 5] = wz;
+          pos[vi] = wx; pos[vi + 1] = wy;        pos[vi + 2] = wz;
+          pos[vi + 3] = wx; pos[vi + 4] = wy + 1.55; pos[vi + 5] = wz;
           const ui = i * 4;
           uvs[ui] = dAcc * 0.015; uvs[ui + 1] = 0;
           uvs[ui + 2] = dAcc * 0.015; uvs[ui + 3] = 1;
@@ -1492,10 +1641,13 @@
       standList.forEach((slot, sIdx) => {
         const sx = slot.x;
         const sz = slot.z;
+        const sy = (ARCH && ARCH.getCircuitElevationAndBank && slot.prog != null)
+          ? Math.max(0, ARCH.getCircuitElevationAndBank(circuit, slot.prog).y * 0.72)
+          : 0;
         const yaw = slot.yaw;
 
         const stand = new THREE.Group();
-        stand.position.set(sx, 0, sz);
+        stand.position.set(sx, sy, sz);
         stand.rotation.y = yaw;
         grp.add(stand);
 
@@ -1529,8 +1681,8 @@
             const wx = sx + jx * cosY + jz * sinY;
             const wz = sz - jx * sinY + jz * cosY;
             const fanCol = rng() < 0.34 ? accentHex : FAN_PALETTE[Math.floor(rng() * FAN_PALETTE.length)];
-            crowdSpots.push({ x: wx, y: ly, z: wz, ry: yaw, color: fanCol });
-            if (rng() < 0.22) beerSpots.push({ x: wx, y: ly, z: wz, ry: yaw });
+            crowdSpots.push({ x: wx, y: sy + ly, z: wz, ry: yaw, color: fanCol });
+            if (rng() < 0.22) beerSpots.push({ x: wx, y: sy + ly, z: wz, ry: yaw });
           }
         }
 
@@ -1565,9 +1717,9 @@
             const baseZ = (rng() - 0.5) * slot.len * 0.6;
             const bx = sx + (-faceSign * 2) * cosY + baseZ * sinY;
             const bz = sz - (-faceSign * 2) * sinY + baseZ * cosY;
-            puff.position.set(bx, maxH + 2 + p * 3.8, bz);
+            puff.position.set(bx, sy + maxH + 2 + p * 3.8, bz);
             grp.add(puff);
-            state.smokePuffs.push({ mesh: puff, baseX: bx, baseY: maxH + 1.5, baseZ: bz, phase: p * 1.25 + sIdx, speed: 0.65 + rng() * 0.35 });
+            state.smokePuffs.push({ mesh: puff, baseX: bx, baseY: sy + maxH + 1.5, baseZ: bz, phase: p * 1.25 + sIdx, speed: 0.65 + rng() * 0.35 });
           }
         }
       });
@@ -1586,11 +1738,13 @@
         grp.add(jg);
       });
 
-      // 9. OBSTRUCTION-FREE OVERHEAD SPONSOR BRIDGES
+      // 9. OBSTRUCTION-FREE OVERHEAD SPONSOR BRIDGES (elevated with local track height!)
       const bridgeCols = [0xe10600, 0x0284c7, 0xf97316];
       (layout ? layout.bridges : []).forEach((br, bi) => {
+        const bTopo = (ARCH && ARCH.getCircuitElevationAndBank) ? ARCH.getCircuitElevationAndBank(circuit, br.prog || 0) : { y: 0, inTunnel: false };
+        if (bTopo.inTunnel) return;
         const bg = new THREE.Group();
-        bg.position.set(br.x, 0, br.z);
+        bg.position.set(br.x, bTopo.y || 0, br.z);
         bg.rotation.y = br.yaw;
         const pillarL = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9.5, 2.4), gantryMat); pillarL.position.set(-12.5, 4.75, 0); bg.add(pillarL);
         const pillarR = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9.5, 2.4), gantryMat); pillarR.position.set( 12.5, 4.75, 0); bg.add(pillarR);
@@ -1683,10 +1837,17 @@
           const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.45, 24, 6), gantryMat);
           pole.position.set(px, 12, pz);
           grp.add(pole);
-          const bank = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.2, 1.0), new THREE.MeshBasicMaterial({ color: 0xf0f9ff }));
+          const bank = new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.4, 1.0), new THREE.MeshBasicMaterial({ color: 0xf0f9ff }));
           bank.position.set(px, 24, pz);
           bank.lookAt(pr.lookX, 1, pr.lookZ);
           grp.add(bank);
+          // Volumetric night-race stadium floodlight beam cone illuminating the asphalt!
+          const beamMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.085, depthWrite: false, side: THREE.DoubleSide });
+          const beam = new THREE.Mesh(new THREE.ConeGeometry(13.5, 28, 10, 1, true), beamMat);
+          beam.position.set((px + pr.lookX) * 0.5, 12.2, (pz + pr.lookZ) * 0.5);
+          beam.lookAt(pr.lookX, 0, pr.lookZ);
+          beam.rotateX(Math.PI * 0.5);
+          grp.add(beam);
         } else if (circuit.biome === "street" || circuit.biome === "night_street" || (circuit.id === "melbourne" && i % 4 === 0)) {
           const h = 22 + Math.floor(rng() * 55);
           const w = 12 + Math.floor(rng() * 14);
@@ -1801,6 +1962,25 @@
       state.magSparkSystem = makePool(180, 0xfff3b0, 0.36, 0.95, sparkTex, false);
       state.spraySystem = makePool(240, 0x9fb4ca, 0.72, 0.24, mistTex, false);
       state.breakdownSmokeSystem = makePool(220, 0x64748b, 1.85, 0.52, mistTex, false);
+      state.lockupSmokeSystem = makePool(180, 0xf1f5f9, 1.18, 0.62, mistTex, false);
+
+      // 13a. Camera-Centered 3D Falling Rain Streaks System (active when wetness >= 22%!)
+      const rainCount = 620;
+      const rainPos = new Float32Array(rainCount * 2 * 3);
+      const rainOff = new Float32Array(rainCount * 3);
+      for (let ri = 0; ri < rainCount; ri++) {
+        rainOff[ri * 3]     = (Math.random() - 0.5) * 95;
+        rainOff[ri * 3 + 1] = Math.random() * 44;
+        rainOff[ri * 3 + 2] = (Math.random() - 0.5) * 95;
+      }
+      const rainGeo = new THREE.BufferGeometry();
+      rainGeo.setAttribute("position", new THREE.BufferAttribute(rainPos, 3));
+      const rainMat = new THREE.LineBasicMaterial({ color: 0xcbd5e1, transparent: true, opacity: 0.42, depthWrite: false });
+      const rainLines = new THREE.LineSegments(rainGeo, rainMat);
+      rainLines.frustumCulled = false;
+      rainLines.visible = false;
+      grp.add(rainLines);
+      state.rainSystem = { lines: rainLines, geo: rainGeo, mat: rainMat, pos: rainPos, off: rainOff, count: rainCount };
 
       // 13b. Physical 3D FIA Safety Car + Trackside FIA Digital Marshal Flag Panels + Persistent Track Debris Group
       state.safetyCar3D = buildSafetyCar3D();
@@ -1820,7 +2000,7 @@
         const mx = mp.x + rx * side * 14.4;
         const mz = mp.z + rz * side * 14.4;
         const pGrp = new THREE.Group();
-        pGrp.position.set(mx, 0, mz);
+        pGrp.position.set(mx, mp.y || 0, mz);
         pGrp.rotation.y = Math.atan2(mp.tx, mp.tz);
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 3.6, 6), postSteel);
         pole.position.y = 1.8;
@@ -1832,11 +2012,14 @@
         state.marshalPanels.push({ mat: panelMat, sector: Math.floor(mProg * 3) + 1 });
       }
 
-      // 14. Obstruction-Free Elevated Trackside TV Broadcast Cameras
-      state.tvCams = (layout ? layout.tvCams : []).map((tc) => ({
-        prog: tc.prog,
-        pos: new THREE.Vector3(tc.x, tc.y, tc.z),
-      }));
+      // 14. Obstruction-Free Elevated Trackside TV Broadcast Cameras (adjusted for local hill elevation!)
+      state.tvCams = (layout ? layout.tvCams : []).map((tc) => {
+        const tElev = (ARCH && ARCH.getCircuitElevationAndBank) ? ARCH.getCircuitElevationAndBank(circuit, tc.prog || 0).y : 0;
+        return {
+          prog: tc.prog,
+          pos: new THREE.Vector3(tc.x, tc.y + tElev, tc.z),
+        };
+      });
     }
 
     function spawnParticle(pool, x, y, z, vx, vy, vz, maxLife) {
@@ -1922,6 +2105,41 @@
       if (state.roadMat) {
         state.roadMat.roughness = 0.72 - wetNorm * 0.50;
         state.roadMat.metalness = 0.12 + wetNorm * 0.42;
+      }
+      if (state.dryLineMat) {
+        // Dark rubbered groove builds up with track grip; on a drying damp track (10-65% wet) a crisp dark dry line stands out!
+        const grip = Math.max(0.2, Math.min(1.0, Number(rs.trackGrip || 0.55)));
+        const dryingBoost = (wetness >= 8 && wetness <= 68) ? (0.30 * Math.sin(((wetness - 8) / 60) * Math.PI)) : 0;
+        state.dryLineMat.opacity = Math.min(0.62, 0.08 + grip * 0.24 + dryingBoost - (wetness > 75 ? 0.18 : 0));
+        state.dryLineMat.roughness = wetness > 70 ? 0.35 : 0.88;
+      }
+      if (state.rainSystem) {
+        const rainOn = wetness >= 22;
+        state.rainSystem.lines.visible = rainOn;
+        if (rainOn) {
+          const rSys = state.rainSystem;
+          const intensity = Math.min(1, (wetness - 18) / 72);
+          rSys.mat.opacity = 0.18 + intensity * 0.38;
+          const cx = camera.position.x, cy = Math.max(0, camera.position.y), cz = camera.position.z;
+          const fallSpeed = 38 + intensity * 24;
+          const streakLen = 1.65 + intensity * 1.35;
+          for (let ri = 0; ri < rSys.count; ri++) {
+            let oy = rSys.off[ri * 3 + 1] - fallSpeed * stepDt;
+            if (oy < -4) oy += 44;
+            rSys.off[ri * 3 + 1] = oy;
+            const px = cx + rSys.off[ri * 3];
+            const py = cy - 10 + oy;
+            const pz = cz + rSys.off[ri * 3 + 2];
+            const pi = ri * 6;
+            rSys.pos[pi]     = px;
+            rSys.pos[pi + 1] = py;
+            rSys.pos[pi + 2] = pz;
+            rSys.pos[pi + 3] = px + 0.35;
+            rSys.pos[pi + 4] = py - streakLen;
+            rSys.pos[pi + 5] = pz + 0.18;
+          }
+          rSys.geo.attributes.position.needsUpdate = true;
+        }
       }
       if (state.crowdRef) {
         state.crowdRef.uTime.value = state.elapsed;
@@ -2033,7 +2251,7 @@
             );
             shard.position.set(
               sp.x + rx * lx + sp.tx * lz,
-              0.08,
+              (sp.y || 0) + 0.08 + (sp.bankRad ? Math.sin(sp.bankRad) * lx : 0),
               sp.z + rz * lx + sp.tz * lz
             );
             shard.rotation.set(0.1 * k, ang, 0.2 * (k % 3));
@@ -2072,10 +2290,11 @@
             const peel = (scIn && pMod > 0.88) ? (state.pitSide * ((pMod - 0.88) / 0.12) * 8.5) : 0;
             state.safetyCar3D.group.position.set(
               scPose.x + (-scPose.tz) * peel,
-              0.04,
+              (scPose.y || 0) + 0.04,
               scPose.z + scPose.tx * peel
             );
-            state.safetyCar3D.group.rotation.y = Math.atan2(scPose.tx, scPose.tz);
+            state.safetyCar3D.group.rotation.order = "YXZ";
+            state.safetyCar3D.group.rotation.set(-(scPose.slopePitch || 0), Math.atan2(scPose.tx, scPose.tz), scPose.bankRad || 0);
             if (scIn) {
               // Roof lights switch OFF / Green when Safety Car is coming in this lap!
               state.safetyCar3D.amberL.color.setHex(0x1e293b);
@@ -2109,9 +2328,9 @@
           const bx = bPose.x + (-bPose.tz) * bLat;
           const bz = bPose.z + bPose.tx * bLat;
           const bYaw = Math.atan2(bPose.tx, bPose.tz) + (car.parkedYawOff != null ? car.parkedYawOff : (bSide * 0.42));
-          mesh.position.set(bx, 0.05, bz);
+          mesh.position.set(bx, (bPose.y || 0) + 0.05, bz);
           mesh.rotation.order = "YXZ";
-          mesh.rotation.set(0.03, bYaw, bSide * 0.05);
+          mesh.rotation.set(0.03 - (bPose.slopePitch || 0), bYaw, bSide * 0.05 + (bPose.bankRad || 0));
           if (entry.fx) {
             entry.fx.brakeMat.opacity = 0;
             entry.fx.drsMat.opacity = 0;
@@ -2122,7 +2341,7 @@
             spawnParticle(
               state.breakdownSmokeSystem,
               bx + (Math.random() - 0.5) * 0.9,
-              0.72 + Math.random() * 0.3,
+              (bPose.y || 0) + 0.72 + Math.random() * 0.3,
               bz + (Math.random() - 0.5) * 0.9,
               (Math.random() - 0.5) * 1.4,
               1.6 + Math.random() * 1.5,
@@ -2141,7 +2360,7 @@
           ? ARCH.samplePitStopMotion(state.layout.pitLayout, pitU, car.pitBoxIdx != null ? car.pitBoxIdx : (car.idx % 10))
           : null;
 
-        let wx, wz, heaveY = 0.06, yaw = 0, pitchRad = 0, rollRad = 0, dyn = null;
+        let wx, wz, trackY = 0, slopePitch = 0, bankRad = 0, heaveY = 0.06, yaw = 0, pitchRad = 0, rollRad = 0, dyn = null;
         if (pitMotion) {
           wx = pitMotion.x;
           wz = pitMotion.z;
@@ -2164,6 +2383,9 @@
             ? sample3DPit(pitU)
             : sample3DTrack(car.totalProg);
           const latTarget = inPit ? 0 : Math.max(-5.6, Math.min(5.6, (car.latOffset || 0) * 1.12));
+          trackY = inPit ? 0 : ((pose.y || 0) + (pose.bankRad ? Math.sin(pose.bankRad) * latTarget : 0));
+          slopePitch = inPit ? 0 : (pose.slopePitch || 0);
+          bankRad = inPit ? 0 : (pose.bankRad || 0);
           yaw = Math.atan2(pose.tx, pose.tz);
           const effectiveKph = car.liveKph != null ? car.liveKph : 220;
 
@@ -2203,9 +2425,31 @@
           }
         }
 
-        mesh.position.set(wx, heaveY, wz);
+        const worldY = trackY + heaveY;
+        mesh.position.set(wx, worldY, wz);
         mesh.rotation.order = "YXZ";
-        mesh.rotation.set(pitchRad, yaw, rollRad);
+        mesh.rotation.set(pitchRad - slopePitch, yaw, rollRad + bankRad);
+
+        // Phase B Living Car Mechanics: Spinning Wheels, Front-Wheel Steering & Hinged 3D DRS Flap!
+        const wheels = mesh.userData && mesh.userData.wheels;
+        if (wheels && wheels.length) {
+          const wSpin = dyn ? (dyn.wheelSpin || 0) : (state.elapsed * ((car.liveKph || 0) / 14));
+          const wSteer = pitMotion
+            ? (pitMotion.phase === "turn_in" ? state.pitSide * 0.28 : (pitMotion.phase === "release" ? -state.pitSide * 0.25 : 0))
+            : (dyn ? (dyn.steerAngle || 0) : 0);
+          for (let wi = 0; wi < wheels.length; wi++) {
+            const wg = wheels[wi];
+            wg.rotation.x = wSpin;
+            if (wg.userData && wg.userData.isFront) {
+              wg.rotation.y = wSteer;
+            }
+          }
+        }
+        const drsFlap = mesh.userData && mesh.userData.drsFlap;
+        if (drsFlap) {
+          const drsTarget = (!inPit && (car.drsOpen || (dyn && dyn.inXMode))) ? -0.48 : 0.0;
+          drsFlap.rotation.x += (drsTarget - drsFlap.rotation.x) * Math.min(1, (stepDt || 0.016) * 14);
+        }
 
         // Update dynamic Pirelli tyre compound ring, glowing brakes, DRS, wet rain light & 3D damaged front wing!
         if (entry.fx) {
@@ -2222,12 +2466,28 @@
           spawnParticle(
             state.sparkSystem,
             wx + fwdX * 2.2 + (Math.random() - 0.5) * 0.5,
-            0.09,
+            trackY + 0.09,
             wz + fwdZ * 2.2 + (Math.random() - 0.5) * 0.5,
             -fwdX * 14 + (Math.random() - 0.5) * 3,
             1.1 + Math.random() * 1.4,
             -fwdZ * 14 + (Math.random() - 0.5) * 3,
             0.22
+          );
+        }
+        // 3D White Lock-Up Tyre Smoke bursting from front tyres during braking lock-ups!
+        if (!paused && !inPit && state.lockupSmokeSystem && ((car.lockupSmokeTimer || 0) > 0 || ((car.liveLongG || 0) < -3.45 && (car.liveKph || 0) > 125 && Math.random() < 0.25))) {
+          const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+          const rightX = -fwdZ, rightZ = fwdX;
+          const wheelSide = (Math.random() < 0.5 ? -0.92 : 0.92);
+          spawnParticle(
+            state.lockupSmokeSystem,
+            wx + fwdX * 1.75 + rightX * wheelSide,
+            trackY + 0.22,
+            wz + fwdZ * 1.75 + rightZ * wheelSide,
+            -fwdX * 4.5 + (Math.random() - 0.5) * 1.6,
+            0.95 + Math.random() * 1.2,
+            -fwdZ * 4.5 + (Math.random() - 0.5) * 1.6,
+            0.85 + Math.random() * 0.45
           );
         }
 
@@ -2245,7 +2505,7 @@
               spawnParticle(
                 sparkPool,
                 wx - fwdX * (1.8 + Math.random() * 0.6) + spreadX * 0.4,
-                0.08 + Math.random() * 0.05,
+                trackY + 0.08 + Math.random() * 0.05,
                 wz - fwdZ * (1.8 + Math.random() * 0.6) + spreadZ * 0.4,
                 -fwdX * (18 + Math.random() * 14) + spreadX * 4.5,
                 0.9 + Math.random() * 2.2 * dyn.bottoming,
@@ -2259,7 +2519,7 @@
             spawnParticle(
               state.spraySystem,
               wx - fwdX * 2.7 + (Math.random() - 0.5) * 1.1,
-              0.24 + Math.random() * 0.16,
+              trackY + 0.24 + Math.random() * 0.16,
               wz - fwdZ * 2.7 + (Math.random() - 0.5) * 1.1,
               -fwdX * 5.5 + (Math.random() - 0.5) * 1.8,
               0.55 + Math.random() * 0.85,
@@ -2274,7 +2534,7 @@
           if (pitMotion) pittingBoxIdx = pitMotion.boxIdx;
         }
         if (focCar && car.idx === focCar.idx) {
-          focPos.set(wx, heaveY, wz);
+          focPos.set(wx, worldY, wz);
           focFwd.set(Math.sin(yaw), 0, Math.cos(yaw)).normalize();
           focDyn = dyn;
           focPitMotion = pitMotion;
@@ -2313,10 +2573,11 @@
       stepPool(state.magSparkSystem, stepDt, 12.0);
       stepPool(state.spraySystem, stepDt, 1.4);
       stepPool(state.breakdownSmokeSystem, stepDt, -0.55);
+      stepPool(state.lockupSmokeSystem, stepDt, -0.75);
 
       // Keep sun shadow frustum centered right on the hero car for crisp shadows everywhere on track!
       if (state.sunLight) {
-        state.sunLight.position.set(focPos.x + 120, 220, focPos.z + 90);
+        state.sunLight.position.set(focPos.x + 120, focPos.y + 220, focPos.z + 90);
         state.sunLight.target.position.copy(focPos);
         state.sunLight.target.updateMatrixWorld();
       }
@@ -2340,12 +2601,12 @@
       let desiredFov = 54;
 
       if (effMode === "pov") {
-        // Silky Suspension-Coupled Onboard Halo T-Cam POV (zero vertex-kink jitter + authentic heave/pitch feel!)
+        // Silky Suspension-Coupled Onboard Halo T-Cam POV (climbs Spa Eau Rouge & COTA T1 seamlessly!)
         const pitchLookY = focDyn ? (-focDyn.pitchRad * 7.5) : 0;
         desiredPos.copy(focPos).addScaledVector(focFwd, -0.58);
         desiredPos.y = focPos.y + 1.42;
         desiredLook.copy(focPos).addScaledVector(focFwd, 32);
-        desiredLook.y = 1.05 + pitchLookY;
+        desiredLook.y = focPos.y + 1.05 + pitchLookY;
         desiredFov = 66 + Math.min(10, ((focCar?.liveKph || 220) - 180) * 0.055);
         const pLerp = state.camInit ? Math.min(1, (dt || 0.016) * 24) : 1;
         const lLerp = state.camInit ? Math.min(1, (dt || 0.016) * 16) : 1;
@@ -2353,9 +2614,9 @@
         state.camLookSmooth.lerp(desiredLook, lLerp);
       } else if (effMode === "chase") {
         desiredPos.copy(focPos).addScaledVector(focFwd, -10.8);
-        desiredPos.y = 3.85;
+        desiredPos.y = focPos.y + 3.85;
         desiredLook.copy(focPos).addScaledVector(focFwd, 15);
-        desiredLook.y = 1.25;
+        desiredLook.y = focPos.y + 1.25;
         desiredFov = 54 + Math.min(12, ((focCar?.liveKph || 220) - 180) * 0.07);
         const lerpF = state.camInit ? Math.min(1, (dt || 0.016) * 8.5) : 1;
         state.camPosSmooth.lerp(desiredPos, lerpF);
@@ -2388,10 +2649,10 @@
           const d = tc.pos.distanceTo(focPos);
           if (d < bestDist) { bestDist = d; bestIdx = i; }
         });
-        const camSpot = state.tvCams[bestIdx] || { pos: new THREE.Vector3(focPos.x + 25, 10, focPos.z + 25) };
+        const camSpot = state.tvCams[bestIdx] || { pos: new THREE.Vector3(focPos.x + 25, focPos.y + 10, focPos.z + 25) };
         desiredPos.copy(camSpot.pos);
         desiredLook.copy(focPos).addScaledVector(focFwd, 5.0);
-        desiredLook.y = 1.25;
+        desiredLook.y = focPos.y + 1.25;
         desiredFov = Math.max(26, Math.min(50, 56 - bestDist * 0.11));
         state.camPosSmooth.copy(desiredPos);
         const lerpL = state.camInit ? Math.min(1, (dt || 0.016) * 9.5) : 1;

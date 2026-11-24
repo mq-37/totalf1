@@ -1474,6 +1474,7 @@
         car.totalProg += (1.0 / car.currentLapS) * simDt;
       }
       car.lap = Math.floor(car.totalProg);
+      if (car.lockupSmokeTimer > 0) car.lockupSmokeTimer = Math.max(0, car.lockupSmokeTimer - simDt);
       const curSec = Math.floor((((car.totalProg % 1) + 1) % 1) * 3);
 
       if (curSec !== prevSec && car.lap >= 1) {
@@ -2447,6 +2448,7 @@
           wingDamaged: !!c.wingDamaged, parkedProg: c.parkedProg, parkedSide: c.parkedSide, parkedYawOff: c.parkedYawOff,
           breakdownKind: c.breakdownKind, smokeActive: c.smokeActive, cleared: !!c.cleared,
           liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+          lockupSmokeTimer: c.lockupSmokeTimer || 0,
           compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
           fuelKg: c.fuelKg,
@@ -2462,6 +2464,7 @@
           lap: Math.min(fs.totalLaps, Math.max(1, (sorted3d[0]?.lap || 0) + 1)),
           totalLaps: fs.totalLaps,
           wetness: fs.wetness,
+          trackGrip: Math.min(1, 0.35 + ((sorted3d[0]?.lap || 0) / Math.max(8, fs.totalLaps)) * 0.65),
           scActive: fs.safetyCarLaps > 0,
           scInThisLap: fs.safetyCarLaps === 1,
           vscActive: fs.vscLaps > 0,
