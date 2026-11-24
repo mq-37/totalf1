@@ -44,6 +44,12 @@ class FacilityUpgradeReq(CareerMutationReq):
 class RdStartReq(CareerMutationReq):
     part_id: str = Field(min_length=1, max_length=32)
     mode: str = Field(default="normal", max_length=20)
+    wt_hrs: float = Field(default=0.0, ge=0.0, le=60.0)
+    cfd_items: int = Field(default=0, ge=0, le=3000)
+
+
+class RdManufactureReq(CareerMutationReq):
+    comp_id: str = Field(min_length=1, max_length=32)
 
 
 class PuSwapReq(CareerMutationReq):
@@ -376,7 +382,21 @@ def api_career_rd_start(req: RdStartReq):
         state = _career.load_career(base)
         if not state:
             raise HTTPException(status_code=404, detail="No active career")
-        ok, msg = _career.start_rd_project(state, req.part_id, req.mode)
+        ok, msg = _career.start_rd_project(state, req.part_id, req.mode, req.wt_hrs, req.cfd_items)
+        if ok:
+            _save_career_checked(base, state, expected_version=req.expected_version)
+        return {"ok": ok, "message": msg, **_career_payload(state)}
+
+
+@router.post("/api/career/rd/manufacture")
+def api_career_rd_manufacture(req: RdManufactureReq):
+    from .. import career as _career, career_db as _cdb
+    base = srv._career_base_dir()
+    with _cdb.slot_lock(base):
+        state = _career.load_career(base)
+        if not state:
+            raise HTTPException(status_code=404, detail="No active career")
+        ok, msg = _career.manufacture_spare_part(state, req.comp_id)
         if ok:
             _save_career_checked(base, state, expected_version=req.expected_version)
         return {"ok": ok, "message": msg, **_career_payload(state)}

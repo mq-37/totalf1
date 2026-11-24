@@ -306,12 +306,23 @@
           </div>
         </div>
 
-        <!-- TAB 4: CAR R&D & GRID RANKINGS -->
+        <!-- TAB 4: CAR R&D, FIA ATR WIND TUNNEL & FACTORY -->
         <div id="car-tab-rd" class="car-tab-pane">
+          <div id="car-rd-atr-strip" class="car-atr-strip"></div>
           <div class="car-two-col">
             <div class="car-panel">
-              <div class="car-panel-head"><span><i class="fas fa-cogs"></i> COMMISSION CHASSIS &amp; PU UPGRADES</span><small id="car-rd-slots-label">0 / 1 Active</small></div>
+              <div class="car-panel-head"><span><i class="fas fa-cogs"></i> 6-COMPONENT F1 CAR DEVELOPMENT &amp; SPARE PARTS</span><small id="car-rd-slots-label">0 / 1 Active</small></div>
               <div id="car-rd-active-list" class="car-stack-list"></div>
+              <div id="car-atr-alloc-box" class="car-atr-alloc">
+                <div class="car-atr-alloc-head">
+                  <span><i class="fas fa-wind"></i> ALLOCATE ATR HOURS TO NEXT PACKAGE</span>
+                  <strong id="car-atr-est-lbl" style="color:#4ade80;">Est. Correlation: 84% · Gain ×1.00</strong>
+                </div>
+                <div class="car-atr-sliders">
+                  <label>Wind Tunnel: <b id="car-atr-wt-val">6.0h</b><input type="range" id="car-atr-wt-slider" min="0" max="20" step="0.5" value="6"></label>
+                  <label>CFD Items: <b id="car-atr-cfd-val">300</b><input type="range" id="car-atr-cfd-slider" min="0" max="1000" step="50" value="300"></label>
+                </div>
+              </div>
               <div id="car-rd-parts-grid" class="car-rd-grid"></div>
               <div class="car-subhead"><i class="fas fa-forward"></i> NEXT-SEASON REGULATION SPEC RESEARCH ($3.8M · CARRIES OVER!)</div>
               <div id="car-nextgen-grid" class="car-nextgen-grid"></div>
@@ -319,6 +330,8 @@
             <div class="car-panel">
               <div class="car-panel-head"><span><i class="fas fa-chart-bar"></i> CONSTRUCTOR CAR PERFORMANCE RANKING</span><small>Aero · Chassis · Power · Tyre Care</small></div>
               <div id="car-rd-comparison" class="car-comp-bars"></div>
+              <div class="car-subhead"><i class="fas fa-flask"></i> WIND-TUNNEL TRACK CORRELATION LOG</div>
+              <div id="car-rd-history" class="car-stack-list"></div>
               <div class="car-subhead"><i class="fas fa-battery-three-quarters"></i> FIA POWER UNIT &amp; GEARBOX POOL (4 ICE · 3 ERS · 4 GBX)</div>
               <div id="car-pu-pool" class="car-pu-grid"></div>
             </div>

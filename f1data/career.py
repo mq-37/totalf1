@@ -218,6 +218,65 @@ RD_PARTS: list[dict[str, Any]] = [
     {"id": "tyre_care", "name": "Suspension & Cooling", "icon": "fa-dharmachakra", "desc": "Reduces tyre degradation & extends stint cliff"},
 ]
 
+# Authentic 6-Component F1 Car Blueprint Tree (Design -> Wind-Tunnel ATR -> Manufacture Spares -> Track Correlation!)
+CAR_BLUEPRINTS: list[dict[str, Any]] = [
+    {"id": "front_wing",     "name": "Front Wing & Endplates",    "icon": "fa-fighter-jet",     "primary": "aero",      "secondary": "tyre_care", "base_cost": 3.6, "spare_cost": 0.9, "base_gain": 2.6, "desc": "Low/medium-speed turn-in balance & front tyre bite"},
+    {"id": "floor_diffuser", "name": "Venturi Floor & Diffuser",  "icon": "fa-layer-group",     "primary": "aero",      "secondary": "chassis",   "base_cost": 5.4, "spare_cost": 1.5, "base_gain": 3.8, "desc": "Peak ground-effect downforce & anti-porpoising stability"},
+    {"id": "rear_wing",      "name": "Rear Wing & Active Aero",   "icon": "fa-wind",            "primary": "power",     "secondary": "aero",      "base_cost": 3.8, "spare_cost": 1.0, "base_gain": 2.8, "desc": "DRS/X-Mode drag shedding & straightline efficiency"},
+    {"id": "sidepods",       "name": "Sidepods & Cooling Louvres","icon": "fa-fire",            "primary": "power",     "secondary": "chassis",   "base_cost": 4.4, "spare_cost": 1.2, "base_gain": 3.1, "desc": "Undercut airflow & ICE/ERS thermal reliability"},
+    {"id": "chassis_tub",    "name": "Monocoque & Weight Save",   "icon": "fa-shield-alt",      "primary": "chassis",   "secondary": "tyre_care", "base_cost": 5.2, "spare_cost": 1.6, "base_gain": 3.5, "desc": "Minimum-weight carbon tub & kerb compliance"},
+    {"id": "suspension",     "name": "Push/Pull-Rod Suspension",  "icon": "fa-dharmachakra",    "primary": "tyre_care", "secondary": "chassis",   "base_cost": 4.0, "spare_cost": 1.1, "base_gain": 2.9, "desc": "Anti-dive platform control & extended tyre stint life"},
+]
+
+# Official FIA Aerodynamic Testing Restrictions (ATR) Sliding Scale by WCC Position (1st=70% .. 10th=115%)
+ATR_BASE_WT_HRS = 32.0
+ATR_BASE_CFD_ITEMS = 1600
+
+
+def _atr_pct_for_wcc_pos(pos: int) -> int:
+    return int(_clamp(70 + (max(1, pos) - 1) * 5, 70, 115))
+
+
+def _compute_wcc_pos(state: dict[str, Any], team_id: str) -> int:
+    teams = sorted(state.get("teams") or [], key=lambda x: (-x.get("points", 0), -x.get("wins", 0), -x.get("car_overall", 0)))
+    return next((i + 1 for i, t in enumerate(teams) if t.get("id") == team_id), len(teams) or 10)
+
+
+def _refresh_atr_period(state: dict[str, Any], period_num: int) -> dict[str, Any]:
+    pt = get_player_team(state)
+    wcc_pos = _compute_wcc_pos(state, pt["id"])
+    pct = _atr_pct_for_wcc_pos(wcc_pos)
+    wt_max = round(ATR_BASE_WT_HRS * (pct / 100.0), 1)
+    cfd_max = int(round(ATR_BASE_CFD_ITEMS * (pct / 100.0)))
+    rnd = int(state.get("current_round") or 1)
+    atr = {
+        "period": period_num,
+        "wcc_rank": wcc_pos,
+        "atr_pct": pct,
+        "wt_hrs_max": wt_max,
+        "wt_hrs_rem": wt_max,
+        "cfd_max": cfd_max,
+        "cfd_rem": cfd_max,
+        "next_reset_round": rnd + 4,
+    }
+    state["atr"] = atr
+    return atr
+
+
+def _ensure_rd_v3(state: dict[str, Any]) -> None:
+    if not isinstance(state.get("atr"), dict) or "wt_hrs_max" not in state["atr"]:
+        _refresh_atr_period(state, 1)
+    inv = state.get("parts_inventory")
+    if not isinstance(inv, dict):
+        inv = {}
+        state["parts_inventory"] = inv
+    for bp in CAR_BLUEPRINTS:
+        cid = bp["id"]
+        if cid not in inv or not isinstance(inv[cid], dict):
+            inv[cid] = {"spec": 1, "spares": 2, "last_corr": "Nominal"}
+    if not isinstance(state.get("rd_history"), list):
+        state["rd_history"] = []
+
 SPONSOR_CATALOG: list[dict[str, Any]] = [
     {
         "id": "apex_cloud",
@@ -467,6 +526,7 @@ def _ensure_career_v2(state: dict[str, Any]) -> dict[str, Any]:
             d["dev_focus"] = "balanced"
         if not d.get("hero_color"):
             d["hero_color"] = team_colors.get(d.get("team_id")) or "#64748b"
+    _ensure_rd_v3(state)
     pt["car_overall"] = _compute_car_overall(pt, state.get("staff"))
     return state
 
@@ -884,42 +944,98 @@ def upgrade_facility(state: dict[str, Any], fac_id: str) -> tuple[bool, str]:
     return True, f"{fdef['name']} upgraded to Level {cur + 1}!"
 
 
-def start_rd_project(state: dict[str, Any], part_id: str, mode: str = "normal") -> tuple[bool, str]:
+def start_rd_project(
+    state: dict[str, Any],
+    part_id: str,
+    mode: str = "normal",
+    wt_hrs: float = 0.0,
+    cfd_items: int = 0,
+) -> tuple[bool, str]:
     _ensure_career_v2(state)
     pt = get_player_team(state)
-    pdef = next((p for p in RD_PARTS if p["id"] == part_id), None)
+    bp = next((b for b in CAR_BLUEPRINTS if b["id"] == part_id), None)
+    pdef = bp or next((p for p in RD_PARTS if p["id"] == part_id), None)
     if not pdef:
-        return False, "Unknown R&D part."
+        return False, "Unknown R&D component."
     max_concurrent = 2 if pt["facilities"].get("cfd_factory", 1) >= 3 else 1
     if len(state["active_rd"]) >= max_concurrent:
         return False, f"Max {max_concurrent} concurrent R&D project(s). Upgrade CFD & Chassis Factory to Level 3 for 2 slots!"
-    if any(p["part"] == part_id for p in state["active_rd"]):
+    if any(p.get("component_id", p.get("part")) == part_id for p in state["active_rd"]):
         return False, f"{pdef['name']} upgrade is already in wind-tunnel production."
+
+    atr = state["atr"]
+    use_wt = round(_clamp(float(wt_hrs or 0.0), 0.0, float(atr.get("wt_hrs_rem") or 0.0)), 1)
+    use_cfd = int(_clamp(int(cfd_items or 0), 0, int(atr.get("cfd_rem") or 0)))
 
     wt_lvl = pt["facilities"].get("wind_tunnel", 1)
     td_rating = float(((state.get("staff") or {}).get("tech_director") or {}).get("rating", 75))
+    ha_rating = float(((state.get("staff") or {}).get("head_aero") or {}).get("rating", 74))
     td_mult = (1.0 + max(0.0, (td_rating - 70.0) * 0.008)) * float(state.get("rd_nerf_mult") or 1.0)
+
+    # ATR Wind Tunnel & CFD boost (+0% up to +38% gain AND raises Wind-Tunnel Correlation accuracy!)
+    atr_frac = _clamp((use_wt / 12.0) * 0.55 + (use_cfd / 600.0) * 0.45, 0.0, 1.25)
+    atr_gain_mult = 1.0 + atr_frac * 0.32
+    corr_pct = int(_clamp(
+        68 + wt_lvl * 4 + (ha_rating - 70.0) * 0.45 + atr_frac * 18.0 - (14.0 if mode == "rush" else 0.0),
+        48,
+        98,
+    ))
+
+    base_c = float(bp["base_cost"]) if bp else 4.2
+    base_g = float(bp["base_gain"]) if bp else 2.6
     cfg = {
-        "normal":  {"cost": 4.2, "gain": (2.4 + wt_lvl * 0.35) * td_mult, "rounds": 2},
-        "intense": {"cost": 7.5, "gain": (4.0 + wt_lvl * 0.45) * td_mult, "rounds": 2},
-        "rush":    {"cost": 9.8, "gain": (3.2 + wt_lvl * 0.35) * td_mult, "rounds": 1},
-    }.get(mode, {"cost": 4.2, "gain": 2.6 * td_mult, "rounds": 2})
+        "normal":  {"cost": round(base_c, 1),        "gain": (base_g + wt_lvl * 0.30) * td_mult * atr_gain_mult, "rounds": 2},
+        "intense": {"cost": round(base_c * 1.65, 1), "gain": (base_g * 1.48 + wt_lvl * 0.40) * td_mult * atr_gain_mult, "rounds": 2},
+        "rush":    {"cost": round(base_c * 2.10, 1), "gain": (base_g * 1.18 + wt_lvl * 0.30) * td_mult * atr_gain_mult, "rounds": 1},
+    }.get(mode, {"cost": round(base_c, 1), "gain": base_g * td_mult * atr_gain_mult, "rounds": 2})
 
     if state["cash_m"] < cfg["cost"]:
-        return False, f"Need ${cfg['cost']}M to start this R&D package."
+        return False, f"Need ${cfg['cost']}M to commission this R&D package."
 
+    # Deduct ATR hours & CFD items
+    atr["wt_hrs_rem"] = round(max(0.0, float(atr.get("wt_hrs_rem") or 0.0) - use_wt), 1)
+    atr["cfd_rem"] = max(0, int(atr.get("cfd_rem") or 0) - use_cfd)
+
+    cur_spec = int(((state.get("parts_inventory") or {}).get(part_id) or {}).get("spec", 1))
     proj = {
-        "part": part_id,
-        "label": pdef["name"],
+        "part": bp["primary"] if bp else part_id,
+        "secondary": bp["secondary"] if bp else None,
+        "component_id": part_id if bp else None,
+        "target_spec": cur_spec + 1 if bp else None,
+        "label": f"{pdef['name']} Spec {cur_spec + 1}" if bp else pdef["name"],
         "mode": mode,
         "gain": round(cfg["gain"], 1),
         "cost_m": cfg["cost"],
+        "wt_hrs": use_wt,
+        "cfd_items": use_cfd,
+        "correlation_pct": corr_pct,
         "rounds_left": cfg["rounds"],
     }
     state["active_rd"].append(proj)
-    _log_finance(state, f"R&D {pdef['name']} ({mode.title()})", -cfg["cost"], cap_eligible=True)
-    _add_inbox(state, "R&D", f"New {pdef['name']} Package Started", f"Expected +{proj['gain']} rating in {proj['rounds_left']} race(s).")
-    return True, f"Started {pdef['name']} R&D (+{proj['gain']} in {proj['rounds_left']} race(s))!"
+    _log_finance(state, f"R&D {proj['label']} ({mode.title()})", -cfg["cost"], cap_eligible=True)
+    _add_inbox(
+        state,
+        "R&D",
+        f"Commissioned: {proj['label']}",
+        f"Projected +{proj['gain']} rating in {proj['rounds_left']} race(s) · ATR: {use_wt}h WT / {use_cfd} CFD · Correlation est. {corr_pct}%.",
+    )
+    return True, f"Started {proj['label']} (+{proj['gain']} est., {corr_pct}% correlation, {proj['rounds_left']}R)!"
+
+
+def manufacture_spare_part(state: dict[str, Any], comp_id: str) -> tuple[bool, str]:
+    _ensure_career_v2(state)
+    bp = next((b for b in CAR_BLUEPRINTS if b["id"] == comp_id), None)
+    if not bp:
+        return False, "Unknown car component."
+    cost = float(bp["spare_cost"])
+    if state["cash_m"] < cost:
+        return False, f"Need ${cost:.1f}M to manufacture a spare {bp['name']}."
+    inv = state["parts_inventory"][comp_id]
+    if int(inv.get("spares", 0)) >= 6:
+        return False, f"Warehouse already full (6 spares) for {bp['name']}."
+    inv["spares"] = int(inv.get("spares", 0)) + 1
+    _log_finance(state, f"Manufacture Spare: {bp['name']} Spec {inv['spec']}", -cost, cap_eligible=True)
+    return True, f"Manufactured +1x {bp['name']} Spec {inv['spec']} (-${cost:.1f}M, now {inv['spares']} spares)!"
 
 
 def assign_scout(state: dict[str, Any], driver_id: str, express: bool = False) -> tuple[bool, str]:
@@ -2072,19 +2188,86 @@ def commit_race_result(
         pu["gearbox"] = max(15, round(pu["gearbox"] - 9.5 * pu_mit))
         pu["grid_penalty"] = 0
 
-    # Tick Active R&D Projects
+    # Tick Active R&D Projects with Authentic Wind-Tunnel Correlation Verification!
+    rd_rng = random.Random()
     completed_rd = []
     still_rd = []
     for proj in state["active_rd"]:
         proj["rounds_left"] -= 1
         if proj["rounds_left"] <= 0:
-            pt["rd"][proj["part"]] = round(_clamp(pt["rd"][proj["part"]] + proj["gain"], 45.0, 99.0), 1)
+            corr_pct = int(proj.get("correlation_pct") or 82)
+            roll = rd_rng.random() * 100.0
+            base_gain = float(proj["gain"])
+            if corr_pct >= 88 and roll < 16.0:
+                actual_gain = round(base_gain * 1.30, 1)
+                outcome = "BREAKTHROUGH"
+                out_note = f"🚀 WIND-TUNNEL BREAKTHROUGH! Track aero load exceeded CFD by +30% (+{actual_gain} actual vs +{base_gain} est.)!"
+            elif roll > corr_pct:
+                actual_gain = round(base_gain * rd_rng.uniform(0.50, 0.72), 1)
+                outcome = "MISMATCH"
+                out_note = f"⚠ CORRELATION MISMATCH! On-track flow differed from wind tunnel (+{actual_gain} actual vs +{base_gain} est.)."
+            else:
+                actual_gain = base_gain
+                outcome = "CLEAN"
+                out_note = f"✅ Clean wind-tunnel correlation (+{actual_gain} delivered on track)!"
+
+            sec_part = proj.get("secondary")
+            if sec_part and sec_part in pt["rd"]:
+                p_gain = round(actual_gain * 0.72, 1)
+                s_gain = round(actual_gain * 0.28, 1)
+                pt["rd"][proj["part"]] = round(_clamp(pt["rd"][proj["part"]] + p_gain, 45.0, 99.0), 1)
+                pt["rd"][sec_part] = round(_clamp(pt["rd"][sec_part] + s_gain, 45.0, 99.0), 1)
+            else:
+                pt["rd"][proj["part"]] = round(_clamp(pt["rd"][proj["part"]] + actual_gain, 45.0, 99.0), 1)
+
+            comp_id = proj.get("component_id")
+            if comp_id and comp_id in (state.get("parts_inventory") or {}):
+                inv = state["parts_inventory"][comp_id]
+                inv["spec"] = int(inv.get("spec", 1)) + 1
+                inv["spares"] = min(6, int(inv.get("spares", 0)) + 2)
+                inv["last_corr"] = outcome
+            state.setdefault("rd_history", []).insert(0, {
+                "round": rnd,
+                "label": proj["label"],
+                "est_gain": base_gain,
+                "actual_gain": actual_gain,
+                "outcome": outcome,
+            })
+            state["rd_history"] = state["rd_history"][:12]
             pt["car_overall"] = _compute_car_overall(pt, state.get("staff"))
+            proj["actual_gain"] = actual_gain
+            proj["outcome"] = outcome
             completed_rd.append(proj)
-            _add_inbox(state, "R&D", f"Upgrade Fitted: {proj['label']} (+{proj['gain']})!", f"{pt['name']} Car Rating is now {pt['car_overall']}!")
+            _add_inbox(state, "R&D", f"Upgrade Fitted: {proj['label']} ({outcome})", f"{out_note} Car Rating is now {pt['car_overall']}!")
         else:
             still_rd.append(proj)
     state["active_rd"] = still_rd
+
+    # Crash Spare Parts Attrition (DNF consumes 1x Front Wing or Floor spare!)
+    player_dnfs = [f for f in player_finishes if f.get("dnf")]
+    if player_dnfs and isinstance(state.get("parts_inventory"), dict):
+        dmg_comp = rd_rng.choice(["front_wing", "floor_diffuser"])
+        inv = state["parts_inventory"].get(dmg_comp)
+        if inv:
+            inv["spares"] = max(0, int(inv.get("spares", 0)) - 1)
+            bp_nm = next((b["name"] for b in CAR_BLUEPRINTS if b["id"] == dmg_comp), dmg_comp)
+            _add_inbox(
+                state,
+                "FACTORY",
+                f"⚠ Spare Consumed: {bp_nm} ({inv['spares']} left)",
+                f"Race incident for {player_dnfs[0]['driver']} destroyed a {bp_nm}. Manufacture a spare in R&D to protect your latest spec!",
+            )
+
+    # Refresh Official FIA ATR Sliding-Scale Allowance every 4 rounds!
+    atr = state.get("atr") or {}
+    if rnd + 1 >= int(atr.get("next_reset_round") or 5):
+        new_atr = _refresh_atr_period(state, int(atr.get("period") or 1) + 1)
+        _add_inbox(
+            state,
+            "FIA ATR",
+            f"ATR Testing Period {new_atr['period']} Reset ({new_atr['atr_pct']}% Scale)",
+            f"Based on P{new_atr['wcc_rank']} WCC, FIA allocated {new_atr['wt_hrs_max']}h Wind Tunnel & {new_atr['cfd_max']} CFD items for the next 4 rounds!",
+        )
 
     # Tick Active Scouts
     completed_scouts = []
@@ -2634,11 +2817,14 @@ def serialize_career_payload(
         "facilities_view": fac_view,
         "scout_slots": _scout_slots_for_level(pt["facilities"].get("scouting_hub", 1)),
         "max_rd_slots": 2 if pt["facilities"].get("cfd_factory", 1) >= 3 else 1,
+        "car_blueprints": CAR_BLUEPRINTS,
+        "rd_parts": RD_PARTS,
         **extra_meta,
     }
     if include_static:
         payload.update({
             "rd_parts": RD_PARTS,
+            "car_blueprints": CAR_BLUEPRINTS,
             "sponsor_catalog": SPONSOR_CATALOG,
             "staff_roles": STAFF_ROLES,
             "dev_focuses": DEV_FOCUSES,

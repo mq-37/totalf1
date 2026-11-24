@@ -877,40 +877,148 @@
     }
   }
 
+  function updateAtrPreview() {
+    if (!DATA || !DATA.state) return;
+    const st = DATA.state;
+    const pt = DATA.player_team || {};
+    const wtEl = getEl("car-atr-wt-slider");
+    const cfdEl = getEl("car-atr-cfd-slider");
+    const wt = Number(wtEl ? wtEl.value : 0);
+    const cfd = Number(cfdEl ? cfdEl.value : 0);
+    if (getEl("car-atr-wt-val")) getEl("car-atr-wt-val").textContent = `${wt.toFixed(1)}h`;
+    if (getEl("car-atr-cfd-val")) getEl("car-atr-cfd-val").textContent = String(cfd);
+    const wtLvl = (pt.facilities && pt.facilities.wind_tunnel) || 1;
+    const haRat = Number((((st.staff || {}).head_aero || {}).rating) || 74);
+    const atrFrac = Math.min(1.25, (wt / 12.0) * 0.55 + (cfd / 600.0) * 0.45);
+    const mult = (1.0 + atrFrac * 0.32).toFixed(2);
+    const corr = Math.min(98, Math.max(48, Math.round(68 + wtLvl * 4 + (haRat - 70) * 0.45 + atrFrac * 18)));
+    const estEl = getEl("car-atr-est-lbl");
+    if (estEl) {
+      const col = corr >= 88 ? "#4ade80" : (corr >= 76 ? "#38bdf8" : "#f59e0b");
+      estEl.style.color = col;
+      estEl.textContent = `Est. Correlation: ${corr}%${corr >= 88 ? " (Breakthrough!)" : ""} · Gain ×${mult}`;
+    }
+  }
+
   function renderRd() {
     const st = DATA.state;
     const pt = DATA.player_team;
+    const atr = st.atr || { period: 1, wcc_rank: 5, atr_pct: 90, wt_hrs_max: 28.8, wt_hrs_rem: 28.8, cfd_max: 1440, cfd_rem: 1440, next_reset_round: 5 };
+    const capLim = Number(st.cost_cap_m || 135.0);
+    const capSpent = Number(st.cost_cap_spent_m || 0.0);
+    const capPct = Math.min(100, Math.round((capSpent / Math.max(1, capLim)) * 100));
+    const capCol = capPct >= 95 ? "#ef4444" : (capPct >= 80 ? "#f59e0b" : "#22c55e");
+
+    // 1. FIA ATR Sliding Scale & Cost Cap Telemetry Strip
+    const stripEl = getEl("car-rd-atr-strip");
+    if (stripEl) {
+      const wtPct = Math.min(100, Math.round((atr.wt_hrs_rem / Math.max(1, atr.wt_hrs_max)) * 100));
+      const cfdPct = Math.min(100, Math.round((atr.cfd_rem / Math.max(1, atr.cfd_max)) * 100));
+      stripEl.innerHTML = `
+        <div class="car-atr-card">
+          <div class="car-atr-top">
+            <span><i class="fas fa-wind"></i> <b>FIA ATR PERIOD ${atr.period}</b> · P${atr.wcc_rank} WCC (${atr.atr_pct}% Scale)</span>
+            <small class="muted">Resets R${atr.next_reset_round}</small>
+          </div>
+          <div class="car-atr-meters">
+            <div>
+              <small>Wind Tunnel: <b>${Number(atr.wt_hrs_rem).toFixed(1)} / ${Number(atr.wt_hrs_max).toFixed(1)}h</b></small>
+              <div class="sim-bar-track"><div class="sim-bar-fill" style="width:${wtPct}%;background:#38bdf8"></div></div>
+            </div>
+            <div>
+              <small>CFD Items: <b>${atr.cfd_rem} / ${atr.cfd_max}</b></small>
+              <div class="sim-bar-track"><div class="sim-bar-fill" style="width:${cfdPct}%;background:#a855f7"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="car-atr-card">
+          <div class="car-atr-top">
+            <span><i class="fas fa-balance-scale"></i> <b>FIA COST CAP</b> (${capPct}% Used)</span>
+            <small style="color:${capCol};font-weight:800;">$${Math.max(0, capLim - capSpent).toFixed(1)}M Left</small>
+          </div>
+          <div style="margin-top:6px;">
+            <small>Cap Spend: <b>$${capSpent.toFixed(1)}M / $${capLim.toFixed(1)}M</b> · Rating: <b>AERO ${pt.rd.aero} · CHS ${pt.rd.chassis} · PWR ${pt.rd.power} · TYR ${pt.rd.tyre_care}</b></small>
+            <div class="sim-bar-track" style="margin-top:4px;"><div class="sim-bar-fill" style="width:${capPct}%;background:${capCol}"></div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Clamp ATR allocation sliders to available remaining ATR hours/CFD
+    const wtSlider = getEl("car-atr-wt-slider");
+    const cfdSlider = getEl("car-atr-cfd-slider");
+    if (wtSlider) {
+      wtSlider.max = String(Math.max(0, Number(atr.wt_hrs_rem || 0)));
+      if (Number(wtSlider.value) > Number(wtSlider.max)) wtSlider.value = wtSlider.max;
+    }
+    if (cfdSlider) {
+      cfdSlider.max = String(Math.max(0, Number(atr.cfd_rem || 0)));
+      if (Number(cfdSlider.value) > Number(cfdSlider.max)) cfdSlider.value = cfdSlider.max;
+    }
+    updateAtrPreview();
+
     getEl("car-rd-slots-label").textContent = `${st.active_rd.length} / ${DATA.max_rd_slots} Active Packages`;
 
     const actEl = getEl("car-rd-active-list");
     actEl.innerHTML = st.active_rd.length
       ? st.active_rd.map((p) => `
           <div class="car-prog-card is-rd">
-            <div><strong>${esc(p.label)} (${esc(p.mode.toUpperCase())})</strong><small style="color:#4ade80">Projected +${p.gain} Rating</small></div>
+            <div>
+              <strong>${esc(p.label)} (${esc(p.mode.toUpperCase())})</strong>
+              <small style="color:#4ade80">Est. +${p.gain} · Corr. ${p.correlation_pct || 82}% · ATR ${p.wt_hrs || 0}h / ${p.cfd_items || 0} CFD</small>
+            </div>
             <span class="car-rnd-pill">${p.rounds_left} Race(s)</span>
           </div>
         `).join("")
-      : `<div class="car-empty-note">Wind tunnel idle — commission a part upgrade below before the next Grand Prix!</div>`;
+      : `<div class="car-empty-note">Wind tunnel idle — allocate ATR hours above and commission a car component below!</div>`;
 
-    getEl("car-rd-parts-grid").innerHTML = (DATA.rd_parts || []).map((part) => {
-      const val = pt.rd[part.id] || 70;
-      const busy = st.active_rd.some((x) => x.part === part.id);
+    // 2. Authentic 6-Component F1 Car Blueprints + Spare Parts Warehouse!
+    const blueprints = (DATA.car_blueprints && DATA.car_blueprints.length) ? DATA.car_blueprints : (DATA.rd_parts || []);
+    const invMap = st.parts_inventory || {};
+    getEl("car-rd-parts-grid").innerHTML = blueprints.map((bp) => {
+      const pKey = bp.primary || bp.id;
+      const val = pt.rd[pKey] || 70;
+      const busy = st.active_rd.some((x) => (x.component_id || x.part) === bp.id);
+      const inv = invMap[bp.id] || { spec: 1, spares: 2, last_corr: "Nominal" };
+      const cNorm = Number(bp.base_cost || 4.2).toFixed(1);
+      const cInt = (Number(bp.base_cost || 4.2) * 1.65).toFixed(1);
+      const cRush = (Number(bp.base_cost || 4.2) * 2.10).toFixed(1);
+      const cSpare = Number(bp.spare_cost || 1.1).toFixed(1);
+      const lowSp = (inv.spares || 0) <= 1;
+      const tags = bp.secondary ? `${pKey.toUpperCase()} + ${bp.secondary.replace("_", " ").toUpperCase()}` : pKey.toUpperCase();
       return `
         <div class="car-rd-card">
           <div class="car-rd-head">
-            <span><i class="fas ${esc(part.icon)}"></i> <b>${esc(part.name)}</b></span>
-            <strong class="car-rd-val">${val}</strong>
+            <span><i class="fas ${esc(bp.icon)}"></i> <b>${esc(bp.name)}</b></span>
+            <span class="car-spec-pill">SPEC ${inv.spec || 1}</span>
           </div>
-          <p class="muted small">${esc(part.desc)}</p>
+          <div class="car-rd-submeta">
+            <span class="muted">${tags} (${val})</span>
+            <span style="color:${lowSp ? "#ef4444" : "#94a3b8"};font-weight:700;">${lowSp ? "⚠ " : ""}${inv.spares ?? 2} Spares</span>
+          </div>
+          <p class="muted small">${esc(bp.desc)}</p>
           <div class="sim-bar-track"><div class="sim-bar-fill" style="width:${val}%;background:#38bdf8"></div></div>
           <div class="car-rd-btns">
-            <button type="button" class="car-btn-xs" data-rd-part="${esc(part.id)}" data-rd-mode="normal" ${busy ? "disabled" : ""}>Normal · $4.2M (2R)</button>
-            <button type="button" class="car-btn-xs car-btn-gold" data-rd-part="${esc(part.id)}" data-rd-mode="intense" ${busy ? "disabled" : ""}>Intense · $7.5M (2R)</button>
-            <button type="button" class="car-btn-xs car-btn-red" data-rd-part="${esc(part.id)}" data-rd-mode="rush" ${busy ? "disabled" : ""}>Rush · $9.8M (1R)</button>
+            <button type="button" class="car-btn-xs" data-rd-part="${esc(bp.id)}" data-rd-mode="normal" ${busy ? "disabled" : ""}>Normal · $${cNorm}M (2R)</button>
+            <button type="button" class="car-btn-xs car-btn-gold" data-rd-part="${esc(bp.id)}" data-rd-mode="intense" ${busy ? "disabled" : ""}>Intense · $${cInt}M (2R)</button>
+            <button type="button" class="car-btn-xs car-btn-red" data-rd-part="${esc(bp.id)}" data-rd-mode="rush" ${busy ? "disabled" : ""}>Rush · $${cRush}M (1R)</button>
+            ${bp.spare_cost ? `<button type="button" class="car-btn-xs" style="border-color:rgba(56,189,248,.45);color:#7dd3fc;" data-mfg-comp="${esc(bp.id)}" ${(inv.spares || 0) >= 6 ? "disabled" : ""}>+1 Spare · $${cSpare}M</button>` : ""}
           </div>
         </div>
       `;
     }).join("");
+
+    // Wind-Tunnel Track Correlation History Log
+    const histEl = getEl("car-rd-history");
+    if (histEl) {
+      const hist = st.rd_history || [];
+      histEl.innerHTML = hist.length
+        ? hist.slice(0, 5).map((h) => {
+            const col = h.outcome === "BREAKTHROUGH" ? "#4ade80" : (h.outcome === "MISMATCH" ? "#f59e0b" : "#38bdf8");
+            return `<div class="car-prog-card"><div><strong>R${h.round} · ${esc(h.label)}</strong><small style="color:${col}">${esc(h.outcome)} (+${h.actual_gain} vs +${h.est_gain} est.)</small></div></div>`;
+          }).join("")
+        : `<div class="car-empty-note">No packages fitted yet — track correlation results will appear after your first upgrade arrives.</div>`;
+    }
 
     // Next-Season Regulation Spec Research
     const ngEl = getEl("car-nextgen-grid");
@@ -3353,7 +3461,14 @@
 
     const rdBtn = ev.target.closest("[data-rd-part]");
     if (rdBtn) {
-      const res = await postJson("/api/career/rd/start", { part_id: rdBtn.dataset.rdPart, mode: rdBtn.dataset.rdMode });
+      const wtHrs = Number(getEl("car-atr-wt-slider")?.value || 0);
+      const cfdItems = Number(getEl("car-atr-cfd-slider")?.value || 0);
+      const res = await postJson("/api/career/rd/start", { part_id: rdBtn.dataset.rdPart, mode: rdBtn.dataset.rdMode, wt_hrs: wtHrs, cfd_items: cfdItems });
+      DATA = res; renderAll(); showHqToast(res.message, res.ok); return;
+    }
+    const mfgBtn = ev.target.closest("[data-mfg-comp]");
+    if (mfgBtn) {
+      const res = await postJson("/api/career/rd/manufacture", { comp_id: mfgBtn.dataset.mfgComp });
       DATA = res; renderAll(); showHqToast(res.message, res.ok); return;
     }
     const facBtn = ev.target.closest("[data-fac-upgrade]");
@@ -3670,6 +3785,12 @@
     const btn = getEl("cr-duel-toggle");
     btn.classList.toggle("is-duel-on", cr.duelEnabled);
     btn.querySelector("span").textContent = cr.duelEnabled ? "3D Duel: ON" : "3D Duel: OFF";
+  });
+
+  document.addEventListener("input", (ev) => {
+    if (ev.target && (ev.target.id === "car-atr-wt-slider" || ev.target.id === "car-atr-cfd-slider")) {
+      updateAtrPreview();
+    }
   });
 
   // Driver Development Focus dropdown change
