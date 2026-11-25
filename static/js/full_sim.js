@@ -1977,6 +1977,9 @@
             }
           }
           car.inPit = 0; car.pitDuration = 0;
+          // Merge onto the track cleanly on the pit-exit side rather than snapping to centerline
+          const exitSide = (fs.b3d && fs.b3d.getLayout && fs.b3d.getLayout()) ? (fs.b3d.getLayout().pitSide || 1) : 1;
+          car.latOffset = exitSide * 3.5;
           car.compound = car.nextCompound;
           car.tyreLife = 100;
           // Authentic compound blanket exit temps (Softs fire up fast -> undercut; Hards start cold -> overcut risk!)
@@ -3234,7 +3237,7 @@
           breakdownKind: c.breakdownKind, smokeActive: c.smokeActive, cleared: !!c.cleared,
           liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
           lockupSmokeTimer: c.lockupSmokeTimer || 0,
-          compound: c.compound, drsOpen: !!(c.inDrsRange && fs.drsEnabled && !c.dnf && !c.finishedRace),
+          compound: c.compound, drsOpen: !!(c.inPit <= 0 && c.inDrsRange && fs.drsEnabled && isInDrsZone(fs.circuit, c.totalProg) && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
           fuelKg: c.fuelKg,
           setupRideHeight: c.eng && c.eng.actual ? c.eng.actual.rideHeight : null,
@@ -3451,6 +3454,7 @@
     // Phase 3: Live 3D Broadcast Camera Engine & Team Radio Controller
     if (window.F1Broadcast3D && getEl("fsim-3d-canvas")) {
       fs.b3d = window.F1Broadcast3D.createBroadcast3D(getEl("fsim-3d-canvas"), getEl("fsim-3d-hud"));
+      window.__fsimB3d = fs.b3d;
     }
     if (window.F1RadioEngine && getEl("fsim-radio-card")) {
       fs.radio = window.F1RadioEngine.createRadioController(getEl("fsim-radio-card"), {
@@ -3464,6 +3468,7 @@
       document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === fs.b3dMode));
       if (!fs.b3d && window.F1Broadcast3D && getEl("fsim-3d-canvas")) {
         fs.b3d = window.F1Broadcast3D.createBroadcast3D(getEl("fsim-3d-canvas"), getEl("fsim-3d-hud"));
+        window.__fsimB3d = fs.b3d;
       }
       if (!fs.b3d) {
         showToast("3D Broadcast requires WebGL / Three.js!", "warn");
@@ -3485,10 +3490,11 @@
         fs.b3d.updateAndRender({
           circuit: fs.circuit,
           cars: fs.cars.map((c) => ({
-            idx: c.idx, code3: c.card.code3, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
-            inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, dnf: c.dnf, color: c.card.hero_color,
-            liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear,
-            palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era,
+            idx: c.idx, code3: c.card.code3, team: c.card.hero_team, pos: c.pos, totalProg: c.totalProg, latOffset: c.latOffset,
+            inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, pitPenaltyHoldFrac: c.pitPenaltyHoldFrac || 0, dnf: c.dnf, color: c.card.hero_color,
+            liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
+            compound: c.compound, drsOpen: !!(c.inPit <= 0 && c.inDrsRange && fs.drsEnabled && isInDrsZone(fs.circuit, c.totalProg) && !c.dnf && !c.finishedRace),
+            palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era, year: c.card.hero_year,
             regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
           })),
           raceState: {

@@ -1510,11 +1510,20 @@
       arch: 0.024, chordCenter: 0.20, chordTip: 0.18, thick: 0.022, pitch: 0.20
     }), mats.frontWing2);
 
-    /* 3rd upper flap */
-    addMesh(buildWingElement({
-      halfSpan: 0.94, zCenter: 2.34, zTip: 2.13, yCenter: 0.218, yTip: 0.202,
-      arch: 0.020, chordCenter: 0.15, chordTip: 0.14, thick: 0.018, pitch: 0.32
-    }), mats.frontWing3);
+    /* 3rd upper flap (hinged pivot at leading edge so 2026 Active Aero X-Mode physically flattens!) */
+    var fwPivot20 = new THREE.Group();
+    fwPivot20.position.set(0, 0.218, 2.34);
+    var fwFlapMesh20 = new THREE.Mesh(
+      buildWingElement({
+        halfSpan: 0.94, zCenter: 0.0, zTip: -0.21, yCenter: 0.0, yTip: -0.016,
+        arch: 0.020, chordCenter: 0.15, chordTip: 0.14, thick: 0.018, pitch: 0.32
+      }),
+      mats.frontWing3
+    );
+    fwFlapMesh20.castShadow = true;
+    fwPivot20.add(fwFlapMesh20);
+    root.add(fwPivot20);
+    root.userData.frontFlap = fwPivot20;
 
     /* Front wing nose pylons + sculpted swept modern endplates */
     [-1, 1].forEach(function (s) {

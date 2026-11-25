@@ -221,6 +221,7 @@
       pitchRad: 0,
       rollRad: 0,
       wheelSpin: 0,
+      brakeHeat: 0,
       downforceKg: 0,
       bottoming: 0,
       bottomingCount: 0,
@@ -344,6 +345,16 @@
     phys.rollRad  += (targetRoll - phys.rollRad) * Math.min(1, stepDt * 10);
     phys.wheelSpin += (vMps / 0.36) * stepDt;
 
+    // E2. Authentic Carbon-Carbon Brake Disc Thermal State (ramps under hard braking, cools smoothly with airflow!)
+    const brakeDecel = Math.max(0, -longG - 0.65);
+    const speedFactor = clamp(speedKph / 240, 0.2, 1.35);
+    if (brakeDecel > 0.05 && !target.inPit) {
+      phys.brakeHeat = clamp((phys.brakeHeat || 0) + brakeDecel * speedFactor * 0.82 * stepDt, 0, 1);
+    } else {
+      const coolRate = (0.42 + speedFactor * 0.45) * (1 + (((env && env.wetness) || 0) / 140));
+      phys.brakeHeat = Math.max(0, (phys.brakeHeat || 0) - coolRate * stepDt);
+    }
+
     // F. EXACT Skid-Block Bottoming-Out Spark Calculation (Different per car, era, fuel & bump!)
     // Sparks ONLY fire when the physical plank/skid touches asphalt (rideHeight <= 3.2mm) at speed!
     let bottoming = 0;
@@ -364,11 +375,13 @@
     return {
       wx: phys.wx,
       wz: phys.wz,
+      latPos: phys.latPos,
       heaveY,
       yaw: phys.yaw,
       pitchRad: phys.pitchRad,
       rollRad: phys.rollRad,
       wheelSpin: phys.wheelSpin,
+      brakeHeat: phys.brakeHeat,
       steerAngle: clamp(-steerAngle * 1.85 - (target.curv || 0) * 14.0, -0.44, 0.44),
       frontRideMm: Math.max(0, Math.round(phys.frontRideMm)),
       rearRideMm: Math.max(0, Math.round(phys.rearRideMm)),
@@ -381,10 +394,100 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // 4. 3D Spatial Multi-Car Anti-Clipping Solver (Oriented Track-Frame Separation)
+  // ---------------------------------------------------------------------------
+  // Guarantees ZERO 3D car-to-car chassis/wheel overlap during wheel-to-wheel overtakes,
+  // standing starts, and Safety Car restarts while keeping every car cleanly on asphalt!
+  function resolve3DCarSeparations(items, maxLatBound) {
+    if (!Array.isArray(items) || items.length < 2) return 0;
+    const limLat = Number.isFinite(maxLatBound) ? maxLatBound : 6.2;
+    const MIN_LONG = 5.75; // Full F1 chassis length (5.6m) + front/rear wing safety margin
+    const MIN_LAT  = 2.42; // Full F1 track width (2.18m) + wheel-to-wheel margin
+    let adjustments = 0;
+
+    for (let iter = 0; iter < 14; iter++) {
+      let movedAny = false;
+      for (let i = 0; i < items.length; i++) {
+        const a = items[i];
+        if (!a || a.inPit || a.dnf) continue;
+        for (let j = i + 1; j < items.length; j++) {
+          const b = items[j];
+          if (!b || b.inPit || b.dnf) continue;
+          const dx = b.wx - a.wx;
+          const dz = b.wz - a.wz;
+          const dist2 = dx * dx + dz * dz;
+          if (dist2 > 44.0) continue; // Fast broadphase reject (> 6.63m apart)
+
+          // Project separation into average local track tangent/right frame
+          let tx = (a.tx || 0) + (b.tx || 0);
+          let tz = (a.tz || 1) + (b.tz || 1);
+          const tl = Math.hypot(tx, tz) || 1;
+          tx /= tl; tz /= tl;
+          const rx = -tz;
+          const rz = tx;
+
+          const dLong = dx * tx + dz * tz;
+          const dLat  = dx * rx + dz * rz;
+          const absLong = Math.abs(dLong);
+          const absLat  = Math.abs(dLat);
+
+          if (absLong < MIN_LONG && absLat < MIN_LAT) {
+            const penLong = MIN_LONG - absLong;
+            const penLat  = MIN_LAT - absLat;
+
+            // Prefer lateral separation when cars are genuinely side-by-side or have room across track,
+            // otherwise resolve along the minimum-penetration axis!
+            const roomA = limLat - Math.abs(a.latPos || 0);
+            const roomB = limLat - Math.abs(b.latPos || 0);
+            const preferLat = (absLong < 4.2 && (roomA + roomB) >= penLat * 0.5) || (penLat <= penLong * 0.65);
+
+            if (preferLat) {
+              const sign = dLat >= 0 ? 1 : -1;
+              const push = penLat * 0.52;
+              const newLatA = clamp((a.latPos || 0) - sign * push, -limLat, limLat);
+              const newLatB = clamp((b.latPos || 0) + sign * push, -limLat, limLat);
+              const shiftA = newLatA - (a.latPos || 0);
+              const shiftB = newLatB - (b.latPos || 0);
+              a.latPos = newLatA;
+              b.latPos = newLatB;
+              a.wx += rx * shiftA;
+              a.wz += rz * shiftA;
+              b.wx += rx * shiftB;
+              b.wz += rz * shiftB;
+              // If track edge clamped lateral push and still overlapping, resolve residual longitudinally
+              const remLat = Math.abs((b.wx - a.wx) * rx + (b.wz - a.wz) * rz);
+              if (remLat < MIN_LAT - 0.04) {
+                const lSign = dLong >= 0 ? 1 : -1;
+                const lPush = (MIN_LONG - absLong) * 0.52;
+                a.wx -= tx * lSign * lPush;
+                a.wz -= tz * lSign * lPush;
+                b.wx += tx * lSign * lPush;
+                b.wz += tz * lSign * lPush;
+              }
+            } else {
+              const lSign = dLong >= 0 ? 1 : -1;
+              const lPush = penLong * 0.52;
+              a.wx -= tx * lSign * lPush;
+              a.wz -= tz * lSign * lPush;
+              b.wx += tx * lSign * lPush;
+              b.wz += tz * lSign * lPush;
+            }
+            movedAny = true;
+            adjustments += 1;
+          }
+        }
+      }
+      if (!movedAny) break;
+    }
+    return adjustments;
+  }
+
   global.F1VehiclePhysics = {
     ERA_CHASSIS_DNA,
     buildTrackSpline,
     createCarPhysicsState,
     stepCarPhysics,
+    resolve3DCarSeparations,
   };
 })(window);

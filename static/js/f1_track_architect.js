@@ -21,6 +21,17 @@
     return t * t * (3 - 2 * t);
   }
 
+  function smootherstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / Math.max(1e-6, edge1 - edge0), 0, 1);
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  function progWrapDist(a, b) {
+    let d = Math.abs((((a % 1) + 1) % 1) - (((b % 1) + 1) % 1));
+    if (d > 0.5) d = 1 - d;
+    return d;
+  }
+
   function hashStr(s) {
     let h = 2166136261;
     const str = String(s || "circuit");
@@ -165,13 +176,13 @@
       const sp = sampleTrackFn(prog);
       const rvx = -sp.tz, rvz = sp.tx;
 
-      // Smooth S-curve entry/exit blend with dead-straight parallel middle section!
+      // C2-continuous quintic S-curve entry/exit blend with dead-straight parallel middle section!
       let blend;
-      if (u < 0.22) blend = smoothstep(0.0, 0.22, u);
-      else if (u > 0.78) blend = 1.0 - smoothstep(0.78, 1.0, u);
+      if (u < 0.23) blend = smootherstep(0.0, 0.23, u);
+      else if (u > 0.77) blend = 1.0 - smootherstep(0.77, 1.0, u);
       else blend = 1.0;
 
-      // Start smoothly from track edge (pitSide * 6.5m) out to basePitOffset
+      // Start smoothly from track edge (pitSide * 6.8m) out to basePitOffset
       const off = pitSide * lerp(6.8, basePitOffset, blend);
       fastPts.push({
         u,
@@ -255,32 +266,56 @@
     const speedLimitIn = fastPts[Math.round(0.22 * samples)];
     const speedLimitOut = fastPts[Math.round(0.78 * samples)];
 
-    // Pit building placement right behind the 10 working boxes (audited against non-SF track legs!)
+    // Pit building placement right behind the 10 working boxes (audited against ALL track legs!)
     const midBox = boxes[4];
     const bldgYaw = midBox.yaw;
     let bldgDist = 11.2; // behind pit box center -> ~35.3m from main straight
     let bldgLen = 122;
-    const bldgDepth = 11.5;
+    let bldgDepth = 11.5;
+    let bldgShift = 0;
     let bldgOk = false;
-    for (const tryLen of [122, 98, 76]) {
-      for (const tryOff of [11.2, 9.8, 13.0]) {
-        const bx = midBox.x + midBox.rx * pitSide * tryOff;
-        const bz = midBox.z + midBox.rz * pitSide * tryOff;
-        const smps = footprintSamples(bx, bz, bldgYaw, bldgDepth * 0.5, tryLen * 0.5);
-        const dTrack = footprintMinDist(smps, trackPts, nonSfSkip);
-        if (dTrack >= 18.0) {
-          bldgDist = tryOff;
-          bldgLen = tryLen;
-          bldgOk = true;
-          break;
+    let bestFallback = { score: -1, dist: 9.8, len: 56, depth: 7.5, shift: 0 };
+
+    // Audit against ALL track points (never skip near-SF legs that curve back, like Shanghai T1-2!).
+    // A valid pit building must keep >= 18.0m from EVERY track point and sit cleanly behind the boxes.
+    for (const tryLen of [122, 98, 76, 58, 44]) {
+      for (const tryDepth of [11.5, 9.4, 7.6]) {
+        for (const tryShift of [0, -10, 10, -20, 20]) {
+          for (const tryOff of [11.2, 9.8, 8.8, 13.2, 15.5]) {
+            const bx = midBox.x + midBox.rx * pitSide * tryOff + midBox.tx * tryShift;
+            const bz = midBox.z + midBox.rz * pitSide * tryOff + midBox.tz * tryShift;
+            const smps = footprintSamples(bx, bz, bldgYaw, tryDepth * 0.5, tryLen * 0.5);
+            const dTrackAll = footprintMinDist(smps, trackPts, null);
+            const dFast = footprintMinDist(smps, fastPts, null);
+            const minClear = Math.min(dTrackAll, dFast + 9.0);
+            if (minClear > bestFallback.score) {
+              bestFallback = { score: minClear, dist: tryOff, len: tryLen, depth: tryDepth, shift: tryShift };
+            }
+            if (dTrackAll >= 18.0 && dFast >= 7.2) {
+              bldgDist = tryOff;
+              bldgLen = tryLen;
+              bldgDepth = tryDepth;
+              bldgShift = tryShift;
+              bldgOk = true;
+              break;
+            }
+          }
+          if (bldgOk) break;
         }
+        if (bldgOk) break;
       }
       if (bldgOk) break;
     }
+    if (!bldgOk) {
+      bldgDist = bestFallback.dist;
+      bldgLen = bestFallback.len;
+      bldgDepth = bestFallback.depth;
+      bldgShift = bestFallback.shift;
+    }
 
     const pitBuilding = {
-      x: midBox.x + midBox.rx * pitSide * bldgDist,
-      z: midBox.z + midBox.rz * pitSide * bldgDist,
+      x: midBox.x + midBox.rx * pitSide * bldgDist + midBox.tx * bldgShift,
+      z: midBox.z + midBox.rz * pitSide * bldgDist + midBox.tz * bldgShift,
       yaw: bldgYaw,
       depth: bldgDepth,
       length: bldgLen,
@@ -459,26 +494,27 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Staggered 2x2 FIA Starting Grid Boxes (Aligned to Spline!)
+  // 2. Staggered 2x2 FIA Starting Grid Boxes (Aligned to Exact Car Spawn!)
   // ---------------------------------------------------------------------------
-  function buildGridSlots(sampleTrackFn, totalLenM, count) {
+  function buildGridSlots(sampleTrackFn, totalLenM, count, circuit) {
     const n = Math.max(20, count || 24);
-    const perim = Math.max(1200, totalLenM || 3200);
-    // Real FIA grid spacing: 8.0m longitudinal stagger between sequential positions (16m per column)
-    const progStep = 8.2 / perim;
-    const firstRowOffset = 8.5 / perim;
+    // Match assignCarLaunchProfile exact progress & 3D lateral scaling so every car sits dead-center in its painted box!
+    const perim = Math.max(1800, (circuit && circuit.length_km ? circuit.length_km * 1000 : (totalLenM || 4800)));
+    const progStep = clamp(16.5 / perim, 0.0020, 0.0052);
+    const firstRowOffset = Math.max(0.0020, 9.0 / perim);
     const slots = [];
     for (let i = 0; i < n; i++) {
       const prog = -(firstRowOffset + i * progStep);
       const sp = sampleTrackFn(prog);
       const rvx = -sp.tz, rvz = sp.tx;
-      const lat = (i % 2 === 0 ? -2.65 : 2.65);
+      const lat = (i % 2 === 0 ? -2.55 : 2.55) * 1.12;
       slots.push({
         gridPos: i + 1,
         prog,
         lat,
         x: sp.x + rvx * lat,
         z: sp.z + rvz * lat,
+        y: (sp.y || 0) + (sp.bankRad ? Math.sin(sp.bankRad) * lat : 0),
         tx: sp.tx,
         tz: sp.tz,
         yaw: Math.atan2(sp.tx, sp.tz),
@@ -503,7 +539,7 @@
       totalLenM += Math.hypot(b.x - a.x, b.z - a.z);
     }
 
-    const gridSlots = buildGridSlots(sampleTrackFn, totalLenM, 24);
+    const gridSlots = buildGridSlots(sampleTrackFn, totalLenM, 24, circuit);
 
     // Track placed bounding circles so buildings/stands/props never intersect each other
     const placed = [];
@@ -611,19 +647,179 @@
       }
     });
 
-    // C. Obstruction-Free Overhead Sponsor Bridges (pillars clear of adjacent track & pit!)
+    // C. Obstruction-Free Overhead Sponsor Bridges (pillars audited against BOTH adjacent track legs & pitlane!)
     const bridges = [];
-    [0.22, 0.50, 0.78].forEach((prog, bi) => {
-      const sp = sampleTrackFn(prog);
-      const rx = -sp.tz, rz = sp.tx;
-      const lx = sp.x - rx * 13.0, lz = sp.z - rz * 13.0;
-      const rxp = sp.x + rx * 13.0, rzp = sp.z + rz * 13.0;
-      const dPitL = minDistToPts(lx, lz, pitPts, null);
-      const dPitR = minDistToPts(rxp, rzp, pitPts, null);
-      if (dPitL >= 14.0 && dPitR >= 14.0) {
-        bridges.push({ idx: bi, prog, x: sp.x, z: sp.z, yaw: Math.atan2(sp.tx, sp.tz) });
+    const pillarClearOfNonLocalTrack = (px, pz, localProg, minClear) => {
+      const nT = trackPts.length;
+      for (let i = 0; i < nT; i++) {
+        if (progWrapDist(i / nT, localProg) < 0.036) continue;
+        const d = Math.hypot(px - trackPts[i].x, pz - trackPts[i].z);
+        if (d < minClear) return false;
+      }
+      return true;
+    };
+    [0.22, 0.50, 0.78].forEach((baseProg, bi) => {
+      for (const shift of [0, 0.025, -0.025, 0.05, -0.05]) {
+        const prog = (((baseProg + shift) % 1) + 1) % 1;
+        if (prog < 0.11 || prog > 0.89) continue;
+        const sp = sampleTrackFn(prog);
+        if (sp.inTunnel) continue;
+        const rx = -sp.tz, rz = sp.tx;
+        const lx = sp.x - rx * 13.0, lz = sp.z - rz * 13.0;
+        const rxp = sp.x + rx * 13.0, rzp = sp.z + rz * 13.0;
+        const dPitL = minDistToPts(lx, lz, pitPts, null);
+        const dPitR = minDistToPts(rxp, rzp, pitPts, null);
+        if (
+          dPitL >= 14.0 && dPitR >= 14.0
+          && pillarClearOfNonLocalTrack(lx, lz, prog, 12.5)
+          && pillarClearOfNonLocalTrack(rxp, rzp, prog, 12.5)
+        ) {
+          bridges.push({ idx: bi, prog, x: sp.x, z: sp.z, y: sp.y || 0, yaw: Math.atan2(sp.tx, sp.tz) });
+          break;
+        }
       }
     });
+
+    // C2. Audited FIA Trackside Braking Distance Boards (150m / 100m / 50m), DRS Gantries, Marshal LED Panels & Heavy-Braking Runoff/Tyre Walls!
+    const brakingBoards = [];
+    const tyreBarriers = [];
+    const rawBraking = Array.isArray(circuit && circuit.braking_zones) ? circuit.braking_zones : [];
+    const pitOpenSpan = (pitLayout.pitSpan || 0.082) + 0.015;
+    const isTracksidePointClear = (wx, wz, localProg, minAllTrackDist, minPitDist) => {
+      if (minDistToPts(wx, wz, pitPts, null) < minPitDist) return false;
+      // Audit against EVERY track point (no skip window!) so tight 180-deg hairpins like Monaco Fairmont never get encroached!
+      if (minDistToPts(wx, wz, trackPts, null) < minAllTrackDist) return false;
+      return true;
+    };
+
+    rawBraking.forEach((bz, bzIdx) => {
+      const tApex = (((Number(bz.t || 0)) % 1) + 1) % 1;
+      const sev = Number(bz.sev || 2);
+      if (sev < 2) return;
+      // Determine outside of corner via local spline curvature
+      const spApex = sampleTrackFn(tApex);
+      const curvSign = (spApex.curv || 0) >= 0 ? -1 : 1; // outside of right turn (+curv) is left (-1)
+      const inPitZone = (tApex < pitOpenSpan || tApex > 1 - pitOpenSpan);
+      const prefSide = inPitZone ? -pitSide : curvSign;
+
+      // Place 150m, 100m, 50m boards cleanly outside kerb/runoff edge (offset = 12.2m) before braking apex!
+      const boardDists = sev >= 3 ? [150, 100, 50] : [100, 50];
+      boardDists.forEach((meters) => {
+        const bProg = (((tApex - (meters / Math.max(1800, totalLenM))) % 1) + 1) % 1;
+        const bInPit = (bProg < pitOpenSpan || bProg > 1 - pitOpenSpan);
+        const side = bInPit ? -pitSide : prefSide;
+        const sp = sampleTrackFn(bProg);
+        if (sp.inTunnel) return;
+        const rx = -sp.tz, rz = sp.tx;
+        const off = side * 12.2;
+        const wx = sp.x + rx * off;
+        const wz = sp.z + rz * off;
+        const wy = (sp.y || 0) + (sp.bankRad ? Math.sin(sp.bankRad) * off : 0);
+        if (isTracksidePointClear(wx, wz, bProg, 10.5, 9.5)) {
+          brakingBoards.push({
+            bzIdx,
+            meters,
+            prog: bProg,
+            side,
+            x: wx,
+            y: wy,
+            z: wz,
+            yaw: Math.atan2(sp.tx, sp.tz),
+          });
+        }
+      });
+
+      // Place FIA Tyre Barrier Stack + Gravel Runoff Apron on the outside of heavy braking zones (sev >= 2)!
+      if (!spApex.inTunnel) {
+        const tSide = inPitZone ? -pitSide : curvSign;
+        const rx = -spApex.tz, rz = spApex.tx;
+        const off = tSide * 13.6;
+        const wx = spApex.x + rx * off;
+        const wz = spApex.z + rz * off;
+        const wy = (spApex.y || 0) + (spApex.bankRad ? Math.sin(spApex.bankRad) * off : 0);
+        const halfL = sev >= 3 ? 12.5 : 8.5;
+        const e1x = wx + spApex.tx * halfL, e1z = wz + spApex.tz * halfL;
+        const e2x = wx - spApex.tx * halfL, e2z = wz - spApex.tz * halfL;
+        if (
+          isTracksidePointClear(wx, wz, tApex, 10.8, 10.5)
+          && isTracksidePointClear(e1x, e1z, tApex, 10.0, 10.0)
+          && isTracksidePointClear(e2x, e2z, tApex, 10.0, 10.0)
+        ) {
+          tyreBarriers.push({
+            bzIdx,
+            sev,
+            prog: tApex,
+            side: tSide,
+            x: wx,
+            y: wy,
+            z: wz,
+            yaw: Math.atan2(spApex.tx, spApex.tz),
+            length: halfL * 2,
+          });
+        }
+      }
+    });
+
+    // C3. Audited DRS Activation / Detection Gantries along circuit.drs_ranges!
+    const drsGantries = [];
+    const rawDrs = Array.isArray(circuit && circuit.drs_ranges) ? circuit.drs_ranges : [];
+    rawDrs.forEach((rngPair, di) => {
+      if (!Array.isArray(rngPair) || rngPair.length < 2) return;
+      const startProg = (((Number(rngPair[0])) % 1) + 1) % 1;
+      const sp = sampleTrackFn(startProg);
+      if (sp.inTunnel) return;
+      const rx = -sp.tz, rz = sp.tx;
+      const lx = sp.x - rx * 11.4, lz = sp.z - rz * 11.4;
+      const rxp = sp.x + rx * 11.4, rzp = sp.z + rz * 11.4;
+      const dPitL = minDistToPts(lx, lz, pitPts, null);
+      const dPitR = minDistToPts(rxp, rzp, pitPts, null);
+      if (
+        dPitL >= 11.0 && dPitR >= 11.0
+        && pillarClearOfNonLocalTrack(lx, lz, startProg, 10.5)
+        && pillarClearOfNonLocalTrack(rxp, rzp, startProg, 10.5)
+      ) {
+        drsGantries.push({
+          idx: di,
+          prog: startProg,
+          endProg: (((Number(rngPair[1])) % 1) + 1) % 1,
+          x: sp.x,
+          y: sp.y || 0,
+          z: sp.z,
+          yaw: Math.atan2(sp.tx, sp.tz),
+        });
+      }
+    });
+
+    // C4. Audited FIA Trackside Digital Marshal Flag LED Panels (14 posts cleanly clear of track & pitlane!)
+    const marshalPosts = [];
+    for (let mi = 0; mi < 14; mi++) {
+      const mProg = (mi + 0.5) / 14;
+      const mp = sampleTrackFn(mProg);
+      if (mp.inTunnel) continue;
+      const rx = -mp.tz, rz = mp.tx;
+      const inPitZone = (mProg < pitOpenSpan || mProg > 1 - pitOpenSpan);
+      const sides = inPitZone ? [-pitSide] : (mi % 2 === 0 ? [1, -1] : [-1, 1]);
+      for (let si = 0; si < sides.length; si++) {
+        const side = sides[si];
+        const off = side * 13.8;
+        const mx = mp.x + rx * off;
+        const mz = mp.z + rz * off;
+        const my = (mp.y || 0) + (mp.bankRad ? Math.sin(mp.bankRad) * off : 0);
+        if (isTracksidePointClear(mx, mz, mProg, 10.5, 9.5)) {
+          marshalPosts.push({
+            idx: mi,
+            prog: mProg,
+            side,
+            x: mx,
+            y: my,
+            z: mz,
+            yaw: Math.atan2(mp.tx, mp.tz),
+            sector: Math.floor(mProg * 3) + 1,
+          });
+          break;
+        }
+      }
+    }
 
     // D. Obstruction-Free Festival & Fan Village (Ferris wheel + 6 Beer Tents + DJ Stage)
     let festival = null;
@@ -730,6 +926,10 @@
       grandstands,
       jumbotrons,
       bridges,
+      brakingBoards,
+      tyreBarriers,
+      drsGantries,
+      marshalPosts,
       festival,
       festivalTents,
       djStage,
@@ -748,6 +948,7 @@
     let minGrandstandPitDist = Infinity;
     let minPropTrackDist = Infinity;
     let minPropPitDist = Infinity;
+    let minPitBldgTrackDist = Infinity;
     const pitPts = layout.pitLayout.fastPts;
 
     layout.grandstands.forEach((g, idx) => {
@@ -758,6 +959,46 @@
       if (dP < minGrandstandPitDist) minGrandstandPitDist = dP;
       if (dT < 23.5) violations.push(`Grandstand #${idx} too close to track (${dT.toFixed(1)}m)`);
       if (dP < 21.5) violations.push(`Grandstand #${idx} too close to pitlane (${dP.toFixed(1)}m)`);
+    });
+
+    if (layout.pitLayout && layout.pitLayout.pitBuilding) {
+      const pb = layout.pitLayout.pitBuilding;
+      const pbSmps = footprintSamples(pb.x, pb.z, pb.yaw, pb.depth * 0.5, pb.length * 0.5);
+      minPitBldgTrackDist = footprintMinDist(pbSmps, trackPts, null);
+      if (minPitBldgTrackDist < 16.5) {
+        violations.push(`Pit building too close to track (${minPitBldgTrackDist.toFixed(1)}m)`);
+      }
+    }
+
+    (layout.bridges || []).forEach((br, idx) => {
+      const tx = Math.sin(br.yaw), tz = Math.cos(br.yaw);
+      const rx = -tz, rz = tx;
+      [-12.5, 12.5].forEach((side) => {
+        const px = br.x + rx * side, pz = br.z + rz * side;
+        for (let i = 0; i < trackPts.length; i++) {
+          if (progWrapDist(i / trackPts.length, br.prog || 0) < 0.035) continue;
+          const d = Math.hypot(px - trackPts[i].x, pz - trackPts[i].z);
+          if (d < 10.0) {
+            violations.push(`Bridge #${idx} pillar encroaches adjacent track (${d.toFixed(1)}m)`);
+            break;
+          }
+        }
+      });
+    });
+
+    (layout.brakingBoards || []).forEach((bb, idx) => {
+      const dT = minDistToPts(bb.x, bb.z, trackPts, null);
+      if (dT < 9.5) violations.push(`BrakingBoard #${idx} encroaches track (${dT.toFixed(1)}m)`);
+    });
+
+    (layout.marshalPosts || []).forEach((mp, idx) => {
+      const dT = minDistToPts(mp.x, mp.z, trackPts, null);
+      if (dT < 9.5) violations.push(`MarshalPost #${idx} encroaches track (${dT.toFixed(1)}m)`);
+    });
+
+    (layout.tyreBarriers || []).forEach((tb, idx) => {
+      const dT = minDistToPts(tb.x, tb.z, trackPts, null);
+      if (dT < 10.0) violations.push(`TyreBarrier #${idx} encroaches track (${dT.toFixed(1)}m)`);
     });
 
     layout.props.forEach((p, idx) => {
@@ -775,8 +1016,13 @@
       propCount: layout.props.length,
       pitBoxCount: layout.pitLayout.boxes.length,
       gridSlotCount: layout.gridSlots.length,
+      brakingBoardCount: (layout.brakingBoards || []).length,
+      drsGantryCount: (layout.drsGantries || []).length,
+      marshalPostCount: (layout.marshalPosts || []).length,
+      tyreBarrierCount: (layout.tyreBarriers || []).length,
       minGrandstandTrackDist: Number.isFinite(minGrandstandTrackDist) ? +minGrandstandTrackDist.toFixed(1) : 999,
       minGrandstandPitDist: Number.isFinite(minGrandstandPitDist) ? +minGrandstandPitDist.toFixed(1) : 999,
+      minPitBldgTrackDist: Number.isFinite(minPitBldgTrackDist) ? +minPitBldgTrackDist.toFixed(1) : 999,
       minPropTrackDist: Number.isFinite(minPropTrackDist) ? +minPropTrackDist.toFixed(1) : 999,
       minPropPitDist: Number.isFinite(minPropPitDist) ? +minPropPitDist.toFixed(1) : 999,
       violations,
