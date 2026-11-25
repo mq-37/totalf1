@@ -30,41 +30,50 @@ async def car_composition_v2_page(request: Request):
 async def car_liveries_page(request: Request):
     """3D studio car renders, one 5-colour livery per team."""
     import re as _re
-    from ..f1_car_palettes import load_palettes, infer_livery_style, infer_team_era, find_car_png_slug
+    from ..f1_car_palettes import load_palettes, infer_team_era, find_car_png_slug
+    from ..livery_registry import resolve_team_livery
 
     def slugify(name: str) -> str:
         return _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
     year_map = srv._team_peak_years_map(srv.get_db())
-    teams = [
-        {
+    teams = []
+    for name in load_palettes():
+        peak_yr = year_map.get(name)
+        era = infer_team_era(name, team_years_map=year_map)
+        yr = int(peak_yr) if peak_yr else (int(era[:4]) + 5 if era[:4].isdigit() else 2026)
+        spec = resolve_team_livery(name, yr)
+        teams.append({
             "name": name,
-            "slug": find_car_png_slug(name) or slugify(name),
-            "palette": pal,
-            "style": infer_livery_style(name),
-            "era": infer_team_era(name, team_years_map=year_map),
-        }
-        for name, pal in load_palettes().items()
-    ]
+            "slug": find_car_png_slug(name, year=yr) or slugify(name),
+            "palette": spec["palette"],
+            "style": spec["style"],
+            "era": era,
+        })
     return srv.render_template(request, "car_liveries.html", { "teams": teams})
 
 
 @router.get("/dev/car-3d", response_class=HTMLResponse)
 async def car_3d_studio_page(request: Request, team: Optional[str] = None, era: Optional[str] = None):
     """Interactive 3D F1 car livery studio."""
-    from ..f1_car_palettes import load_palettes, slugify, infer_livery_style, infer_team_era, LIVERY_STYLES, CAR_ERAS
+    from ..f1_car_palettes import load_palettes, slugify, infer_team_era, LIVERY_STYLES, CAR_ERAS
+    from ..livery_registry import resolve_team_livery
     palettes = load_palettes()
     year_map = srv._team_peak_years_map(srv.get_db())
-    team_list = [
-        {
+    team_list = []
+    for name in palettes:
+        peak_yr = year_map.get(name)
+        t_era = infer_team_era(name, team_years_map=year_map)
+        yr = int(peak_yr) if peak_yr else (int(t_era[:4]) + 5 if t_era[:4].isdigit() else 2026)
+        spec = resolve_team_livery(name, yr)
+        team_list.append({
             "name": name,
             "slug": slugify(name),
-            "palette": pal,
-            "style": infer_livery_style(name),
-            "era": infer_team_era(name, team_years_map=year_map),
-        }
-        for name, pal in palettes.items()
-    ]
+            "palette": spec["palette"],
+            "style": spec["style"],
+            "finish": spec["finish"],
+            "era": t_era,
+        })
     selected = team if (team and team in palettes) else ("McLaren Mercedes" if "McLaren Mercedes" in palettes else (team_list[0]["name"] if team_list else "Ferrari"))
     selected_era = era if (era and era in CAR_ERAS) else infer_team_era(selected, team_years_map=year_map)
     return srv.render_template(request, "car_3d.html", {

@@ -27,14 +27,19 @@ def _free_port() -> int:
 
 
 class TestLiveryRegistry(unittest.TestCase):
-    def test_red_bull_2026_matte_yellow_nose_crimson_bull(self):
-        spec = livery_registry.resolve_team_livery("Red Bull Racing", 2026)
-        self.assertEqual(spec["style"], "redbull")
-        self.assertEqual(spec["finish"], "matte")
-        self.assertEqual(spec["motif"], "bull_nose")
-        self.assertEqual(spec["palette"]["main"].upper(), "#0B1A3C")
-        self.assertEqual(spec["palette"]["accent"].upper(), "#FFCC00")
-        self.assertEqual(spec["palette"]["secondary"].upper(), "#DB0A40")
+    def test_red_bull_2026_gloss_cobalt_and_2024_matte_navy(self):
+        spec26 = livery_registry.resolve_team_livery("Red Bull Racing", 2026)
+        self.assertEqual(spec26["style"], "redbull")
+        self.assertEqual(spec26["finish"], "gloss")
+        self.assertEqual(spec26["motif"], "bull_nose")
+        self.assertEqual(spec26["palette"]["main"].upper(), "#0B2168")
+        self.assertEqual(spec26["palette"]["accent"].upper(), "#FFBE00")
+        self.assertEqual(spec26["palette"]["secondary"].upper(), "#E00A2B")
+
+        spec24 = livery_registry.resolve_team_livery("Red Bull Racing", 2024)
+        self.assertEqual(spec24["style"], "redbull")
+        self.assertEqual(spec24["finish"], "matte")
+        self.assertEqual(spec24["palette"]["main"].upper(), "#0B1A3C")
 
     def test_ferrari_year_evolution_2025_2026_hp_blue_and_white(self):
         s26 = livery_registry.resolve_team_livery("Ferrari", 2026)
@@ -49,18 +54,22 @@ class TestLiveryRegistry(unittest.TestCase):
 
     def test_mercedes_carbon_silver_arrow_petronas_teal(self):
         s26 = livery_registry.resolve_team_livery("Mercedes", 2026)
+        s24 = livery_registry.resolve_team_livery("Mercedes", 2024)
         s16 = livery_registry.resolve_team_livery("Mercedes", 2016)
         self.assertEqual(s26["style"], "merc_arrow")
-        self.assertEqual(s26["finish"], "metallic")
-        self.assertEqual(s26["palette"]["main"].upper(), "#11151B")
+        self.assertEqual(s26["finish"], "gloss")
+        self.assertEqual(s26["palette"]["main"].upper(), "#0F1319")
         self.assertEqual(s26["palette"]["secondary"].upper(), "#C8CCCE")
-        self.assertEqual(s26["palette"]["accent"].upper(), "#27F4D2")
+        self.assertEqual(s26["palette"]["accent"].upper(), "#00D2BE")
+        self.assertEqual(s24["palette"]["pop"].upper(), "#E10600")
         self.assertEqual(s16["palette"]["main"].upper(), "#C8CCCE")
 
     def test_new_2026_entries_and_historic_mclaren(self):
         audi = livery_registry.resolve_team_livery("Audi", 2026)
         cad = livery_registry.resolve_team_livery("Cadillac", 2026)
+        vcarb = livery_registry.resolve_team_livery("Racing Bulls", 2026)
         williams = livery_registry.resolve_team_livery("Williams", 2026)
+        wil24 = livery_registry.resolve_team_livery("Williams", 2024)
         wil16 = livery_registry.resolve_team_livery("Williams", 2016)
         mac26 = livery_registry.resolve_team_livery("McLaren", 2026)
         mac88 = livery_registry.resolve_team_livery("McLaren", 1988)
@@ -69,7 +78,9 @@ class TestLiveryRegistry(unittest.TestCase):
         aston26 = livery_registry.resolve_team_livery("Aston Martin", 2026)
         self.assertEqual(audi["style"], "audi_slash")
         self.assertEqual(cad["style"], "cadillac_split")
-        self.assertEqual(williams["style"], "williams_duracell")
+        self.assertEqual(vcarb["style"], "vcarb_2026")
+        self.assertEqual(williams["style"], "williams_2026")
+        self.assertEqual(wil24["style"], "williams_duracell")
         self.assertEqual(wil16["style"], "martini_tri")
         self.assertEqual(mac26["style"], "mclaren_papaya")
         self.assertEqual(mac88["style"], "mclaren_marlboro")
@@ -81,7 +92,9 @@ class TestLiveryRegistry(unittest.TestCase):
         self.assertEqual(livery_registry.resolve_team_livery("McLaren Mercedes", 2026)["style"], "mclaren_papaya")
         self.assertEqual(livery_registry.resolve_team_livery("Aston Martin Aramco Mercedes", 2026)["style"], "aston_wings")
         self.assertEqual(livery_registry.resolve_team_livery("Williams Mercedes", 2016)["style"], "martini_tri")
-        self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2026)["style"], "haas_carbon")
+        self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2026)["style"], "haas_tgr")
+        self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2024)["style"], "haas_carbon")
+        self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2019)["style"], "lotus_jps")
         self.assertEqual(livery_registry.resolve_team_livery("Brawn Mercedes", 2009)["style"], "brawn_neon")
 
 

@@ -28,6 +28,16 @@ def _yr(year: int | str | None) -> int:
 
 # Ordered family match rules: (keywords, resolver(year) -> dict)
 def _resolve_red_bull(y: int) -> dict[str, Any]:
+    if y >= 2026:
+        # 2026 Oracle Red Bull Racing RB22 (Red Bull Ford): Returned to high-gloss vibrant metallic cobalt blue,
+        # bright sun-yellow nose & airbox with crisp white-outlined crimson charging bull!
+        return {
+            "palette": {"main": "#0B2168", "secondary": "#E00A2B", "accent": "#FFBE00", "pop": "#FFFFFF", "detail": "#061030"},
+            "style": "redbull",
+            "finish": "gloss",
+            "motif": "bull_nose",
+            "label": f"{y} Oracle Red Bull Racing RB22 (Gloss Cobalt Blue, Sun Yellow & Charging Bull)",
+        }
     if y <= 2015:
         return {
             "palette": {"main": "#142254", "secondary": "#DB0A40", "accent": "#FFCC00", "pop": "#FFFFFF", "detail": "#0A1026"},
@@ -97,14 +107,24 @@ def _resolve_ferrari(y: int) -> dict[str, Any]:
 
 
 def _resolve_mercedes(y: int) -> dict[str, Any]:
+    if y >= 2026:
+        # 2026 Mercedes-AMG Petronas W17: Gloss Obsidian Black + Silver Arrow top nose & AMG flank slashes +
+        # flowing Petronas Turquoise wave & silver 3-pointed stars (no red INEOS roll-hoop in 2026!)
+        return {
+            "palette": {"main": "#0F1319", "secondary": "#C8CCCE", "accent": "#00D2BE", "pop": "#FFFFFF", "detail": "#07090D"},
+            "style": "merc_arrow",
+            "finish": "gloss",
+            "motif": "silver_arrow",
+            "label": f"{y} Mercedes-AMG Petronas W17 (Obsidian Black, Silver Arrow Slashes & Petronas Teal)",
+        }
     if y >= 2024:
-        # 2024-2026: Sleek Obsidian Carbon + Silver Arrow Nose + Razor Petronas Teal Pinstripe + INEOS Red Roll Hoop!
+        # 2024-2025 W15/W16: Sleek Obsidian Carbon + Silver Arrow Nose + Petronas Teal + INEOS Red Roll Hoop!
         return {
             "palette": {"main": "#11151B", "secondary": "#C8CCCE", "accent": "#27F4D2", "pop": "#E10600", "detail": "#090B0E"},
             "style": "merc_arrow",
             "finish": "metallic",
             "motif": "silver_arrow",
-            "label": f"{y} Mercedes-AMG Petronas (Carbon/Silver Arrow & Petronas Teal)",
+            "label": f"{y} Mercedes-AMG Petronas (Carbon/Silver Arrow, Petronas Teal & INEOS Red)",
         }
     if y in (2020, 2021, 2023):
         return {
@@ -124,13 +144,29 @@ def _resolve_mercedes(y: int) -> dict[str, Any]:
 
 
 def _resolve_mclaren(y: int) -> dict[str, Any]:
-    if y >= 2018:
+    if y >= 2022:
         return {
-            "palette": {"main": "#FF8000", "secondary": "#14171D", "accent": "#47C7FC", "pop": "#FFFFFF", "detail": "#9E4F00"},
+            "palette": {"main": "#FF7A00", "secondary": "#14171D", "accent": "#00B8D4", "pop": "#FFFFFF", "detail": "#1A1E26"},
             "style": "mclaren_papaya",
             "finish": "matte",
             "motif": "papaya",
-            "label": f"{y} McLaren F1 Team (Matte Papaya Orange & Exposed Carbon)",
+            "label": f"{y} McLaren F1 Team (Matte Papaya Orange, Anthracite Carbon & Chrome Rims)",
+        }
+    if 2018 <= y <= 2021:
+        return {
+            "palette": {"main": "#FF8000", "secondary": "#0059B3", "accent": "#47C7FC", "pop": "#FFFFFF", "detail": "#14171D"},
+            "style": "two-tone",
+            "finish": "matte",
+            "motif": "papaya",
+            "label": f"{y} McLaren F1 Team (Papaya Orange & Electric Blue)",
+        }
+    if 2015 <= y <= 2017:
+        return {
+            "palette": {"main": "#1C2026", "secondary": "#FF6A00", "accent": "#FFFFFF", "pop": "#FFFFFF", "detail": "#0F1216"},
+            "style": "two-tone",
+            "finish": "matte",
+            "motif": "papaya",
+            "label": f"{y} McLaren Honda (Graphite Black & Orange)",
         }
     if 1997 <= y <= 2014:
         return {
@@ -158,6 +194,16 @@ def _resolve_mclaren(y: int) -> dict[str, Any]:
 
 
 def _resolve_williams(y: int) -> dict[str, Any]:
+    if y >= 2026:
+        # 2026 Atlassian Williams FW48: Vibrant Gloss Royal Blue, Sky Blue upper sidepod + Crisp White lower panel
+        # (Barclays/Komatsu) & iconic Duracell Copper airbox!
+        return {
+            "palette": {"main": "#0062C8", "secondary": "#32A3E8", "accent": "#C87533", "pop": "#F7F8FA", "detail": "#12161E"},
+            "style": "williams_2026",
+            "finish": "gloss",
+            "motif": "duracell_airbox",
+            "label": f"{y} Atlassian Williams Racing FW48 (Gloss Royal Blue, Sky/White Sidepods & Duracell Airbox)",
+        }
     if y >= 2022:
         return {
             "palette": {"main": "#041E42", "secondary": "#00A3E0", "accent": "#C87533", "pop": "#FFFFFF", "detail": "#0A1228"},
@@ -166,6 +212,14 @@ def _resolve_williams(y: int) -> dict[str, Any]:
             "motif": "duracell_airbox",
             "label": f"{y} Williams Racing (Royal Navy, Electric Blue & Copper Airbox)",
         }
+    if 2019 <= y <= 2021:
+        return {
+            "palette": {"main": "#F8FAFC", "secondary": "#00A3E0", "accent": "#041E42", "pop": "#FFFFFF", "detail": "#0A1228"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "classic",
+            "label": f"{y} Williams Racing (White & Sky Blue)",
+        }
     if 2014 <= y <= 2018:
         return {
             "palette": {"main": "#F8FAFC", "secondary": "#002366", "accent": "#E10600", "pop": "#38BDF8", "detail": "#1E293B"},
@@ -173,6 +227,22 @@ def _resolve_williams(y: int) -> dict[str, Any]:
             "finish": "gloss",
             "motif": "martini",
             "label": f"{y} Williams Martini Racing (Pearl White & Tricolour Stripes)",
+        }
+    if 2000 <= y <= 2005:
+        return {
+            "palette": {"main": "#F8FAFC", "secondary": "#0B2466", "accent": "#0072CE", "pop": "#FFFFFF", "detail": "#081845"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "bmw_williams",
+            "label": f"{y} BMW WilliamsF1 Team (Pearl White & Deep Navy)",
+        }
+    if 1998 <= y <= 1999:
+        return {
+            "palette": {"main": "#CC0018", "secondary": "#F8FAFC", "accent": "#111318", "pop": "#FFCC00", "detail": "#7A0410"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "winfield",
+            "label": f"{y} Winfield Williams (Crimson Red & White)",
         }
     if 1994 <= y <= 1997:
         return {
@@ -200,6 +270,15 @@ def _resolve_williams(y: int) -> dict[str, Any]:
 
 
 def _resolve_aston(y: int) -> dict[str, Any]:
+    if y >= 2026:
+        # 2026 Aston Martin Aramco Honda AMR26: Satin/Matte British Racing Green, Carbon wings & razor lime pinstripe!
+        return {
+            "palette": {"main": "#00584B", "secondary": "#101418", "accent": "#CEDC00", "pop": "#FFFFFF", "detail": "#003B34"},
+            "style": "aston_wings",
+            "finish": "matte",
+            "motif": "brg_lime",
+            "label": f"{y} Aston Martin Aramco Honda AMR26 (Matte British Racing Green & Lime Pinstripe)",
+        }
     return {
         "palette": {"main": "#00594F", "secondary": "#101418", "accent": "#CEDC00", "pop": "#FFFFFF", "detail": "#003B34"},
         "style": "aston_wings",
@@ -210,60 +289,151 @@ def _resolve_aston(y: int) -> dict[str, Any]:
 
 
 def _resolve_alpine(y: int) -> dict[str, Any]:
+    if y == 2021:
+        return {
+            "palette": {"main": "#0059B3", "secondary": "#14171D", "accent": "#E10600", "pop": "#FFFFFF", "detail": "#082C5A"},
+            "style": "modern",
+            "finish": "metallic",
+            "motif": "alpine_tricolour",
+            "label": "2021 Alpine F1 Team A521 (Metallic Alpine Blue & French Tricolour)",
+        }
     return {
-        "palette": {"main": "#0072CE", "secondary": "#FD4BC7", "accent": "#14171D", "pop": "#FFFFFF", "detail": "#0A3A6E"},
+        "palette": {"main": "#005CB9", "secondary": "#F47BBF", "accent": "#14171D", "pop": "#FFFFFF", "detail": "#093160"},
         "style": "alpine_bwt",
         "finish": "metallic",
         "motif": "alpine_bwt",
-        "label": f"{y} BWT Alpine F1 Team (Alpine Blue, BWT Pink & Carbon)",
+        "label": f"{y} BWT Alpine F1 Team (Metallic Alpine Blue, BWT Rose Pink & Carbon)",
     }
 
 
 def _resolve_audi(y: int) -> dict[str, Any]:
     return {
-        "palette": {"main": "#C2C7D0", "secondary": "#101319", "accent": "#F50537", "pop": "#FFFFFF", "detail": "#3F4552"},
+        "palette": {"main": "#8D929A", "secondary": "#12151B", "accent": "#FF2400", "pop": "#FFFFFF", "detail": "#2A2E37"},
         "style": "audi_slash",
         "finish": "metallic",
         "motif": "audi_rings",
-        "label": f"{y} Audi F1 Works Team (Titanium Silver, Carbon & Lava Red)",
+        "label": f"{y} Audi Revolut F1 Team R26 (Brushed Titanium Silver, Lava Red Slash & Exposed Carbon)",
     }
 
 
 def _resolve_cadillac(y: int) -> dict[str, Any]:
+    # 2026 Cadillac Formula 1 Team: Sleek Monochrome Pearl White, Silver-Grey & Deep Gloss Black
+    # with chequered speed-stripes, monochrome Cadillac crest, TWG flank & white aero wheel covers!
     return {
-        "palette": {"main": "#0B0D12", "secondary": "#F8FAFC", "accent": "#D4AF37", "pop": "#94A3B8", "detail": "#050608"},
+        "palette": {"main": "#F2F4F7", "secondary": "#111419", "accent": "#9BA3AE", "pop": "#FFFFFF", "detail": "#1B2028"},
         "style": "cadillac_split",
         "finish": "gloss",
         "motif": "cadillac_crest",
-        "label": f"{y} Cadillac Formula 1 Team (Monochrome Black/White Split & Gold)",
+        "label": f"{y} Cadillac Formula 1 Team (Monochrome Pearl White, Silver Fade & Gloss Black)",
     }
 
 
 def _resolve_racing_bulls(y: int) -> dict[str, Any]:
     if y >= 2025:
+        # 2025-2026 Visa Cash App Racing Bulls (VCARB 02 / VCARB 03): Gloss Pure White bodywork & white wheel covers,
+        # Sun-Yellow nose & airbox with Red Charging Bull, Royal Blue sidepod swoosh & VISA branding!
         return {
-            "palette": {"main": "#F8FAFC", "secondary": "#1E41FF", "accent": "#DB0A40", "pop": "#FFCC00", "detail": "#111827"},
-            "style": "redbull",
+            "palette": {"main": "#F7F8FA", "secondary": "#1434A4", "accent": "#FFBE00", "pop": "#DB0A40", "detail": "#14171D"},
+            "style": "vcarb_2026",
             "finish": "gloss",
             "motif": "bull_nose",
-            "label": f"{y} Visa Cash App Racing Bulls (Gloss White, Royal Blue & Red Bull Nose)",
+            "label": f"{y} Visa Cash App Racing Bulls (Gloss White, Yellow Bull Nose/Airbox & Royal Blue)",
+        }
+    if y == 2024:
+        return {
+            "palette": {"main": "#1A3CE6", "secondary": "#F8FAFC", "accent": "#DB0A40", "pop": "#FFCC00", "detail": "#0E1A4A"},
+            "style": "two-tone",
+            "finish": "metallic",
+            "motif": "bull_nose",
+            "label": "2024 Visa Cash App RB VCARB 01 (Metallic Royal Blue, White & Red Bull)",
+        }
+    if 2020 <= y <= 2023:
+        return {
+            "palette": {"main": "#F4F6F9", "secondary": "#132240", "accent": "#DB0A40", "pop": "#FFFFFF", "detail": "#0A1428"},
+            "style": "two-tone",
+            "finish": "matte",
+            "motif": "alphatauri",
+            "label": f"{y} Scuderia AlphaTauri (Matte White & Deep Navy)",
         }
     return {
-        "palette": {"main": "#14266B", "secondary": "#F8FAFC", "accent": "#DB0A40", "pop": "#FFCC00", "detail": "#0A143A"},
+        "palette": {"main": "#14266B", "secondary": "#DB0A40", "accent": "#FFCC00", "pop": "#FFFFFF", "detail": "#0A143A"},
         "style": "two-tone",
         "finish": "metallic",
         "motif": "bull_nose",
-        "label": f"{y} Racing Bulls / Toro Rosso",
+        "label": f"{y} Scuderia Toro Rosso (Metallic Blue & Red Bull)",
     }
 
 
 def _resolve_haas(y: int) -> dict[str, Any]:
+    if y >= 2026:
+        # 2026 TGR Haas F1 Team VF-26: Gloss Pure White bodywork/sidepods/halo/rear endplates,
+        # bold Red airbox hood & upper shoulder beltline, exposed carbon floor, black HAAS & black/red GR branding!
+        return {
+            "palette": {"main": "#F7F8FA", "secondary": "#13161B", "accent": "#E10600", "pop": "#FFFFFF", "detail": "#1B1F26"},
+            "style": "haas_tgr",
+            "finish": "gloss",
+            "motif": "haas_tgr",
+            "label": f"{y} TGR Haas F1 Team VF-26 (Gloss White, Haas Red Airbox & GR Engine Cover)",
+        }
+    if y == 2025:
+        # 2025 MoneyGram Haas VF-25: Predominantly Gloss White bodywork & sidepods with black lower undercut & red trim
+        return {
+            "palette": {"main": "#F6F7F9", "secondary": "#14161A", "accent": "#E10600", "pop": "#FFFFFF", "detail": "#262B33"},
+            "style": "modern",
+            "finish": "gloss",
+            "motif": "haas",
+            "label": "2025 MoneyGram Haas F1 Team VF-25 (Gloss White, Carbon Undercut & Haas Red)",
+        }
+    if y in (2023, 2024):
+        # 2023-2024 MoneyGram Haas VF-23 / VF-24: White nose & engine cover + Raw Exposed Carbon Black sidepods + Red accents
+        return {
+            "palette": {"main": "#F4F5F7", "secondary": "#14161A", "accent": "#DA291C", "pop": "#FFFFFF", "detail": "#2E3440"},
+            "style": "haas_carbon",
+            "finish": "gloss",
+            "motif": "haas",
+            "label": f"{y} MoneyGram Haas F1 Team (White Spine, Exposed Carbon Sidepods & Red)",
+        }
+    if y == 2022:
+        return {
+            "palette": {"main": "#F6F7F9", "secondary": "#14161A", "accent": "#DA291C", "pop": "#FFFFFF", "detail": "#334155"},
+            "style": "modern",
+            "finish": "gloss",
+            "motif": "haas",
+            "label": "2022 Haas F1 Team VF-22 (White, Black & Haas Red)",
+        }
+    if y == 2021:
+        # 2021 Uralkali Haas VF-21: Gloss White with Blue & Red tricolour stripes
+        return {
+            "palette": {"main": "#F8FAFC", "secondary": "#0039A6", "accent": "#D52B1E", "pop": "#FFFFFF", "detail": "#1E293B"},
+            "style": "martini_tri",
+            "finish": "gloss",
+            "motif": "haas",
+            "label": "2021 Uralkali Haas F1 Team VF-21 (White, Blue & Red Tricolour)",
+        }
+    if y == 2019:
+        # 2019 Rich Energy Haas VF-19: Gloss Black & Brushed Gold Pinstripes!
+        return {
+            "palette": {"main": "#0E0F12", "secondary": "#D4AF37", "accent": "#FACC15", "pop": "#FFFFFF", "detail": "#07080A"},
+            "style": "lotus_jps",
+            "finish": "gloss",
+            "motif": "rich_energy",
+            "label": "2019 Rich Energy Haas F1 Team VF-19 (Gloss Black & Gold)",
+        }
+    if y in (2018, 2020):
+        return {
+            "palette": {"main": "#F2F4F7", "secondary": "#1A1D24", "accent": "#DA291C", "pop": "#FFFFFF", "detail": "#475569"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "haas",
+            "label": f"{y} Haas F1 Team (White, Charcoal & Haas Red)",
+        }
+    # 2016-2017 VF-16 / VF-17: Metallic Gunmetal Grey, Black & Haas Red
     return {
-        "palette": {"main": "#F4F5F7", "secondary": "#14161A", "accent": "#DA291C", "pop": "#FFFFFF", "detail": "#475569"},
-        "style": "haas_carbon",
-        "finish": "gloss",
+        "palette": {"main": "#696E77", "secondary": "#181B21", "accent": "#DA291C", "pop": "#F4F5F7", "detail": "#343942"},
+        "style": "two-tone",
+        "finish": "metallic",
         "motif": "haas",
-        "label": f"{y} MoneyGram Haas F1 Team (White, Woven Carbon & Haas Red)",
+        "label": f"{y} Haas F1 Team (Gunmetal Grey, Black & Haas Red)",
     }
 
 
