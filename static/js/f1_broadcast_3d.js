@@ -1148,6 +1148,11 @@
     const state = {
       active: false,
       mode: "tv",
+      povSub: "cockpit", // cockpit | tcam | nose
+      lookOffsetRad: 0,
+      cockpit3d: null,
+      cockpitLastColor: "",
+      cockpitLastHalo: null,
       directorSub: "tv",
       directorTimer: 0,
       circuitId: "",
@@ -1175,6 +1180,8 @@
       sparkSystem: null,
       magSparkSystem: null,
       spraySystem: null,
+      gravelSystem: null,
+      debrisSystem: null,
       breakdownSmokeSystem: null,
       safetyCar3D: null,
       marshalPanels: [],
@@ -1253,6 +1260,8 @@
       state.sparkSystem = null;
       state.magSparkSystem = null;
       state.spraySystem = null;
+      state.gravelSystem = null;
+      state.debrisSystem = null;
       state.breakdownSmokeSystem = null;
       state.lockupSmokeSystem = null;
       state.rainSystem = null;
@@ -2922,6 +2931,51 @@
           entry.fx.rainMat.opacity = wetness >= 20 ? rainBlink : 0.08;
           if (entry.fx.dmgWingGrp) entry.fx.dmgWingGrp.visible = !!car.wingDamaged;
         }
+        // 3D Gravel Dust & Carbon Debris Pools (ported from /drive!)
+        if (!state.gravelSystem && state.worldGroup) {
+          const mkMiniPool = (cnt, col, sz, op) => {
+            const pArr = new Float32Array(cnt * 3);
+            for (let pi = 0; pi < cnt; pi++) pArr[pi * 3 + 1] = -999;
+            const g = new THREE.BufferGeometry();
+            g.setAttribute("position", new THREE.BufferAttribute(pArr, 3));
+            const m = new THREE.PointsMaterial({ color: col, size: sz, transparent: true, opacity: op, depthWrite: false });
+            const pts = new THREE.Points(g, m);
+            pts.frustumCulled = false;
+            state.worldGroup.add(pts);
+            return { count: cnt, cursor: 0, pos: pArr, vel: new Float32Array(cnt * 3), life: new Float32Array(cnt), geo: g, mat: m, pts };
+          };
+          state.gravelSystem = mkMiniPool(140, 0xd4b98c, 0.55, 0.72);
+          state.debrisSystem = mkMiniPool(80, 0x1e293b, 0.42, 0.92);
+        }
+        if (!paused && !inPit && state.gravelSystem && ((Math.abs(car.latOffset || 0) > 4.45) || (car.gravelDirt || 0) > 0.25) && (car.liveKph || 0) > 45) {
+          const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+          for (let gIdx = 0; gIdx < 2; gIdx++) {
+            spawnParticle(
+              state.gravelSystem,
+              wx - fwdX * 1.9 + (Math.random() - 0.5) * 1.4,
+              trackY + 0.14,
+              wz - fwdZ * 1.9 + (Math.random() - 0.5) * 1.4,
+              -fwdX * (5 + Math.random() * 6) + (Math.random() - 0.5) * 3.0,
+              1.4 + Math.random() * 2.2,
+              -fwdZ * (5 + Math.random() * 6) + (Math.random() - 0.5) * 3.0,
+              0.55 + Math.random() * 0.35
+            );
+          }
+        }
+        if (!paused && !inPit && state.debrisSystem && car.wingDamaged && (car.liveKph || 0) > 120 && Math.random() < 0.08) {
+          const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+          spawnParticle(
+            state.debrisSystem,
+            wx + fwdX * 2.1,
+            trackY + 0.24,
+            wz + fwdZ * 2.1,
+            -fwdX * 9 + (Math.random() - 0.5) * 4.5,
+            2.4 + Math.random() * 2.5,
+            -fwdZ * 9 + (Math.random() - 0.5) * 4.5,
+            0.75
+          );
+        }
+
         // Front-wing endplate scraping asphalt sparks when damaged!
         if (!paused && !inPit && car.wingDamaged && (car.liveKph || 0) > 130 && Math.random() < 0.45) {
           const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
@@ -3048,6 +3102,8 @@
       stepPool(state.sparkSystem, stepDt, 12.5);
       stepPool(state.magSparkSystem, stepDt, 12.0);
       stepPool(state.spraySystem, stepDt, 1.4);
+      stepPool(state.gravelSystem, stepDt, 7.5);
+      stepPool(state.debrisSystem, stepDt, 11.0);
       stepPool(state.breakdownSmokeSystem, stepDt, -0.55);
       stepPool(state.lockupSmokeSystem, stepDt, -0.75);
 
@@ -3066,22 +3122,134 @@
           effMode = "pitlane";
         } else if (state.directorTimer > 7.5) {
           state.directorTimer = 0;
-          const seq = ["tv", "chase", "pov", "tv"];
+          const seq = ["tv", "chase", "cockpit", "pov", "tv"];
           state.directorSub = seq[(seq.indexOf(state.directorSub) + 1) % seq.length];
         }
         if (effMode === "director") effMode = state.directorSub;
+      }
+
+      // Shared 3D Carbon Halo Cockpit + Live 60 Hz OLED Wheel (ported from /drive!)
+      const useCockpitRig = effMode === "cockpit" && Boolean(global.F1DriveCockpit3D && focCar);
+      if (focCar) {
+        const focEntry = state.carMeshes.get(focCar.idx);
+        if (focEntry && focEntry.group) {
+          focEntry.group.visible = !useCockpitRig;
+        }
+      }
+      if (state.cockpit3d && !useCockpitRig) {
+        state.cockpit3d.root.visible = false;
       }
 
       const desiredPos = new THREE.Vector3();
       const desiredLook = new THREE.Vector3();
       let desiredFov = 54;
 
-      if (effMode === "pov") {
+      if (useCockpitRig) {
+        const eraKeyStr = String(rs.eraKey || focCar.era || "2026");
+        const eraYearNum = parseInt(eraKeyStr.replace(/\D/g, ""), 10) || 2026;
+        const hasHalo = eraYearNum >= 2018;
+        if (!state.cockpit3d) {
+          state.cockpit3d = global.F1DriveCockpit3D.createCockpitAndCamera(scene, focCar.color || "#e10600", { halo: hasHalo });
+          state.cockpitLastColor = focCar.color || "#e10600";
+          state.cockpitLastHalo = hasHalo;
+        }
+        if (state.cockpitLastColor !== (focCar.color || "#e10600") || state.cockpitLastHalo !== hasHalo) {
+          state.cockpit3d.setTeamColor(focCar.color || "#e10600", hasHalo);
+          state.cockpitLastColor = focCar.color || "#e10600";
+          state.cockpitLastHalo = hasHalo;
+        }
+        state.cockpit3d.root.visible = true;
+        const subCam = state.povSub || "cockpit";
+        if (state.cockpit3d.getCameraMode() !== subCam) {
+          state.cockpit3d.setCameraMode(subCam);
+        }
+
+        // Compute proximity blind-spot mirror warnings from nearby rivals
+        let proxLeft = false;
+        let proxRight = false;
+        const focYaw = Math.atan2(focFwd.x, focFwd.z);
+        const rx = -Math.cos(focYaw);
+        const rz = Math.sin(focYaw);
+        for (let ci = 0; ci < cars.length; ci++) {
+          const oc = cars[ci];
+          if (!oc || oc.idx === focCar.idx || oc.dnf || oc.inPit > 0) continue;
+          const om = state.carMeshes.get(oc.idx);
+          if (!om || !om.group) continue;
+          const dx = om.group.position.x - focPos.x;
+          const dz = om.group.position.z - focPos.z;
+          const along = dx * focFwd.x + dz * focFwd.z;
+          const across = dx * rx + dz * rz;
+          if (along > -12 && along < 9 && Math.abs(across) < 5.0) {
+            if (across > 0.3) proxLeft = true;
+            else if (across < -0.3) proxRight = true;
+          }
+        }
+
+        const fwHealth = focCar.dmg ? Math.min(focCar.dmg.wingL ?? 100, focCar.dmg.wingR ?? 100) : (focCar.wingDamaged ? 40 : 100);
+        const brkTemp = focCar.dmg ? (focCar.dmg.brakes ?? 440) : ((focCar.liveLongG || 0) < -1.1 ? 820 : 420);
+        const puHeat = focCar.dmg ? (focCar.dmg.puHeat ?? 96) : 96;
+        const curKph = focPitMotion ? focPitMotion.speedKph : (focCar.liveKph || 240);
+        const curGear = focPitMotion && focPitMotion.stopped ? 1 : (focCar.liveGear || 6);
+        const rpmEst = Math.min(14800, 4200 + ((curKph % 52) / 52) * 8600 + (curGear * 220));
+        const steerRad = Math.max(-0.55, Math.min(0.55, Number(focCar.steerAngle || 0)));
+        const ft = focCar.tyres;
+        const baseT = focCar.tyreTemp ?? 96;
+        const tyreCore4 = ft
+          ? [ft.fl?.temp ?? baseT, ft.fr?.temp ?? baseT, ft.rl?.temp ?? baseT, ft.rr?.temp ?? baseT]
+          : [baseT, baseT, baseT, baseT];
+
+        const cockpitCarState = {
+          x: focPos.x,
+          y: focPos.y,
+          z: focPos.z,
+          yaw: focYaw,
+          dna: { idle_rpm: 3600, redline_rpm: 14500, halo: hasHalo },
+          heaveY: focDyn ? Math.max(0.01, (focDyn.minRideMm || 30) * 0.001) : 0.03,
+          pitchRad: focDyn ? (focDyn.pitchRad || 0) : 0,
+          rollRad: focDyn ? (focDyn.rollRad || 0) : 0,
+          steerWheelRad: steerRad * 2.2,
+          frontSteerRad: steerRad,
+          wheelSpin: state.elapsed * (curKph / 3.6) * 2.9,
+          speedKph: curKph,
+          gear: curGear,
+          rpm: rpmEst,
+          compound: focCar.compound || "soft",
+          ersBattery: focCar.ers ?? 65,
+          ersActive: !!focCar.ersHot,
+          drsOpen: !!focCar.drsOpen,
+          xModeActive: Boolean(focDyn && focDyn.inXMode),
+          puOverheat: puHeat > 115,
+          pitLimiter: focCar.inPit > 0,
+          thermalCliff: baseT > 114,
+          brakeBias: 56,
+          fuelKg: focCar.fuelKg ?? 60,
+          tyreLife: focCar.tyreLife ?? 90,
+          tyreTemp: baseT,
+          tyreCore4,
+          frontWingHealth: fwHealth,
+          brakeTemp: brkTemp,
+          brake: (focCar.liveLongG || 0) < -0.9 ? Math.min(1, Math.abs(focCar.liveLongG) / 4.2) : 0,
+          flatSpot: focCar.flatSpot || 0,
+          kerbIntensity: Math.abs(focCar.latOffset || 0) > 3.9 ? 0.55 : 0,
+          gravelIntensity: focCar.gravelDirt || 0,
+          impactStrength: focCar.impactFlash || 0,
+        };
+        state.cockpit3d.update(cockpitCarState, camera, stepDt, 0, proxLeft, proxRight);
+        if (Math.abs(state.lookOffsetRad) > 0.01) {
+          const lookYaw = focYaw + state.lookOffsetRad;
+          const lx = Math.sin(lookYaw), lz = Math.cos(lookYaw);
+          const lookDist = Math.abs(state.lookOffsetRad) > 2.5 ? 28 : 34;
+          camera.lookAt(focPos.x + lx * lookDist, focPos.y + 0.82, focPos.z + lz * lookDist);
+        }
+        state.camInit = true;
+      } else if (effMode === "pov") {
         // Silky Suspension-Coupled Onboard Halo T-Cam POV (climbs Spa Eau Rouge & COTA T1 seamlessly!)
         const pitchLookY = focDyn ? (-focDyn.pitchRad * 7.5) : 0;
+        const baseYaw = Math.atan2(focFwd.x, focFwd.z) + (state.lookOffsetRad || 0);
+        const lookDir = new THREE.Vector3(Math.sin(baseYaw), 0, Math.cos(baseYaw));
         desiredPos.copy(focPos).addScaledVector(focFwd, -0.58);
         desiredPos.y = focPos.y + 1.42;
-        desiredLook.copy(focPos).addScaledVector(focFwd, 32);
+        desiredLook.copy(focPos).addScaledVector(lookDir, 32);
         desiredLook.y = focPos.y + 1.05 + pitchLookY;
         desiredFov = 66 + Math.min(10, ((focCar?.liveKph || 220) - 180) * 0.055);
         const pLerp = state.camInit ? Math.min(1, (dt || 0.016) * 24) : 1;
@@ -3089,9 +3257,11 @@
         state.camPosSmooth.lerp(desiredPos, pLerp);
         state.camLookSmooth.lerp(desiredLook, lLerp);
       } else if (effMode === "chase") {
-        desiredPos.copy(focPos).addScaledVector(focFwd, -10.8);
+        const backYaw = Math.atan2(focFwd.x, focFwd.z) + (state.lookOffsetRad || 0);
+        const viewFwd = new THREE.Vector3(Math.sin(backYaw), 0, Math.cos(backYaw));
+        desiredPos.copy(focPos).addScaledVector(viewFwd, -10.8);
         desiredPos.y = focPos.y + 3.85;
-        desiredLook.copy(focPos).addScaledVector(focFwd, 15);
+        desiredLook.copy(focPos).addScaledVector(viewFwd, 15);
         desiredLook.y = focPos.y + 1.25;
         desiredFov = 54 + Math.min(12, ((focCar?.liveKph || 220) - 180) * 0.07);
         const lerpF = state.camInit ? Math.min(1, (dt || 0.016) * 8.5) : 1;
@@ -3135,20 +3305,24 @@
         state.camLookSmooth.lerp(desiredLook, lerpL);
       }
 
-      state.camInit = true;
-      camera.position.copy(state.camPosSmooth);
-      camera.lookAt(state.camLookSmooth);
-      if (Math.abs(camera.fov - desiredFov) > 0.2) {
-        camera.fov += (desiredFov - camera.fov) * 0.22;
-        camera.updateProjectionMatrix();
+      if (!useCockpitRig) {
+        state.camInit = true;
+        camera.position.copy(state.camPosSmooth);
+        camera.lookAt(state.camLookSmooth);
+        if (Math.abs(camera.fov - desiredFov) > 0.2) {
+          camera.fov += (desiredFov - camera.fov) * 0.22;
+          camera.updateProjectionMatrix();
+        }
       }
 
       renderer.render(scene, camera);
 
       if (hudEl && focCar) {
-        const camLabel = effMode === "pov" ? "ONBOARD T-CAM POV"
-          : (effMode === "chase" ? "3RD PERSON CHASE"
-            : (effMode === "pitlane" ? "PITLANE CAM" : "TRACKSIDE TV CAM"));
+        const subLbl = state.povSub === "nose" ? "NOSE CAM POV" : (state.povSub === "tcam" ? "ONBOARD T-CAM POV" : "HALO COCKPIT POV");
+        const camLabel = effMode === "cockpit" ? subLbl
+          : (effMode === "pov" ? "ONBOARD T-CAM POV"
+            : (effMode === "chase" ? "3RD PERSON CHASE"
+              : (effMode === "pitlane" ? "PITLANE CAM" : "TRACKSIDE TV CAM")));
         const isHold = startSeq && startSeq.active && !startSeq.lightsOut;
         const dispKph = isHold ? 0 : (focPitMotion ? Math.round(focPitMotion.speedKph) : Math.round(focCar.liveKph != null ? focCar.liveKph : 260));
         const dispGear = isHold ? 1 : (focPitMotion && focPitMotion.stopped ? "N" : (focCar.liveGear || 6));
@@ -3193,6 +3367,38 @@
         state.camInit = false;
       },
       getMode() { return state.mode; },
+      setPovSub(sub) {
+        if (sub === "cockpit" || sub === "tcam" || sub === "nose") {
+          state.povSub = sub;
+          if (state.cockpit3d) state.cockpit3d.setCameraMode(sub);
+        }
+        return state.povSub;
+      },
+      getPovSub() { return state.povSub; },
+      cyclePovSub() {
+        const seq = ["cockpit", "tcam", "nose"];
+        state.povSub = seq[(seq.indexOf(state.povSub) + 1) % seq.length];
+        if (state.cockpit3d) state.cockpit3d.setCameraMode(state.povSub);
+        return state.povSub;
+      },
+      toggleHaloGhost() {
+        if (state.cockpit3d) return state.cockpit3d.toggleHaloGhost();
+        return false;
+      },
+      isHaloGhost() {
+        return state.cockpit3d ? state.cockpit3d.isHaloGhost() : false;
+      },
+      setLookOffset(rad) {
+        state.lookOffsetRad = Number.isFinite(rad) ? rad : 0;
+      },
+      getCockpitState() {
+        return {
+          mounted: Boolean(state.cockpit3d),
+          visible: Boolean(state.cockpit3d && state.cockpit3d.root && state.cockpit3d.root.visible),
+          povSub: state.povSub,
+          haloGhost: state.cockpit3d ? state.cockpit3d.isHaloGhost() : false,
+        };
+      },
       getLayout() { return state.layout; },
       auditClearance() {
         if (!state.layout || !global.F1TrackArchitect) return null;
@@ -3215,6 +3421,7 @@
       updateAndRender,
       dispose() {
         disposeWorld();
+        if (state.cockpit3d) { state.cockpit3d.dispose(); state.cockpit3d = null; }
         state.asphaltTex.dispose();
         state.sponsorTex.dispose();
         state.checkerTex.dispose();

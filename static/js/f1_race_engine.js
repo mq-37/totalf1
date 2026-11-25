@@ -323,6 +323,23 @@
     else if (opts.paceMode === "conserve") delta += 0.55;
     if (opts.wingDamaged) delta += 0.55;
 
+    // Ported /drive deep wear, damage & environmental physics (bounded for historical calibration)
+    if (opts.car) {
+      const c = opts.car;
+      if (c.flatSpot > 0.05) delta += Math.min(0.85, c.flatSpot * 0.95);
+      if (c.gravelDirt > 0.05) delta += Math.min(1.15, c.gravelDirt * 1.15);
+      if (c.dmg) {
+        const fwMin = Math.min(c.dmg.wingL ?? 100, c.dmg.wingR ?? 100);
+        if (fwMin < 95) delta += Math.min(0.95, (95 - fwMin) * 0.012);
+        if ((c.dmg.floor ?? 100) < 95) delta += Math.min(0.75, (95 - c.dmg.floor) * 0.011);
+        if ((c.dmg.susp ?? 100) < 95) delta += Math.min(0.65, (95 - c.dmg.susp) * 0.010);
+        if ((c.dmg.puHeat ?? 96) > 116) delta += Math.min(0.80, (c.dmg.puHeat - 116) * 0.055);
+        if ((c.dmg.brakes ?? 420) > 920) delta += Math.min(0.55, (c.dmg.brakes - 920) * 0.004);
+      }
+      if (c.puddlePenaltyS) delta += Math.min(0.9, c.puddlePenaltyS);
+      if (c.windPenaltyS) delta += Math.max(-0.22, Math.min(0.28, c.windPenaltyS));
+    }
+
     // Psychology, Momentum, Track Affinity & Risk Modifiers
     if (opts.car) {
       const beh = getDriverBehaviorModifiers(opts.car, wetness);

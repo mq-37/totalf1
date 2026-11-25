@@ -648,11 +648,19 @@ def build_new_driver_career(
             "h2h_losses": 0,
             "rival_id": teammate["driver_id"],
             "rival_name": teammate["name"],
+            "tp_trust": 64,
+            "team_morale": 70,
+            "media_rep": 52,
+            "focus": 86,
+            "rivalry_heat": 28,
         },
         "grid": grid,
         "calendar": calendar,
         "contract_offers": [],
         "season_history": [],
+        "active_buffs": [],
+        "completed_commitments": [],
+        "story_history": [],
         "inbox": [
             {
                 "round": 1,
@@ -785,7 +793,7 @@ def commit_driver_career_race(
         })
     state["inbox"] = state["inbox"][:20]
 
-    return {
+    res_payload = {
         "ok": True,
         "round": rd,
         "circuit_id": cal_item["circuit_id"],
@@ -799,6 +807,12 @@ def commit_driver_career_race(
         "best_lap_ms": int(best_lap_ms),
         "season_complete": season_complete,
     }
+    try:
+        from . import drive_paddock as dp
+        dp.append_post_race_paddock_buzz(state, res_payload)
+    except Exception:
+        pass
+    return res_payload
 
 
 def sign_driver_career_contract(state: dict[str, Any], team_name: str) -> tuple[bool, str]:

@@ -2471,10 +2471,26 @@
             const paceAdv = (ahead.currentLapS || lapS) - (car.currentLapS || lapS);
             const isLapping = (car.totalProg - ahead.totalProg) > 0.45;
             const defCoveredInside = Math.sign(aLat) === cornerSign && Math.abs(aLat) > 1.65;
-            const wantsAttack = isLapping || car.paceMode === "push" || drsBoost > 0 || tyreAdv >= 5 || paceAdv > 0.08 || (car.ersMode === "overtake" && car.ers > 12);
-            const shouldHold = !isLapping && (car.paceMode === "conserve" || (car.tyreTemp || 96) > 113);
+            const sameTeam = Boolean(car.card && ahead.card && car.card.hero_team && car.card.hero_team === ahead.card.hero_team);
+            const wantsAttack = isLapping || car.paceMode === "push" || drsBoost > 0 || tyreAdv >= 5 || paceAdv > 0.08 || (car.ersMode === "overtake" && car.ers > 12) || (car.undercutPushLaps > 0);
+            const thermalHot = Boolean(car.dmg && ((car.dmg.puHeat || 96) > 114 || (car.dmg.brakes || 420) > 900));
+            const shouldHold = !isLapping && (car.paceMode === "conserve" || (car.tyreTemp || 96) > 113 || thermalHot);
 
-            if (shouldHold && aheadGapS < 0.50) {
+            if (thermalHot && poseNow.curv < 0.14 && aheadGapS < 1.15 && inWake) {
+              // Clean-air cooling line: step out of hot wake on straights to cool PU & carbon brakes
+              const coolSign = aLat >= 0 ? -1 : 1;
+              const coolLat = Math.max(-4.2, Math.min(4.2, aLat + coolSign * 2.1));
+              const u = 0.96;
+              if (u > bestUtil) {
+                bestUtil = u;
+                bestPlan = {
+                  state: "clean_air", tag: "COOL", badge: "❄ COOL LINE",
+                  detail: `COOLING ${(car.dmg.puHeat || 96) > 114 ? "PU" : "BRAKES"} OUT OF ${getCode(ahead)}'S WAKE`,
+                  latOffset: coolLat,
+                  speedMod: 0.992, sensor: { x: aPt.x, y: aPt.y, kind: "clean_air" }, dur: 1.4,
+                };
+              }
+            } else if (shouldHold && aheadGapS < 0.50) {
               const u = 0.85;
               if (u > bestUtil) {
                 bestUtil = u;
@@ -2509,11 +2525,12 @@
                 const preferSign = defCoveredInside ? -cornerSign : cornerSign;
                 const openPick = pickOpenPassingLane(preferSign, aLat);
                 if (openPick.open) {
-                  const isDive = !defCoveredInside && approachingCorner && aheadGapS <= 0.42 && (dna.bravery >= 0.36 || paceAdv > 0.22);
+                  const isDive = !sameTeam && !defCoveredInside && approachingCorner && aheadGapS <= 0.42 && (dna.bravery >= 0.36 || paceAdv > 0.22);
                   const speedBoost = isDive
                     ? (1.048 + dna.bravery * 0.016 + drsBoost)
                     : (1.038 + Math.min(0.036, Math.max(0, paceAdv) * 0.022) + drsBoost);
-                  const u = 1.08 + (paceAdv > 0 ? Math.min(0.45, paceAdv * 0.28) : 0) + (drsBoost > 0 ? 0.28 : 0) + dna.bravery * 0.18 + (isLapping ? 0.5 : 0);
+                  const teamPenalty = (sameTeam && tyreAdv < 10 && paceAdv < 0.35) ? -0.22 : 0;
+                  const u = 1.08 + teamPenalty + (paceAdv > 0 ? Math.min(0.45, paceAdv * 0.28) : 0) + (drsBoost > 0 ? 0.28 : 0) + dna.bravery * 0.18 + (isLapping ? 0.5 : 0);
                   if (u > bestUtil) {
                     bestUtil = u;
                     bestPlan = {
@@ -2532,9 +2549,9 @@
                 }
               }
 
-              // CORNER SWITCHBACK / CUTBACK when defender covers inside
-              if (poseNow.curv >= 0.16 && aheadGapS < 0.46 && defCoveredInside) {
-                const u = 0.88 + dna.craft * 0.22 + (wantsAttack ? 0.15 : 0);
+              // CORNER SWITCHBACK / OVER-UNDER CUTBACK when defender covers inside
+              if ((poseNow.curv >= 0.16 || poseAhead.curv >= 0.28) && aheadGapS < 0.52 && defCoveredInside) {
+                const u = 0.94 + dna.craft * 0.28 + (wantsAttack ? 0.18 : 0);
                 if (u > bestUtil) {
                   bestUtil = u;
                   const entryPhase = poseAhead.curv > poseNow.curv;

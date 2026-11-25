@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from .. import drive_db as ddb
 from .. import drive_engine as deng
+from .. import drive_paddock as dpaddock
 from .. import server as srv
 from ..circuits import CIRCUITS_META
 
@@ -24,6 +25,8 @@ async def drive_page(
     mode: str = Query("timetrial"),
     circuit: str = Query("melbourne"),
     era: str = Query("2026"),
+    weather: str = Query("dry"),
+    team: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     ref_id: Optional[str] = Query(None),
 ):
@@ -46,6 +49,8 @@ async def drive_page(
                 "mode": mode,
                 "circuit": circuit,
                 "era": era,
+                "weather": weather,
+                "team": team or "",
                 "source": source or "",
                 "ref_id": ref_id or "",
             },
@@ -191,3 +196,53 @@ async def api_drive_career_contract(save_id: str, request: Request):
     if ok:
         ddb.save_career(_base_dir(), st)
     return JSONResponse({"ok": ok, "message": msg, "view": deng.serialize_career_view(st)})
+
+
+@router.get("/api/drive/paddock")
+def api_drive_paddock(
+    save_id: Optional[str] = Query(None),
+    circuit: str = Query("melbourne"),
+    era: str = Query("2026"),
+    team: str = Query("McLaren"),
+    driver: str = Query("Alex Vance"),
+):
+    st = ddb.load_career(_base_dir(), save_id) if save_id else None
+    payload = dpaddock.build_paddock_payload(
+        _base_dir(),
+        career_state=st,
+        circuit_id=circuit,
+        era_key=era,
+        team_name=team,
+        driver_name=driver,
+    )
+    return JSONResponse(payload)
+
+
+@router.post("/api/drive/career/{save_id}/story/choose")
+async def api_drive_story_choose(save_id: str, request: Request):
+    st = ddb.load_career(_base_dir(), save_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="Driver career not found")
+    body = await request.json()
+    ok, msg, extra = dpaddock.resolve_story_choice(
+        st,
+        str(body.get("story_id") or ""),
+        str(body.get("choice_id") or ""),
+    )
+    if ok:
+        ddb.save_career(_base_dir(), st)
+    paddock = dpaddock.build_paddock_payload(_base_dir(), career_state=st)
+    return JSONResponse({"ok": ok, "message": msg, **extra, "view": deng.serialize_career_view(st), "paddock": paddock})
+
+
+@router.post("/api/drive/career/{save_id}/commitment")
+async def api_drive_commitment(save_id: str, request: Request):
+    st = ddb.load_career(_base_dir(), save_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="Driver career not found")
+    body = await request.json()
+    ok, msg, extra = dpaddock.execute_commitment(st, str(body.get("commitment_id") or ""))
+    if ok:
+        ddb.save_career(_base_dir(), st)
+    paddock = dpaddock.build_paddock_payload(_base_dir(), career_state=st)
+    return JSONResponse({"ok": ok, "message": msg, **extra, "view": deng.serialize_career_view(st), "paddock": paddock})

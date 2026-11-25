@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ team }} — Local F1{% endblock %}
+{% block title %}{{ team }} — APEX GRID{% endblock %}
 {% block content %}
   {% set colors = request.app.state.get_team_colors(team) if (request and request.app and request.app.state and request.app.state.get_team_colors) else {'primary':'#777','secondary':'#ddd','accent':'#111'} %}
   {% set car_style_team = '--s:1; --primary:' ~ colors.primary ~ '; --secondary:' ~ colors.secondary ~ '; --accent:' ~ colors.accent ~ '; --ink:rgba(10,14,28,0.55); --tyre:#111111;' %}

@@ -2108,3 +2108,247 @@ body.sim-cockpit-active #panel-sim.active {
 .wr-pit-txt { color: #94a3b8; font-size: 0.62rem; }
 
 
+
+/* =========================================================================
+   APEX GRID — /sim Visor FX, Contextual POV Dock, 4-Corner Health & Controls Modal
+   ========================================================================= */
+.fsim-visor-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+}
+.sim-kbd-mini {
+  display: inline-block;
+  padding: 0 4px;
+  margin-left: 3px;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #7dd3fc;
+  vertical-align: middle;
+}
+.fsim-pov-dock {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(9, 14, 26, 0.84);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+}
+.fsim-pov-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+.fsim-pov-btn kbd {
+  font-size: 0.6rem;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(2, 6, 23, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #93c5fd;
+  font-family: ui-monospace, monospace;
+}
+.fsim-pov-btn:hover, .fsim-pov-btn:focus-visible {
+  border-color: #38bdf8;
+  color: #fff;
+  background: rgba(14, 116, 144, 0.45);
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 1px;
+}
+.fsim-pov-btn.is-on {
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #86efac;
+}
+.fsim-pov-btn.fsim-pov-drive {
+  background: linear-gradient(135deg, #b91c1c, #e10600);
+  border-color: rgba(248, 113, 113, 0.7);
+  color: #fff;
+}
+.fsim-pov-btn.fsim-pov-drive:hover {
+  filter: brightness(1.12);
+}
+.fsim-pov-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+/* High-contrast keyboard focus navigation across /sim toolbars */
+.sim-cam-chip:focus-visible,
+.sim-dir-btn:focus-visible,
+.sim-speed-btn:focus-visible,
+.sim-layer-chip:focus-visible,
+.tt-mode-btn:focus-visible,
+.fsim-mini-btn:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* Compact 4-Corner Tyre & Component Health Strip (Zero-Scroll Safe) */
+.fsim-health-strip {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fsim-t4-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+.fsim-t4 {
+  text-align: center;
+  font-size: 0.61rem;
+  font-weight: 800;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(34, 197, 94, 0.42);
+  color: #cbd5e1;
+  font-family: ui-monospace, monospace;
+}
+.fsim-t4.t-cold { border-color: rgba(56, 189, 248, 0.55); color: #7dd3fc; }
+.fsim-t4.t-warm { border-color: rgba(250, 204, 21, 0.55); color: #fde047; }
+.fsim-t4.t-hot  { border-color: rgba(239, 68, 68, 0.72); color: #fca5a5; }
+.fsim-comp-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.fsim-cbadge {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 0.59rem;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #94a3b8;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+.fsim-cbadge b { color: #e2e8f0; }
+.fsim-cbadge.is-warn { border-color: rgba(245, 158, 11, 0.65); color: #fde68a; }
+.fsim-cbadge.is-warn b { color: #fbbf24; }
+.fsim-cbadge.is-crit { border-color: rgba(239, 68, 68, 0.75); background: rgba(127, 29, 29, 0.35); color: #fecaca; }
+.fsim-cbadge.is-crit b { color: #f87171; }
+.fsim-cenv b { color: #7dd3fc; }
+
+/* Interactive Controls & Gamepad Studio Modal */
+.fsim-keys-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+  padding: 14px;
+}
+.fsim-keys-modal.hidden { display: none; }
+.fsim-keys-card {
+  width: min(860px, 96vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, #0b1222 0%, #111a2e 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  color: #e2e8f0;
+}
+.fsim-keys-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+.fsim-keys-head strong { display: block; font-size: 0.92rem; letter-spacing: 0.04em; color: #f8fafc; }
+.fsim-keys-tabs { display: flex; gap: 6px; margin: 10px 0; }
+.fsim-ktab {
+  background: rgba(30, 41, 59, 0.85);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.fsim-ktab.active {
+  background: rgba(225, 6, 0, 0.25);
+  border-color: #ef4444;
+  color: #fff;
+}
+.fsim-kpane { display: none; }
+.fsim-kpane.active { display: block; }
+.fsim-kgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 7px;
+}
+.fsim-kitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.fsim-kitem:hover, .fsim-kitem:focus-visible {
+  border-color: #38bdf8;
+  background: rgba(14, 116, 144, 0.25);
+  transform: translateY(-1px);
+}
+.fsim-kitem kbd {
+  min-width: 38px;
+  text-align: center;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: rgba(2, 6, 23, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+  font-family: ui-monospace, monospace;
+  font-weight: 900;
+  font-size: 0.72rem;
+}
+.fsim-kitem b { display: block; font-size: 0.74rem; color: #f8fafc; }
+.fsim-kitem small { display: block; font-size: 0.65rem; color: #94a3b8; }

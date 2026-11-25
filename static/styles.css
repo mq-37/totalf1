@@ -2883,3 +2883,41 @@ body.sim-focus-mode .fsim-broadcast-shell { height: calc(100dvh - 10px); }
 @media (max-width: 900px) {
   .fsim-setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* APEX GRID Brand Accent & Unified Gamepad Studio */
+.logo-accent { color: #e10600; font-weight: 900; }
+.gp-studio { display: flex; flex-direction: column; gap: 10px; color: #e2e8f0; font-size: 0.78rem; }
+.gp-top-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 9px; background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(56, 189, 248, 0.25); }
+.gp-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-weight: 800; font-size: 0.72rem; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(148, 163, 184, 0.35); color: #cbd5e1; }
+.gp-status-pill.is-connected { background: rgba(22, 163, 74, 0.2); border-color: rgba(34, 197, 94, 0.55); color: #86efac; }
+.gp-grid-2 { display: grid; grid-template-columns: minmax(220px, 0.92fr) minmax(0, 1.35fr); gap: 10px; }
+@media (max-width: 820px) { .gp-grid-2 { grid-template-columns: 1fr; } }
+.gp-card { background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.gp-card h4 { margin: 0; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7dd3fc; display: flex; align-items: center; gap: 6px; }
+.gp-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.gp-btn { background: rgba(30, 41, 59, 0.9); color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 6px; padding: 4px 9px; font-size: 0.71rem; font-weight: 700; cursor: pointer; transition: all 0.14s ease; }
+.gp-btn:hover, .gp-btn:focus-visible { border-color: #38bdf8; color: #fff; outline: 2px solid rgba(56, 189, 248, 0.5); outline-offset: 1px; }
+.gp-btn.active { background: rgba(225, 6, 0, 0.28); border-color: #ef4444; color: #fff; }
+.gp-btn.is-listening { background: rgba(250, 204, 21, 0.24); border-color: #facc15; color: #fef08a; animation: gpPulse 0.8s ease-in-out infinite; }
+@keyframes gpPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.gp-slider-row { display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: center; }
+.gp-slider-row label { font-size: 0.71rem; color: #94a3b8; font-weight: 700; }
+.gp-slider-row input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: #e10600; cursor: pointer; }
+.gp-live-bars { display: flex; flex-direction: column; gap: 5px; padding: 7px; border-radius: 7px; background: rgba(2, 6, 23, 0.65); border: 1px solid rgba(148, 163, 184, 0.16); }
+.gp-bar-line { display: grid; grid-template-columns: 62px 1fr 38px; gap: 6px; align-items: center; font-size: 0.68rem; color: #94a3b8; font-family: monospace; }
+.gp-bar-track { height: 7px; background: rgba(51, 65, 85, 0.6); border-radius: 99px; overflow: hidden; position: relative; }
+.gp-bar-fill { height: 100%; background: #38bdf8; transition: width 0.04s linear; }
+.gp-bar-fill.thr { background: #22c55e; }
+.gp-bar-fill.brk { background: #ef4444; }
+.gp-bind-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+.gp-bind-table th { text-align: left; color: #94a3b8; font-size: 0.66rem; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid rgba(148, 163, 184, 0.18); }
+.gp-bind-table td { padding: 4px 6px; border-bottom: 1px solid rgba(148, 163, 184, 0.09); vertical-align: middle; }
+.gp-glyph { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; padding: 1px 6px; border-radius: 5px; font-weight: 900; font-size: 0.68rem; font-family: ui-monospace, monospace; background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(148, 163, 184, 0.45); color: #f8fafc; }
+.gp-glyph.ps-cross { border-color: #60a5fa; color: #93c5fd; }
+.gp-glyph.ps-circle { border-color: #f87171; color: #fca5a5; }
+.gp-glyph.ps-square { border-color: #f472b6; color: #fbcfe8; }
+.gp-glyph.ps-tri { border-color: #4ade80; color: #86efac; }
+.gp-glyph.xb-a { border-color: #22c55e; color: #86efac; }
+.gp-glyph.xb-b { border-color: #ef4444; color: #fca5a5; }
+.gp-glyph.xb-x { border-color: #3b82f6; color: #93c5fd; }
+.gp-glyph.xb-y { border-color: #facc15; color: #fef08a; }

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Full CPU Sim — F1 TV Broadcast Director · Local F1{% endblock %}
+{% block title %}Full CPU Sim — F1 TV Broadcast Director · APEX GRID{% endblock %}
 {% block head %}
   <link rel="stylesheet" href="/static/css/sim.css?v={{ asset_v }}">
 {% endblock %}
@@ -53,9 +53,10 @@
         <button type="button" class="sim-speed-btn" data-fsim-speed="32" title="32× Turbo-Sim [6]">32×</button>
         <button type="button" class="sim-speed-btn sim-speed-end" id="fsim-sim-end-btn" title="Simulate straight to Checkered Flag with full telemetry">⏭ End</button>
       </div>
-      <button type="button" id="fsim-sfx-btn" class="sim-dir-btn sim-dir-icon" title="Toggle Broadcast SFX"><i class="fas fa-volume-up"></i></button>
+      <button type="button" id="fsim-sfx-btn" class="sim-dir-btn sim-dir-icon" title="Toggle Broadcast SFX [M]"><i class="fas fa-volume-up"></i></button>
+      <button type="button" id="fsim-keys-btn" class="sim-dir-btn" title="Keyboard Shortcuts &amp; Gamepad Studio [? / K]"><i class="fas fa-keyboard"></i> <span class="sim-lbl-md">Controls</span></button>
       <button type="button" id="fsim-focus-btn" class="sim-dir-btn sim-dir-icon" title="Full-Screen Broadcast Focus Mode [F]"><i class="fas fa-expand"></i></button>
-      <button type="button" id="fsim-setup-toggle" class="sim-dir-btn" aria-expanded="false" title="Configure CPU Grid, Era, Season Mode & Chaos"><i class="fas fa-sliders-h"></i> <span class="sim-lbl-md">Setup</span></button>
+      <button type="button" id="fsim-setup-toggle" class="sim-dir-btn" aria-expanded="false" title="Configure CPU Grid, Era, Season Mode & Chaos [S]"><i class="fas fa-sliders-h"></i> <span class="sim-lbl-md">Setup</span></button>
       <button type="button" id="fsim-restart-btn" class="sim-dir-btn sim-dir-icon" title="Restart Grand Prix"><i class="fas fa-redo"></i></button>
     </div>
 
@@ -248,8 +249,21 @@
     <div class="sim-stage-panel">
       <canvas id="fsim-track-canvas" class="sim-track-canvas" aria-label="Live Full CPU F1 Circuit Broadcast"></canvas>
       <canvas id="fsim-3d-canvas" class="sim-3d-canvas hidden" aria-label="Live 3D F1 TV Broadcast Camera"></canvas>
+      <canvas id="fsim-visor-fx" class="fsim-visor-fx hidden" aria-hidden="true"></canvas>
       <div id="fsim-3d-hud" class="b3d-hud hidden"></div>
       <div id="fsim-radio-card" class="tr-dock hidden"></div>
+
+      <!-- Contextual Onboard POV & Quick Director Dock (auto-shown in 3D POV / Cockpit / Chase) -->
+      <div id="fsim-pov-dock" class="fsim-pov-dock hidden" role="toolbar" aria-label="Onboard POV Quick Controls">
+        <button type="button" id="fsim-pov-prev" class="fsim-pov-btn" title="Previous Driver in Race Order [↑]"><i class="fas fa-chevron-up"></i> Prev <kbd>↑</kbd></button>
+        <button type="button" id="fsim-pov-next" class="fsim-pov-btn" title="Next Driver in Race Order [↓]"><i class="fas fa-chevron-down"></i> Next <kbd>↓</kbd></button>
+        <span class="fsim-pov-sep"></span>
+        <button type="button" id="fsim-pov-angle" class="fsim-pov-btn" title="Cycle POV Sub-Angle: Cockpit / T-Cam / Nose [C]">Cockpit <kbd>C</kbd></button>
+        <button type="button" id="fsim-pov-halo" class="fsim-pov-btn" title="Toggle Halo Pillar Ghost Opacity [H]">Halo: Solid <kbd>H</kbd></button>
+        <button type="button" id="fsim-pov-visor" class="fsim-pov-btn is-on" title="Toggle Visor Rain &amp; Speed FX [U]">Visor FX <kbd>U</kbd></button>
+        <span class="fsim-pov-sep"></span>
+        <button type="button" id="fsim-pov-drive" class="fsim-pov-btn fsim-pov-drive" title="Jump into Apex POV (/drive) with this exact circuit, era &amp; weather [W]"><i class="fas fa-tachometer-alt"></i> Take Wheel <kbd>W</kbd></button>
+      </div>
 
       <!-- Floating F1 TV Live Broadcast Chyron -->
       <div id="fsim-chyron" class="fsim-chyron">
@@ -307,15 +321,16 @@
 
       <!-- Bottom-Left Camera Zoom & Layer Toggles -->
       <div class="sim-map-toggles">
-        <div class="sim-3d-group" role="group" aria-label="3D Broadcast Cameras">
-          <button type="button" class="sim-cam-chip active" data-fsim-3d="off" title="2D Satellite GPS Map [V]">2D</button>
-          <button type="button" class="sim-cam-chip" data-fsim-3d="tv" title="3D Off-Side Trackside TV Broadcast Cam"><i class="fas fa-video"></i> TV</button>
-          <button type="button" class="sim-cam-chip" data-fsim-3d="pov" title="3D Onboard Halo T-Cam POV">POV</button>
-          <button type="button" class="sim-cam-chip" data-fsim-3d="chase" title="3D 3rd Person Chase Cam">3rd</button>
-          <button type="button" class="sim-cam-chip" data-fsim-3d="pitlane" title="3D Pitlane & Pit Crew Cam">Pit</button>
-          <button type="button" class="sim-cam-chip" data-fsim-3d="director" title="Auto 3D Broadcast Director">Auto 3D</button>
+        <div class="sim-3d-group" role="toolbar" aria-label="3D Broadcast Cameras">
+          <button type="button" class="sim-cam-chip active" data-fsim-3d="off" title="2D Satellite GPS Map [Shift+1 / V]">2D</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="tv" title="3D Trackside TV Broadcast Cam [Shift+2]"><i class="fas fa-video"></i> TV</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="cockpit" title="3D Carbon Halo Cockpit + Live OLED Wheel [O / Shift+3]">Cockpit <kbd class="sim-kbd-mini">O</kbd></button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="pov" title="3D Onboard T-Cam POV [O / Shift+4]">T-Cam</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="chase" title="3D 3rd Person Chase Cam [Shift+5]">3rd</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="pitlane" title="3D Pitlane &amp; Pit Crew Cam [Shift+6]">Pit</button>
+          <button type="button" class="sim-cam-chip" data-fsim-3d="director" title="Auto 3D Broadcast Director [Shift+7]">Auto 3D</button>
         </div>
-        <div class="sim-cam-group" role="group" aria-label="Broadcast Camera Zoom">
+        <div class="sim-cam-group" role="toolbar" aria-label="Broadcast Camera Zoom">
           <button type="button" class="sim-cam-chip" data-fsim-cam="full" title="Full Circuit Overview [Z]"><i class="fas fa-map"></i> Full</button>
           <button type="button" class="sim-cam-chip" data-fsim-cam="follow" title="2.5× Follow Cam [Z]">2.5×</button>
           <button type="button" class="sim-cam-chip active" data-fsim-cam="battle" title="5× Wheel-to-Wheel Battle Zoom [Z]">5×</button>
@@ -380,6 +395,22 @@
             <div class="sim-bar-track"><div id="fsim-f-ers-bar" class="sim-bar-fill ers-fill" style="width:65%"></div></div>
           </div>
         </div>
+        <!-- Compact 4-Corner Tyre, Component Health & Elements Strip (Zero-Scroll Safe) -->
+        <div id="fsim-f-health-strip" class="fsim-health-strip">
+          <div class="fsim-t4-grid" title="4-Corner Tyre Wear &amp; Core Temp">
+            <span id="fsim-t-fl" class="fsim-t4">FL <b>100</b></span>
+            <span id="fsim-t-fr" class="fsim-t4">FR <b>100</b></span>
+            <span id="fsim-t-rl" class="fsim-t4">RL <b>100</b></span>
+            <span id="fsim-t-rr" class="fsim-t4">RR <b>100</b></span>
+          </div>
+          <div class="fsim-comp-badges">
+            <span id="fsim-c-fw" class="fsim-cbadge" title="Front Wing Integrity (L/R)">FW <b>100%</b></span>
+            <span id="fsim-c-flr" class="fsim-cbadge" title="Venturi Floor &amp; Suspension">FLR <b>100%</b></span>
+            <span id="fsim-c-pu" class="fsim-cbadge" title="Power Unit Thermal Core">PU <b>96°</b></span>
+            <span id="fsim-c-brk" class="fsim-cbadge" title="Carbon Brake Core Temp">BRK <b>420°</b></span>
+            <span id="fsim-c-env" class="fsim-cbadge fsim-cenv" title="Track Rubber &amp; Wind Gust">RUB <b>38%</b></span>
+          </div>
+        </div>
       </div>
 
       <!-- 2. Hottest On-Track Battles Radar (Click any fight to cut camera!) -->
@@ -435,8 +466,49 @@
     <span id="fsim-radio-lap" class="sim-radio-lap">L1</span>
     <span id="fsim-radio-latest" class="sim-radio-latest">Loading 100% CPU Broadcast Grid…</span>
     <div class="sim-radio-right">
-      <span class="sim-keys-hint">Space: Pause · R: Instant Replay · T: Auto TV · Z: Zoom · L: Leader · N: Next Battle · F: Fullscreen</span>
+      <span id="fsim-keys-hint" class="sim-keys-hint">⌨️ [O] POV · [C] Cockpit/T-Cam · [H] Halo · [↑/↓] Driver · [←/→] Battle · [Q/E/B] Look · [W] Drive · [?] Controls</span>
       <button type="button" id="fsim-radio-toggle" class="sim-dir-btn"><i class="fas fa-list"></i> Log (<span id="fsim-radio-count">0</span>)</button>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE KEYBOARD SHORTCUTS & GAMEPAD CUSTOMIZER MODAL -->
+  <div id="fsim-keys-modal" class="fsim-keys-modal hidden" role="dialog" aria-label="Broadcast Controls &amp; Gamepad Studio">
+    <div class="fsim-keys-card">
+      <div class="fsim-keys-head">
+        <div>
+          <strong><i class="fas fa-gamepad"></i> APEX GRID — BROADCAST CONTROLS &amp; GAMEPAD STUDIO</strong>
+          <small class="muted">Click any quick-action chip below or customize your Xbox / PlayStation / Keyboard bindings</small>
+        </div>
+        <button type="button" id="fsim-keys-close" class="sim-drawer-close" aria-label="Close controls">&times;</button>
+      </div>
+      <div class="fsim-keys-tabs">
+        <button type="button" class="fsim-ktab active" data-fsim-ktab="cheatsheet"><i class="fas fa-keyboard"></i> Quick Actions &amp; Hotkeys</button>
+        <button type="button" class="fsim-ktab" data-fsim-ktab="gamepad"><i class="fas fa-sliders-h"></i> Gamepad &amp; Keybind Customizer</button>
+      </div>
+      <div id="fsim-kpane-cheatsheet" class="fsim-kpane active">
+        <div class="fsim-kgrid">
+          <button type="button" class="fsim-kitem" data-fsim-exec="povToggle"><kbd>O</kbd><span><b>Instant POV Toggle</b><small>Jump to Cockpit/T-Cam POV</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="povSub"><kbd>C</kbd><span><b>Cycle POV Angle</b><small>Cockpit → T-Cam → Nose</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="haloGhost"><kbd>H</kbd><span><b>Halo Ghost Toggle</b><small>Solid Carbon ↔ Translucent</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="cycleView"><kbd>V</kbd><span><b>Cycle All Views</b><small>2D → TV → Cockpit → T-Cam → 3rd → Pit → Auto</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="prevCar"><kbd>↑ / [</kbd><span><b>Previous Driver</b><small>Step up live race order</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="nextCar"><kbd>↓ / ]</kbd><span><b>Next Driver</b><small>Step down live race order</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="nextBattle"><kbd>← / → / N</kbd><span><b>Cycle Battles</b><small>Cut between closest duels</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="leader"><kbd>L</kbd><span><b>Jump to Leader</b><small>Lock onto P1 immediately</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="playPause"><kbd>Space</kbd><span><b>Play / Pause</b><small>Freeze or resume action</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="speedUp"><kbd>, / .</kbd><span><b>Step Sim Speed</b><small>0.25× ↔ 32× smoothly</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="autoTv"><kbd>T</kbd><span><b>Auto TV Director</b><small>Auto-cut to fights &amp; pits</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="replay"><kbd>R</kbd><span><b>Instant Replay</b><small>0.45× slow-mo last 6s</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="towerMode"><kbd>I</kbd><span><b>Timing Tower Mode</b><small>INT/LDR/LAPS/SEC/TYRE/CONF</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="visorToggle"><kbd>U</kbd><span><b>Toggle Visor / HUD</b><small>Raindrops &amp; speed lines</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="takeWheel"><kbd>W</kbd><span><b>Take the Wheel</b><small>Launch /drive with this GP</small></span></button>
+          <button type="button" class="fsim-kitem" data-fsim-exec="focusMode"><kbd>F</kbd><span><b>Focus Fullscreen</b><small>Hide chrome for TV view</small></span></button>
+        </div>
+        <div class="muted small" style="margin-top:8px;"><b>In 3D POV / Cockpit:</b> Hold <kbd>Q</kbd> Look Left · Hold <kbd>E</kbd> Look Right · Hold <kbd>B</kbd> Look Back · <kbd>Shift+1..7</kbd> Direct Camera Jump · <kbd>A</kbd> AI Mind · <kbd>G</kbd> Best Line · <kbd>M</kbd> Mute · <kbd>S</kbd> Setup · <kbd>D</kbd> Radio Log</div>
+      </div>
+      <div id="fsim-kpane-gamepad" class="fsim-kpane">
+        <div id="fsim-gp-studio-host"></div>
+      </div>
     </div>
   </div>
 
@@ -462,7 +534,9 @@
   };
 </script>
 <script src="/static/vendor/three.min.js"></script>
+<script src="/static/js/f1_gamepad_studio.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+<script src="/static/js/f1_drive_cockpit_3d.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_race_engine.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_timing_tower.js?v={{ asset_v }}"></script>
 <script src="/static/js/f1_vehicle_physics.js?v={{ asset_v }}"></script>

@@ -648,14 +648,22 @@
       car.riskMode = "standard";
     }
 
-    // Dynamic Pace AI (weighted by confidence/overtake boldness)
+    // Dynamic Pace AI (weighted by confidence, thermal protection & undercut out-lap bursts)
     const atkThresh = 1.25 * Math.min(1.45, Math.max(0.75, beh.overtakeMult));
+    const puHot = Boolean(car.dmg && car.dmg.puHeat > 115);
+    const brkHot = Boolean(car.dmg && car.dmg.brakes > 910);
     if (fs.safetyCarLaps > 0 || fs.vscLaps > 0) {
       car.paceMode = "conserve";
       car.aiStatus = "SC DELTA";
+    } else if (puHot || brkHot) {
+      car.paceMode = "conserve";
+      car.aiStatus = puHot ? "🔥 COOLING PU" : "🛑 BRAKE MGMT";
     } else if (car.tyreLife < 26 || car.tyreTemp > 113) {
       car.paceMode = "conserve";
       car.aiStatus = car.tyreTemp > 113 ? "COOLING TYRES" : "SAVING TYRES";
+    } else if ((car.undercutPushLaps || 0) > 0 && car.tyreLife > 38) {
+      car.paceMode = "push";
+      car.aiStatus = "⚡ UNDERCUT OUT-LAP";
     } else if ((gapAhead < atkThresh || gapBehind < 0.9 || lapsLeft <= 3) && car.tyreLife > 34) {
       car.paceMode = "push";
       car.aiStatus = era.turbo_boost
@@ -669,19 +677,23 @@
       car.aiStatus = "MANAGING GAP";
     }
 
-    // Dynamic ERS / 2026 Manual Override AI (disabled in classic non-ERS eras!)
+    // Sector-Aware Dynamic ERS / 2026 Manual Override AI (harvests in twisty sectors, deploys on DRS straights & undercut out-laps!)
+    const inDrsStraight = isInDrsZone(fs.circuit, car.totalProg) || isInDrsZone(fs.circuit, car.totalProg + 0.04);
     if (!era.ers_enabled) {
       car.ersMode = "auto";
-    } else if (car.ers < 18) {
+    } else if (car.ers < 18 || puHot) {
       car.ersMode = "harvest";
-    } else if ((gapAhead < 0.98 || gapBehind < 0.75) && car.ers > 26 && fs.safetyCarLaps === 0) {
+    } else if ((car.undercutPushLaps || 0) > 0 && car.ers > 22 && fs.safetyCarLaps === 0) {
+      car.ersMode = "overtake";
+      car.aiStatus = "⚡ UNDERCUT DEPLOY";
+    } else if ((gapAhead < 0.98 || gapBehind < 0.78) && car.ers > 24 && fs.safetyCarLaps === 0 && (inDrsStraight || gapAhead < 0.55 || gapBehind < 0.55)) {
       car.ersMode = "overtake";
       car.aiStatus = era.override_mode
         ? (gapAhead < 0.98 ? "⚡ MANUAL OVERRIDE" : "🛡 ERS DEFEND")
         : (gapAhead < 0.98 ? "⚡ ERS OVERTAKE" : "🛡 ERS DEFEND");
-    } else if (car.ers > 82 && car.pos > 1) {
+    } else if (car.ers > 84 && inDrsStraight && car.pos > 1) {
       car.ersMode = "overtake";
-    } else if (gapAhead > 2.6 && gapBehind > 2.2 && car.ers < 72) {
+    } else if (!inDrsStraight && gapAhead > 1.8 && gapBehind > 1.6 && car.ers < 74) {
       car.ersMode = "harvest";
     } else {
       car.ersMode = "auto";
@@ -1341,6 +1353,34 @@
       getEl("fsim-f-ers").textContent = `${Math.round(foc.ers)}%`;
       getEl("fsim-f-ers-bar").style.width = `${Math.round(foc.ers)}%`;
       getEl("fsim-f-ers-mode").textContent = foc.ersMode.toUpperCase();
+
+      // Update Compact 4-Corner Tyre, Component Health & Environmental Strip
+      const fTy = foc.tyres || { fl: { wear: life, temp: t }, fr: { wear: life, temp: t }, rl: { wear: life, temp: t }, rr: { wear: life, temp: t } };
+      [["fl", "FL"], ["fr", "FR"], ["rl", "RL"], ["rr", "RR"]].forEach(([ck, lbl]) => {
+        const el = getEl(`fsim-t-${ck}`);
+        if (!el) return;
+        const tw = Math.round(fTy[ck]?.wear ?? life);
+        const tt = Math.round(fTy[ck]?.temp ?? t);
+        el.innerHTML = `${lbl} <b>${tw}</b>`;
+        el.title = `${lbl}: ${tw}% life · ${tt}°C${foc.flatSpot > 0.15 ? ` · FLAT-SPOT ${Math.round(foc.flatSpot * 100)}%` : ""}`;
+        el.className = `fsim-t4 ${tt > 114 || tw < 26 ? "t-hot" : (tt < 84 ? "t-cold" : (tw < 52 ? "t-warm" : ""))}`;
+      });
+      const dm = foc.dmg || { wingL: 100, wingR: 100, floor: 100, susp: 100, brakes: 420, puHeat: 96 };
+      const fwPct = Math.round(Math.min(dm.wingL ?? 100, dm.wingR ?? 100));
+      const flrPct = Math.round(Math.min(dm.floor ?? 100, dm.susp ?? 100));
+      const puC = Math.round(dm.puHeat ?? 96);
+      const brkC = Math.round(dm.brakes ?? 420);
+      const setBadge = (id, html, cls) => {
+        const el = getEl(id);
+        if (!el) return;
+        el.innerHTML = html;
+        el.className = `fsim-cbadge ${cls || ""}`.trim();
+      };
+      setBadge("fsim-c-fw", `FW <b>${fwPct}%</b>`, fwPct < 60 ? "is-crit" : (fwPct < 88 ? "is-warn" : ""));
+      setBadge("fsim-c-flr", `FLR <b>${flrPct}%</b>`, flrPct < 65 ? "is-crit" : (flrPct < 88 ? "is-warn" : ""));
+      setBadge("fsim-c-pu", `PU <b>${puC}°</b>`, puC > 116 ? "is-crit" : (puC > 109 ? "is-warn" : ""));
+      setBadge("fsim-c-brk", `BRK <b>${brkC}°</b>`, brkC > 920 ? "is-crit" : (brkC > 780 ? "is-warn" : ""));
+      setBadge("fsim-c-env", `RUB <b>${Math.round(fs.rubberPct ?? fs.gripPct ?? 38)}%</b> · W${Math.round(fs.windGust || 10)}`, "fsim-cenv");
     }
 
     // Hottest On-Track Battles Radar
@@ -1994,6 +2034,20 @@
           }
           const fixedWing = !!car.wingDamaged;
           car.wingDamaged = false;
+          car.flatSpot = 0;
+          car.gravelDirt = 0;
+          const freshOpt = (COMPOUNDS[car.compound] || COMPOUNDS.medium).optTemp - 6;
+          car.tyres = {
+            fl: { wear: 100, temp: freshOpt },
+            fr: { wear: 100, temp: freshOpt },
+            rl: { wear: 100, temp: freshOpt },
+            rr: { wear: 100, temp: freshOpt },
+          };
+          if (car.dmg) {
+            if (fixedWing) { car.dmg.wingL = 100; car.dmg.wingR = 100; }
+            car.dmg.puHeat = Math.max(92, (car.dmg.puHeat || 98) - 8);
+            car.dmg.brakes = Math.max(360, (car.dmg.brakes || 480) - 180);
+          }
           car.stops += 1;
           car.lastPitLap = car.lap;
           if (Array.isArray(car.stintHistory)) {
@@ -2092,7 +2146,76 @@
       const tyreCareStat = Number(car.card.game?.stats?.tyre_care || 78);
       const tyreCareMult = Math.max(0.76, Math.min(1.24, 1.0 - (tyreCareStat - 78) * 0.008));
       const wearMult = (0.65 + (fs.circuit.tyre_wear || 3) * 0.16) * (0.55 + 0.45 * f1dbDegMult) * comp.wear * thermalWear * beh.tyreWearMult * tyreCareMult * (car.paceMode === "push" ? 1.28 : (car.paceMode === "conserve" ? 0.72 : 1.0));
-      car.tyreLife = Math.max(5, car.tyreLife - (wearMult * lapFrac * baseWearPerLap));
+      const baseStepWear = wearMult * lapFrac * baseWearPerLap;
+      car.tyreLife = Math.max(5, car.tyreLife - baseStepWear);
+
+      // Ported /drive 4-Corner Tyre Wear/Temps, Flat-Spots, Gravel Dirt, Multi-Component Thermal/Damage & Puddles/Wind!
+      if (!car.tyres) {
+        car.tyres = {
+          fl: { wear: car.tyreLife, temp: car.tyreTemp },
+          fr: { wear: car.tyreLife, temp: car.tyreTemp },
+          rl: { wear: car.tyreLife, temp: car.tyreTemp },
+          rr: { wear: car.tyreLife, temp: car.tyreTemp },
+        };
+      }
+      if (!car.dmg) {
+        car.dmg = { wingL: car.wingDamaged ? 52 : 100, wingR: car.wingDamaged ? 44 : 100, floor: 100, susp: 100, brakes: 420, puHeat: 96 };
+      }
+      const pFrac = (((car.totalProg || 0) % 1) + 1) % 1;
+      const latAbs = Math.abs(car.latOffset || 0);
+      const asymBias = ((fs.circuit.turns || 14) % 2 === 0) ? 1.08 : 0.93;
+      const brakingLoad = (car.liveLongG || 0) < -1.1 ? Math.min(1, Math.abs(car.liveLongG) / 4.0) : 0;
+      const pushHeat = car.paceMode === "push" ? 1 : (car.paceMode === "conserve" ? -1 : 0);
+      car.tyres.fl.wear = Math.max(4, car.tyres.fl.wear - baseStepWear * (1.04 * asymBias + brakingLoad * 0.18));
+      car.tyres.fr.wear = Math.max(4, car.tyres.fr.wear - baseStepWear * (1.04 / asymBias + brakingLoad * 0.18));
+      car.tyres.rl.wear = Math.max(4, car.tyres.rl.wear - baseStepWear * (0.97 + (car.ersMode === "overtake" ? 0.14 : 0)));
+      car.tyres.rr.wear = Math.max(4, car.tyres.rr.wear - baseStepWear * (0.97 + (car.ersMode === "overtake" ? 0.14 : 0)));
+      car.tyres.fl.temp = car.tyreTemp + (asymBias - 1) * 18 + brakingLoad * 5;
+      car.tyres.fr.temp = car.tyreTemp - (asymBias - 1) * 18 + brakingLoad * 5;
+      car.tyres.rl.temp = car.tyreTemp + (car.ersMode === "overtake" ? 4.5 : -1.5);
+      car.tyres.rr.temp = car.tyreTemp + (car.ersMode === "overtake" ? 4.5 : -1.5);
+
+      if ((car.lockupSmokeTimer || 0) > 0.05) {
+        car.flatSpot = Math.min(1.0, (car.flatSpot || 0) + simDt * 0.14);
+        car.impactFlash = Math.max(car.impactFlash || 0, 0.35);
+      }
+      if (latAbs > 4.42) {
+        car.gravelDirt = Math.min(1.0, (car.gravelDirt || 0) + simDt * 0.55);
+      } else if ((car.gravelDirt || 0) > 0) {
+        car.gravelDirt = Math.max(0, car.gravelDirt - simDt * 0.28);
+      }
+      if ((car.impactFlash || 0) > 0) car.impactFlash = Math.max(0, car.impactFlash - dt * 2.2);
+
+      // Carbon Brake & PU Thermal Core
+      const brkTarget = 380 + brakingLoad * 540 + (pushHeat > 0 ? 48 : (pushHeat < 0 ? -45 : 0)) - fs.wetness * 1.4;
+      car.dmg.brakes += (brkTarget - car.dmg.brakes) * Math.min(1, dt * (brakingLoad > 0.2 ? 1.8 : 0.65));
+      const puTarget = 95 + (pushHeat > 0 ? 15 : (pushHeat < 0 ? -9 : 2)) + (car.inDrsRange ? 8.5 : 0) + (car.ersMode === "overtake" ? 6.5 : 0) - fs.wetness * 0.08;
+      car.dmg.puHeat += (puTarget - car.dmg.puHeat) * Math.min(1, dt * 0.28);
+      if (car.wingDamaged && Math.min(car.dmg.wingL, car.dmg.wingR) > 62) {
+        car.dmg.wingR = 42;
+        car.dmg.wingL = 78;
+      }
+
+      // Standing-Water Puddles (wet sessions) & Dynamic Wind Gusts
+      const puddles = fs.puddles || [0.22, 0.57, 0.81];
+      let inPuddle = false;
+      if (fs.wetness >= 45) {
+        for (let pi = 0; pi < puddles.length; pi++) {
+          if (Math.abs(pFrac - puddles[pi]) < 0.024 && latAbs > 1.8) { inPuddle = true; break; }
+        }
+      }
+      car.puddlePenaltyS = inPuddle ? (comp.wet === 0 ? 0.72 : (comp.wet === 1 ? 0.24 : 0.06)) : 0;
+      car.windPenaltyS = Math.sin(pFrac * Math.PI * 2 + (fs.raceClock * 0.04)) * ((fs.windGust || 12) / 140);
+      car.steerAngle = (car._prevLat != null) ? Math.max(-0.5, Math.min(0.5, ((car.latOffset || 0) - car._prevLat) * 0.45)) : 0;
+      car._prevLat = car.latOffset || 0;
+
+      // Track Rubber Evolution & Wind Drift (once per frame on leader)
+      if (car.pos === 1) {
+        fs.windGust = Math.max(4, Math.min(34, (fs.windGust || 12) + Math.sin(fs.raceClock * 0.13) * dt * 0.55));
+        const rubRate = fs.wetness > 45 ? -0.35 : 0.42;
+        fs.rubberPct = Math.max(22, Math.min(100, (fs.rubberPct ?? 38) + rubRate * lapFrac * 8));
+        fs.gripPct = Math.max(32, Math.min(100, Math.round(fs.rubberPct)));
+      }
 
       // Keep Safety Car bunching responsive every tick (not just on lap crossing!)
       if (fs.safetyCarLaps > 0) {
@@ -2279,13 +2402,17 @@
         const minStint = Math.max(3, Math.round(fs.totalLaps * 0.12));
 
         let weatherTarget = null;
-        if (comp.wet === 0 && fs.wetness >= 28 && lapsLeft >= 3) {
-          weatherTarget = fs.wetness >= 72 ? "wet" : "inter";
-        } else if (comp.wet === 1 && fs.wetness >= 76 && lapsLeft >= 5 && lapsSincePit >= 3) {
+        // Weather-Radar Crossover Anticipation: smart strategists anticipate rain/dry crossover 1 lap ahead!
+        const radarForecastWet = (fs.nextWeatherLap && (car.lap + 1) >= fs.nextWeatherLap) ? (fs.targetWetness ?? fs.wetness) : fs.wetness;
+        const smartStrategist = Number(car.card.game?.stats?.racecraft || 78) >= 82;
+        const effWetForCall = smartStrategist ? (fs.wetness * 0.65 + radarForecastWet * 0.35) : fs.wetness;
+        if (comp.wet === 0 && effWetForCall >= 28 && lapsLeft >= 3) {
+          weatherTarget = effWetForCall >= 72 ? "wet" : "inter";
+        } else if (comp.wet === 1 && effWetForCall >= 76 && lapsLeft >= 5 && lapsSincePit >= 3) {
           weatherTarget = "wet";
-        } else if (comp.wet === 2 && fs.wetness <= 40 && lapsLeft >= 5 && lapsSincePit >= 3) {
-          weatherTarget = fs.wetness <= 16 ? "slick" : "inter";
-        } else if (comp.wet > 0 && fs.wetness <= 16 && lapsLeft >= 3 && lapsSincePit >= 3) {
+        } else if (comp.wet === 2 && effWetForCall <= 40 && lapsLeft >= 5 && lapsSincePit >= 3) {
+          weatherTarget = effWetForCall <= 16 ? "slick" : "inter";
+        } else if (comp.wet > 0 && effWetForCall <= 16 && lapsLeft >= 3 && lapsSincePit >= 3) {
           weatherTarget = "slick";
         }
 
@@ -2319,19 +2446,35 @@
           return;
         }
 
+        if ((car.undercutPushLaps || 0) > 0) car.undercutPushLaps -= 1;
         const mustFulfillRule = era.two_compound_rule !== false && !car.usedWet && car.dryCompoundsUsed.size < 2 && lapsLeft <= Math.max(3, Math.round(fs.totalLaps * 0.14)) && lapsLeft >= 2;
         const fuelPit = era.refuelling && Number.isFinite(car.fuelKg) && car.fuelKg <= (era.fuel_burn_per_lap_kg || 2.3) * 1.8 && lapsLeft >= 2;
         const scOpportunistic = (fs.safetyCarLaps > 0 || fs.vscLaps > 0) && car.tyreLife < 58 && lapsSincePit >= minStint && lapsLeft >= 4;
-        const cliffPit = car.tyreLife < (car.aiPlan === "aggressive" ? 27 : 22) && lapsLeft >= 3 && lapsSincePit >= minStint;
+        const flatSpotPit = (car.flatSpot || 0) >= 0.58 && lapsLeft >= 4 && lapsSincePit >= 2;
+        const cliffPit = (car.tyreLife < (car.aiPlan === "aggressive" ? 27 : 22) || flatSpotPit) && lapsLeft >= 3 && lapsSincePit >= minStint;
         const wingPit = (car.meatballFlag && lapsLeft >= 2) || (car.wingDamaged && lapsLeft >= 4 && lapsSincePit >= 2);
-        // Real Undercut Strategy: Stuck within 2.4s behind a rival in pit window -> box 1 lap early on fresh rubber!
+        // Predictive Undercut / Overcut Pit Solver: checks clean-air rejoin window via computePitRejoin!
         const rivalAhead = sortedNow[Math.max(0, (car.pos || 2) - 2)];
         const gapToRival = (rivalAhead && rivalAhead.idx !== car.idx && !rivalAhead.dnf) ? (rivalAhead.totalProg - car.totalProg) * fs.circuit.base_lap_s : 99;
-        const undercutPit = fs.safetyCarLaps === 0 && fs.wetness < 22 && gapToRival > 0.4 && gapToRival <= 2.4 && car.tyreLife < 44 && car.tyreLife >= 26 && lapsSincePit >= minStint && lapsLeft >= 5 && Math.random() < 0.28;
+        const rejoinInfo = (fs.safetyCarLaps === 0 && fs.wetness < 22 && gapToRival <= 2.4 && car.tyreLife < 46 && lapsLeft >= 5)
+          ? ENG.computePitRejoin(fs.cars, car, fs.circuit, effPit)
+          : null;
+        const undercutPit = Boolean(
+          rejoinInfo && rejoinInfo.cleanAir
+          && gapToRival > 0.35 && gapToRival <= 2.35
+          && car.tyreLife < 46 && car.tyreLife >= 24
+          && lapsSincePit >= minStint && lapsLeft >= 5
+          && Math.random() < (car.aiPlan === "aggressive" ? 0.52 : 0.36)
+        );
+        // Smart Double-Stack Avoidance: defer non-emergency stop 1 lap if teammate is currently in the pit box!
+        const teammateInPit = fs.cars.find((o) => o.idx !== car.idx && !o.dnf && o.card.hero_team === car.card.hero_team && o.inPit > 0);
+        const emergencyStop = Boolean(weatherTarget || fuelPit || (car.meatballFlag && lapsLeft <= 3) || car.tyreLife < 14 || fs.safetyCarLaps > 0);
+        const deferForTeammate = Boolean(teammateInPit && !emergencyStop && lapsLeft >= 3);
 
-        if (weatherTarget || mustFulfillRule || fuelPit || scOpportunistic || cliffPit || wingPit || undercutPit) {
+        if (!deferForTeammate && (weatherTarget || mustFulfillRule || fuelPit || scOpportunistic || cliffPit || wingPit || undercutPit)) {
+          if (undercutPit) car.undercutPushLaps = 2;
           // Real Teammate Double-Stacking in Shared Pit Box (+3.2s hold!)
-          const teammate = fs.cars.find((o) => o.idx !== car.idx && !o.dnf && o.card.hero_team === car.card.hero_team && o.inPit > 0);
+          const teammate = teammateInPit;
           const isDoubleStack = Boolean(teammate);
           // Official FIA Rule: Unserved +5s / +10s Time Penalties MUST be served motionless in pit box before crew touches car!
           const servePenS = Math.min(10, Math.round(car.unservedPenaltyS || 0));
@@ -2970,6 +3113,10 @@
     fs.drying = false;
     fs.nextWeatherLap = Math.max(3, Math.round(fs.totalLaps * (0.18 + Math.random() * 0.22)));
     fs.gripPct = 38;
+    fs.rubberPct = 38;
+    fs.windGust = 10 + Math.round(Math.random() * 14);
+    fs.puddles = [0.22, 0.57, 0.81];
+    if (fs.visorFxOn == null) fs.visorFxOn = true;
     fs.drsEnabled = false;
     fs.drsAnnounced = false;
     fs.vscLaps = 0;
@@ -3051,6 +3198,18 @@
         usedWet: isWetStart,
         tyreLife: 100,
         tyreTemp: COMPOUNDS[comp].optTemp - 3,
+        tyres: {
+          fl: { wear: 100, temp: COMPOUNDS[comp].optTemp - 3 },
+          fr: { wear: 100, temp: COMPOUNDS[comp].optTemp - 3 },
+          rl: { wear: 100, temp: COMPOUNDS[comp].optTemp - 3 },
+          rr: { wear: 100, temp: COMPOUNDS[comp].optTemp - 3 },
+        },
+        flatSpot: 0,
+        gravelDirt: 0,
+        impactFlash: 0,
+        undercutPushLaps: 0,
+        steerAngle: 0,
+        dmg: { wingL: 100, wingR: 100, floor: 100, susp: 100, brakes: 420, puHeat: 96 },
         fuelKg: fs.eraRule.refuelling ? (fs.eraRule.start_fuel_kg || 58) * (0.75 + Math.random() * 0.25) : (fs.eraRule.start_fuel_kg || 100),
         ers: fs.eraRule.ers_enabled ? 68 : 0,
         stops: 0,
@@ -3212,12 +3371,106 @@
     dr.classList.toggle("hidden", !open);
   }
 
+  function drawVisorFx(focCar, dt) {
+    const cv = getEl("fsim-visor-fx");
+    if (!cv) return;
+    const inPov3d = Boolean(fs.b3d && fs.b3d.isActive() && (fs.b3dMode === "cockpit" || fs.b3dMode === "pov"));
+    const show = inPov3d && fs.visorFxOn !== false && fs.layers.hud !== false;
+    cv.classList.toggle("hidden", !show);
+    if (!show || !focCar) return;
+    const w = cv.clientWidth || 720;
+    const h = cv.clientHeight || 420;
+    if (cv.width !== w || cv.height !== h) {
+      cv.width = w;
+      cv.height = h;
+    }
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, w, h);
+
+    const kph = focCar.livePhysKph != null ? focCar.livePhysKph : (focCar.liveKph || 210);
+    const wet = Number(fs.wetness || 0);
+
+    // 1. Peripheral High-Speed Lines (>285 KPH)
+    if (kph > 285) {
+      const inten = Math.min(1, (kph - 285) / 65);
+      ctx.save();
+      ctx.strokeStyle = `rgba(186, 230, 253, ${(0.08 + inten * 0.16).toFixed(3)})`;
+      ctx.lineWidth = 1.2;
+      const cx = w * 0.5, cy = h * 0.48;
+      const lines = 16;
+      const phase = (fs.raceClock || 0) * 14;
+      for (let i = 0; i < lines; i++) {
+        const ang = (i / lines) * Math.PI * 2 + Math.sin(phase + i) * 0.04;
+        const r0 = Math.min(w, h) * (0.36 + ((i * 19 + phase * 3) % 10) * 0.015);
+        const r1 = r0 + 28 + inten * 46;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+        ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Wind-Swept Helmet Visor Raindrops (wetness >= 18)
+    if (wet >= 18) {
+      if (!fs._visorDrops) fs._visorDrops = [];
+      const targetDrops = Math.min(75, Math.round((wet - 12) * 0.85));
+      while (fs._visorDrops.length < targetDrops) {
+        fs._visorDrops.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: 1.4 + Math.random() * 2.4,
+          life: 0.4 + Math.random() * 1.4,
+        });
+      }
+      const speedPush = Math.max(0.25, kph / 240);
+      ctx.save();
+      for (let i = fs._visorDrops.length - 1; i >= 0; i--) {
+        const d = fs._visorDrops[i];
+        const dx = (d.x - w * 0.5) * 0.65 * speedPush * dt;
+        const dy = (18 + (d.y - h * 0.45) * 0.45) * speedPush * dt;
+        d.x += dx;
+        d.y += dy;
+        d.life -= dt * (0.5 + speedPush * 0.4);
+        if (d.life <= 0 || d.x < -10 || d.x > w + 10 || d.y < -10 || d.y > h + 10) {
+          d.x = Math.random() * w;
+          d.y = Math.random() * h * 0.85;
+          d.life = 0.5 + Math.random() * 1.3;
+        }
+        ctx.strokeStyle = "rgba(186, 230, 253, 0.34)";
+        ctx.lineWidth = d.r * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - dx * 3.8, d.y - dy * 3.8);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(224, 242, 254, 0.46)";
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 3. Impact / Lock-up / Gravel Edge Vignette
+    const flash = Math.max(focCar.impactFlash || 0, (focCar.gravelDirt || 0) * 0.45);
+    if (flash > 0.05) {
+      const grad = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.25, w * 0.5, h * 0.5, Math.max(w, h) * 0.68);
+      grad.addColorStop(0, "rgba(0,0,0,0)");
+      grad.addColorStop(1, focCar.impactFlash > 0.1
+        ? `rgba(239, 68, 68, ${Math.min(0.45, flash * 0.55).toFixed(3)})`
+        : `rgba(217, 119, 6, ${Math.min(0.32, flash * 0.4).toFixed(3)})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
   function loop(ts) {
     fs.rafId = requestAnimationFrame(loop);
     if (!fs.lastTs) fs.lastTs = ts;
     const dt = Math.min(0.06, Math.max(0.001, (ts - fs.lastTs) / 1000));
     fs.lastTs = ts;
     fs.lastDt = dt;
+    if (typeof fs.pollGamepad === "function") fs.pollGamepad();
     if (fs.replay && fs.replay.active) {
       fs.replay.playPos += dt * 20 * (fs.replay.speed || 0.45);
       if (fs.replay.playPos >= fs.replay.frames.length - 1) {
@@ -3240,11 +3493,21 @@
           compound: c.compound, drsOpen: !!(c.inPit <= 0 && c.inDrsRange && fs.drsEnabled && isInDrsZone(fs.circuit, c.totalProg) && !c.dnf && !c.finishedRace),
           finishedRace: !!c.finishedRace,
           fuelKg: c.fuelKg,
+          ers: c.ers,
+          ersHot: !!(c.ersMode === "overtake" && c.ers > 6),
+          tyreLife: c.tyreLife,
+          tyreTemp: c.tyreTemp,
+          tyres: c.tyres,
+          dmg: c.dmg,
+          flatSpot: c.flatSpot || 0,
+          gravelDirt: c.gravelDirt || 0,
+          impactFlash: c.impactFlash || 0,
+          steerAngle: c.steerAngle || 0,
           setupRideHeight: c.eng && c.eng.actual ? c.eng.actual.rideHeight : null,
           setupAeroBalance: c.eng && c.eng.actual ? c.eng.actual.aeroBalance : null,
           balanceBias: c.eng ? c.eng.balanceBias : 0,
-          floorHealth: c.components && c.components.floor ? c.components.floor.health : 95,
-          suspHealth: c.components && c.components.suspension ? c.components.suspension.health : 95,
+          floorHealth: c.dmg ? c.dmg.floor : (c.components && c.components.floor ? c.components.floor.health : 95),
+          suspHealth: c.dmg ? c.dmg.susp : (c.components && c.components.suspension ? c.components.suspension.health : 95),
           palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era, year: c.card.hero_year,
           regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
         })),
@@ -3271,7 +3534,9 @@
         dt,
         paused: fs.paused,
       });
+      drawVisorFx(fs.cars[fs.focusIdx] || fs.cars[0], dt);
     } else {
+      getEl("fsim-visor-fx")?.classList.add("hidden");
       drawCanvas();
     }
     if (window.F1Sfx && window.F1Sfx.updateTelemetry) {
@@ -3463,6 +3728,29 @@
         onEmit: (entry) => { if (fs.telemetry && fs.telemetry.addRadio) fs.telemetry.addRadio(entry); },
       });
     }
+    function updatePovDock() {
+      const dock = getEl("fsim-pov-dock");
+      if (!dock) return;
+      const showDock = Boolean(fs.b3d && fs.b3d.isActive() && (fs.b3dMode === "cockpit" || fs.b3dMode === "pov" || fs.b3dMode === "chase"));
+      dock.classList.toggle("hidden", !showDock);
+      const angBtn = getEl("fsim-pov-angle");
+      if (angBtn && fs.b3d) {
+        const sub = fs.b3dMode === "pov" ? "tcam" : (fs.b3d.getPovSub ? fs.b3d.getPovSub() : "cockpit");
+        const lbl = sub === "nose" ? "Nose" : (sub === "tcam" ? "T-Cam" : "Cockpit");
+        angBtn.innerHTML = `${lbl} <kbd>C</kbd>`;
+      }
+      const haloBtn = getEl("fsim-pov-halo");
+      if (haloBtn && fs.b3d) {
+        const ghost = fs.b3d.isHaloGhost ? fs.b3d.isHaloGhost() : false;
+        haloBtn.innerHTML = `Halo: ${ghost ? "Ghost" : "Solid"} <kbd>H</kbd>`;
+        haloBtn.classList.toggle("is-on", ghost);
+      }
+      const visBtn = getEl("fsim-pov-visor");
+      if (visBtn) {
+        visBtn.classList.toggle("is-on", fs.visorFxOn !== false);
+      }
+    }
+
     function setBroadcast3DMode(mode) {
       fs.b3dMode = mode || "off";
       document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === fs.b3dMode));
@@ -3476,16 +3764,23 @@
       }
       if (fs.b3dMode === "off") {
         fs.b3d.setActive(false);
+        getEl("fsim-visor-fx")?.classList.add("hidden");
+        updatePovDock();
         drawCanvas();
       } else {
         fs.b3d.setMode(fs.b3dMode);
+        if (fs.b3dMode === "cockpit" && fs.b3d.setPovSub && fs.b3d.getPovSub && fs.b3d.getPovSub() === "tcam") {
+          fs.b3d.setPovSub("cockpit");
+        }
         const ok = fs.b3d.setActive(true);
         if (!ok) {
           fs.b3dMode = "off";
           document.querySelectorAll("[data-fsim-3d]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-fsim-3d") === "off"));
+          updatePovDock();
           showToast("WebGL 3D context unavailable in this browser window.", "warn");
           return;
         }
+        updatePovDock();
         // Render 1 frame immediately even if paused!
         fs.b3d.updateAndRender({
           circuit: fs.circuit,
@@ -3494,6 +3789,7 @@
             inPit: c.inPit, pitDuration: c.pitDuration, pitBoxIdx: c.pitBoxIdx, pitPenaltyHoldFrac: c.pitPenaltyHoldFrac || 0, dnf: c.dnf, color: c.card.hero_color,
             liveKph: c.livePhysKph != null ? c.livePhysKph : c.liveKph, liveGear: c.liveGear, liveLongG: c.liveLongG || 0,
             compound: c.compound, drsOpen: !!(c.inPit <= 0 && c.inDrsRange && fs.drsEnabled && isInDrsZone(fs.circuit, c.totalProg) && !c.dnf && !c.finishedRace),
+            tyres: c.tyres, dmg: c.dmg, flatSpot: c.flatSpot || 0, gravelDirt: c.gravelDirt || 0, ers: c.ers, tyreLife: c.tyreLife, tyreTemp: c.tyreTemp, steerAngle: c.steerAngle || 0,
             palette: c.card.hero_palette, liveryStyle: c.card.hero_livery_style, liveryFinish: c.card.hero_livery_finish, era: c.card.hero_era, year: c.card.hero_year,
             regFormula: (fs.eraRule && fs.eraRule.dimensions) ? fs.eraRule : null,
           })),
@@ -3631,41 +3927,328 @@
       new ResizeObserver(() => drawCanvas()).observe(cv);
     }
 
-    // Broadcast Director Hotkeys
+    // Enhanced Broadcast Director Actions, POV Quick-Bar, Controls Modal & Gamepad Polling
+    const SPEED_LADDER = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
+    const VIEW_ORDER = ["off", "tv", "cockpit", "pov", "chase", "pitlane", "director"];
+    const TOWER_MODES = ["int", "ldr", "laps", "sectors", "tyre", "form"];
+
+    function stepSpeed(delta) {
+      if (fs.paused) { setSpeed(1); return; }
+      const idx = SPEED_LADDER.indexOf(fs.speedMult);
+      const curIdx = idx >= 0 ? idx : 2;
+      const nextIdx = Math.max(0, Math.min(SPEED_LADDER.length - 1, curIdx + delta));
+      setSpeed(SPEED_LADDER[nextIdx]);
+    }
+
+    function stepFocusByOrder(delta) {
+      const sorted = ENG.sortRaceStandings(fs.cars, fs.finished);
+      if (!sorted.length) return;
+      const curRank = Math.max(0, sorted.findIndex((c) => c.idx === fs.focusIdx));
+      const nextRank = (curRank + delta + sorted.length) % sorted.length;
+      const target = sorted[nextRank];
+      if (target) selectFocusCar(target.idx, `🎯 P${target.pos}`);
+    }
+
+    function cycleActiveBattles(delta) {
+      const sorted = ENG.sortRaceStandings(fs.cars, fs.finished);
+      const battles = getActiveBattles(sorted);
+      if (!battles.length) {
+        stepFocusByOrder(delta || 1);
+        return;
+      }
+      fs.battleCycleIdx = ((fs.battleCycleIdx || 0) + (delta || 1) + battles.length) % battles.length;
+      const pick = battles[fs.battleCycleIdx];
+      selectFocusCar(pick.chaser.idx, `⚔️ BATTLE · ${pick.ahead.card.code3} vs ${pick.chaser.card.code3}`, "heli");
+    }
+
+    function toggleInstantPov() {
+      if (fs.b3dMode === "cockpit") {
+        setBroadcast3DMode("pov");
+        showToast("🎥 Switched to Onboard T-Cam POV [O]", "info");
+      } else {
+        setBroadcast3DMode("cockpit");
+        if (fs.b3d && fs.b3d.setPovSub) fs.b3d.setPovSub("cockpit");
+        updatePovDock();
+        showToast("🏎️ Carbon Halo Cockpit POV [O / C / H]", "info");
+      }
+    }
+
+    function cyclePovAngle() {
+      if (fs.b3dMode !== "cockpit" && fs.b3dMode !== "pov") {
+        setBroadcast3DMode("cockpit");
+      }
+      if (fs.b3d && fs.b3d.cyclePovSub) {
+        if (fs.b3dMode !== "cockpit") setBroadcast3DMode("cockpit");
+        const nextSub = fs.b3d.cyclePovSub();
+        updatePovDock();
+        showToast(`🎥 POV Angle: ${nextSub.toUpperCase()}`, "info");
+      }
+    }
+
+    function toggleHaloGhost() {
+      if (fs.b3dMode !== "cockpit") {
+        setBroadcast3DMode("cockpit");
+      }
+      if (fs.b3d && fs.b3d.toggleHaloGhost) {
+        const ghost = fs.b3d.toggleHaloGhost();
+        updatePovDock();
+        showToast(ghost ? "👻 Halo Pillar: Ghost Translucent" : "🛡 Halo Pillar: Solid Carbon", "info");
+      }
+    }
+
+    function toggleVisorFx() {
+      fs.visorFxOn = !(fs.visorFxOn !== false);
+      updatePovDock();
+      showToast(fs.visorFxOn ? "💧 Helmet Visor FX ON" : "💧 Helmet Visor FX OFF", "info");
+    }
+
+    function takeTheWheel() {
+      const cirId = (fs.circuit && fs.circuit.id) || "melbourne";
+      const eraKey = (fs.eraRule && fs.eraRule.key) || "2026";
+      const wet = fs.wetness >= 55 ? "rain" : (fs.weatherMode === "dynamic" ? "dynamic" : "dry");
+      const foc = fs.cars[fs.focusIdx] || fs.cars[0];
+      const team = foc && foc.card && foc.card.hero_team ? `&team=${encodeURIComponent(foc.card.hero_team)}` : "";
+      window.location.href = `/drive?mode=gp&circuit=${encodeURIComponent(cirId)}&era=${encodeURIComponent(eraKey)}&weather=${encodeURIComponent(wet)}${team}`;
+    }
+
+    function refreshDynamicKeyHints() {
+      const hintEl = getEl("fsim-keys-hint");
+      if (hintEl && window.F1GamepadStudio) {
+        hintEl.textContent = window.F1GamepadStudio.buildDynamicHintLine("sim");
+      }
+    }
+
+    // Controls & Gamepad Studio Modal
+    let gpStudioUnmount = null;
+    function toggleKeysModal(force, tabName) {
+      const modal = getEl("fsim-keys-modal");
+      if (!modal) return;
+      const open = typeof force === "boolean" ? force : modal.classList.contains("hidden");
+      modal.classList.toggle("hidden", !open);
+      if (open && tabName) {
+        modal.querySelectorAll("[data-fsim-ktab]").forEach((b) => b.classList.toggle("active", b.dataset.fsimKtab === tabName));
+        ["cheatsheet", "gamepad"].forEach((p) => getEl(`fsim-kpane-${p}`)?.classList.toggle("active", p === tabName));
+      }
+      if (open && window.F1GamepadStudio && getEl("fsim-gp-studio-host")) {
+        if (gpStudioUnmount) gpStudioUnmount();
+        gpStudioUnmount = window.F1GamepadStudio.mountStudio(getEl("fsim-gp-studio-host"), { context: "sim" });
+      } else if (!open && gpStudioUnmount) {
+        gpStudioUnmount();
+        gpStudioUnmount = null;
+      }
+    }
+
+    getEl("fsim-keys-btn")?.addEventListener("click", () => toggleKeysModal());
+    getEl("fsim-keys-close")?.addEventListener("click", () => toggleKeysModal(false));
+    getEl("fsim-keys-modal")?.addEventListener("click", (ev) => {
+      if (ev.target && ev.target.id === "fsim-keys-modal") toggleKeysModal(false);
+    });
+    document.querySelectorAll("[data-fsim-ktab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const t = btn.dataset.fsimKtab;
+        document.querySelectorAll("[data-fsim-ktab]").forEach((b) => b.classList.toggle("active", b === btn));
+        ["cheatsheet", "gamepad"].forEach((p) => getEl(`fsim-kpane-${p}`)?.classList.toggle("active", p === t));
+      });
+    });
+
+    function execDirectorAction(act) {
+      if (act === "povToggle") toggleInstantPov();
+      else if (act === "povSub") cyclePovAngle();
+      else if (act === "haloGhost") toggleHaloGhost();
+      else if (act === "cycleView") {
+        const nxt = VIEW_ORDER[(VIEW_ORDER.indexOf(fs.b3dMode || "off") + 1) % VIEW_ORDER.length];
+        setBroadcast3DMode(nxt);
+      }
+      else if (act === "prevCar") stepFocusByOrder(-1);
+      else if (act === "nextCar") stepFocusByOrder(1);
+      else if (act === "nextBattle") cycleActiveBattles(1);
+      else if (act === "leader") getEl("fsim-cam-leader")?.click();
+      else if (act === "playPause") setSpeed(fs.paused ? (fs.speedMult || 1) : 0);
+      else if (act === "speedUp") stepSpeed(1);
+      else if (act === "speedDown") stepSpeed(-1);
+      else if (act === "autoTv") setAutoTv(!fs.autoTv);
+      else if (act === "replay") getEl("fsim-replay-btn")?.click();
+      else if (act === "towerMode") {
+        const nxt = TOWER_MODES[(TOWER_MODES.indexOf(fs.gapMode || "int") + 1) % TOWER_MODES.length];
+        document.querySelector(`[data-fsim-gap="${nxt}"]`)?.click();
+      }
+      else if (act === "visorToggle") toggleVisorFx();
+      else if (act === "takeWheel") takeTheWheel();
+      else if (act === "focusMode") getEl("fsim-focus-btn")?.click();
+    }
+
+    document.querySelectorAll("[data-fsim-exec]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        execDirectorAction(btn.getAttribute("data-fsim-exec"));
+        toggleKeysModal(false);
+      });
+    });
+
+    // Contextual POV Dock Button Wiring
+    getEl("fsim-pov-prev")?.addEventListener("click", () => stepFocusByOrder(-1));
+    getEl("fsim-pov-next")?.addEventListener("click", () => stepFocusByOrder(1));
+    getEl("fsim-pov-angle")?.addEventListener("click", cyclePovAngle);
+    getEl("fsim-pov-halo")?.addEventListener("click", toggleHaloGhost);
+    getEl("fsim-pov-visor")?.addEventListener("click", toggleVisorFx);
+    getEl("fsim-pov-drive")?.addEventListener("click", takeTheWheel);
+
+    // Arrow-key roving focus across toolbar button groups for effortless keyboard navigation
+    document.querySelectorAll('[role="toolbar"]').forEach((bar) => {
+      bar.addEventListener("keydown", (ev) => {
+        if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+        const btns = Array.from(bar.querySelectorAll("button:not(.hidden)"));
+        const idx = btns.indexOf(document.activeElement);
+        if (idx < 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const nxt = btns[(idx + (ev.key === "ArrowRight" ? 1 : -1) + btns.length) % btns.length];
+        nxt?.focus();
+      });
+    });
+
+    // Hold-to-Look (Q = Left, E = Right, B = Back) in 3D POV/Cockpit/Chase
+    const lookHold = { left: false, right: false, back: false };
+    function syncLookOffset() {
+      if (!fs.b3d || !fs.b3d.setLookOffset) return;
+      let rad = 0;
+      if (lookHold.back) rad = Math.PI;
+      else if (lookHold.left) rad = 0.92;
+      else if (lookHold.right) rad = -0.92;
+      fs.b3d.setLookOffset(rad);
+    }
+
+    // Customizable Gamepad Director Polling inside RAF loop
+    let prevPadBtns = [];
+    let lastHintSyncMs = 0;
+    fs.pollGamepad = function pollSimGamepad() {
+      const S = window.F1GamepadStudio;
+      if (!S) return;
+      const pad = S.getConnectedGamepad();
+      if (!pad) return;
+      const b = S.getSimBinds();
+      const pressed = (idx) => idx != null && Boolean(pad.buttons[idx] && pad.buttons[idx].pressed);
+      const edge = (idx) => pressed(idx) && !prevPadBtns[idx];
+      if (pad.buttons.some((bt) => bt && bt.pressed)) {
+        S.setLastDevice("gamepad");
+        const nowMs = performance.now();
+        if (nowMs - lastHintSyncMs > 600) { lastHintSyncMs = nowMs; refreshDynamicKeyHints(); }
+      }
+      if (edge(b.povToggle.pad)) toggleInstantPov();
+      if (edge(b.povSub.pad)) cyclePovAngle();
+      if (edge(b.cycleView.pad)) execDirectorAction("cycleView");
+      if (edge(b.haloGhost.pad)) toggleHaloGhost();
+      if (edge(b.playPause.pad)) execDirectorAction("playPause");
+      if (edge(b.nextBattle.pad)) cycleActiveBattles(1);
+      if (edge(b.prevCar.pad)) stepFocusByOrder(-1);
+      if (edge(b.nextCar.pad)) stepFocusByOrder(1);
+      if (edge(b.speedDown.pad)) stepSpeed(-1);
+      if (edge(b.speedUp.pad)) stepSpeed(1);
+      if (edge(b.autoTv.pad)) setAutoTv(!fs.autoTv);
+
+      const padLookL = pressed(b.lookLeft.pad);
+      const padLookR = pressed(b.lookRight.pad);
+      const padLookB = pressed(b.lookBack.pad);
+      if (padLookL || padLookR || padLookB || lookHold._fromPad) {
+        lookHold.left = padLookL;
+        lookHold.right = padLookR;
+        lookHold.back = padLookB;
+        lookHold._fromPad = padLookL || padLookR || padLookB;
+        syncLookOffset();
+      }
+      prevPadBtns = pad.buttons.map((bt) => Boolean(bt && bt.pressed));
+    };
+
+    if (window.F1GamepadStudio) {
+      window.F1GamepadStudio.onChange(refreshDynamicKeyHints);
+      refreshDynamicKeyHints();
+    }
+
+    // Broadcast Director Hotkeys (Full Keyboard Control + Custom Bindings!)
     document.addEventListener("keydown", (ev) => {
       const tag = (ev.target && ev.target.tagName) || "";
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+      if (window.F1GamepadStudio) {
+        window.F1GamepadStudio.setLastDevice("keyboard");
+        refreshDynamicKeyHints();
+      }
       const k = ev.key.toLowerCase();
-      if (ev.code === "Space") { ev.preventDefault(); setSpeed(fs.paused ? (fs.speedMult || 1) : 0); }
-      else if (k === "-" || k === "`") setSpeed(0.5);
+      const keysModalOpen = !getEl("fsim-keys-modal")?.classList.contains("hidden");
+
+      if (ev.key === "Escape") {
+        if (keysModalOpen) { toggleKeysModal(false); return; }
+        if (fs.replay.active) { stopInstantReplay(); return; }
+        toggleSetupDrawer(false);
+        toggleRadioDrawer(false);
+        return;
+      }
+      if (ev.key === "?" || k === "k") {
+        ev.preventDefault();
+        toggleKeysModal();
+        return;
+      }
+      if (keysModalOpen) return;
+
+      // Shift+1..7: Direct 1-press broadcast camera jump!
+      if (ev.shiftKey && ev.code && ev.code.startsWith("Digit")) {
+        const dNum = parseInt(ev.code.slice(5), 10);
+        if (dNum >= 1 && dNum <= VIEW_ORDER.length) {
+          ev.preventDefault();
+          setBroadcast3DMode(VIEW_ORDER[dNum - 1]);
+          return;
+        }
+      }
+
+      if (ev.code === "Space" || k === "0") { ev.preventDefault(); setSpeed(fs.paused ? (fs.speedMult || 1) : 0); }
+      else if (k === "," || k === "-" || k === "`") { ev.preventDefault(); stepSpeed(-1); }
+      else if (k === "." || k === "=" || k === "+") { ev.preventDefault(); stepSpeed(1); }
       else if (k === "1") setSpeed(1);
       else if (k === "2") setSpeed(2);
       else if (k === "3") setSpeed(4);
       else if (k === "4") setSpeed(8);
       else if (k === "5") setSpeed(16);
       else if (k === "6") setSpeed(32);
+      else if (k === "o") { ev.preventDefault(); toggleInstantPov(); }
+      else if (k === "c") { ev.preventDefault(); cyclePovAngle(); }
+      else if (k === "h") { ev.preventDefault(); toggleHaloGhost(); }
+      else if (k === "u") { ev.preventDefault(); toggleVisorFx(); }
+      else if (k === "w") { ev.preventDefault(); takeTheWheel(); }
+      else if (ev.key === "ArrowUp" || k === "[") { ev.preventDefault(); stepFocusByOrder(-1); }
+      else if (ev.key === "ArrowDown" || k === "]") { ev.preventDefault(); stepFocusByOrder(1); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); cycleActiveBattles(-1); }
+      else if (ev.key === "ArrowRight") { ev.preventDefault(); cycleActiveBattles(1); }
+      else if (k === "q") { lookHold.left = true; syncLookOffset(); }
+      else if (k === "e") { lookHold.right = true; syncLookOffset(); }
+      else if (k === "b") { lookHold.back = true; syncLookOffset(); }
+      else if (k === "i") { ev.preventDefault(); execDirectorAction("towerMode"); }
+      else if (k === "a") document.querySelector('[data-fsim-layer="ai"]')?.click();
+      else if (k === "g") document.querySelector('[data-fsim-layer="line"]')?.click();
+      else if (k === "m") getEl("fsim-sfx-btn")?.click();
+      else if (k === "s") toggleSetupDrawer();
+      else if (k === "d") toggleRadioDrawer();
       else if (k === "r") {
         if (fs.replay.active) stopInstantReplay();
         else startInstantReplay({ focusIdx: fs.focusIdx });
       }
-      else if (k === "escape" && fs.replay.active) stopInstantReplay();
       else if (k === "t") setAutoTv(!fs.autoTv);
       else if (k === "v") {
-        const order = ["off", "tv", "pov", "chase", "pitlane", "director"];
-        const nxt = order[(order.indexOf(fs.b3dMode || "off") + 1) % order.length];
-        document.querySelector(`[data-fsim-3d="${nxt}"]`)?.click();
+        const nxt = VIEW_ORDER[(VIEW_ORDER.indexOf(fs.b3dMode || "off") + 1) % VIEW_ORDER.length];
+        setBroadcast3DMode(nxt);
       }
       else if (k === "l") getEl("fsim-cam-leader")?.click();
-      else if (k === "n") getEl("fsim-cam-battle")?.click();
+      else if (k === "n") cycleActiveBattles(1);
       else if (k === "f") getEl("fsim-focus-btn")?.click();
       else if (k === "z") {
         const cur = (fs.cam && fs.cam.mode) || "full";
         const order = ["full", "follow", "battle", "close", "heli"];
         setCamMode(order[(order.indexOf(cur) + 1) % order.length], false);
-      } else if (ev.key === "Escape") {
-        toggleSetupDrawer(false);
-        toggleRadioDrawer(false);
       }
+    });
+
+    document.addEventListener("keyup", (ev) => {
+      const k = ev.key.toLowerCase();
+      if (k === "q") { lookHold.left = false; syncLookOffset(); }
+      else if (k === "e") { lookHold.right = false; syncLookOffset(); }
+      else if (k === "b") { lookHold.back = false; syncLookOffset(); }
     });
 
     // Historical "What-If" Real F1DB Grand Prix Launcher (1950-2026)

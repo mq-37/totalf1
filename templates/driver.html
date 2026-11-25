@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ name }} — Local F1{% endblock %}
+{% block title %}{{ name }} — APEX GRID{% endblock %}
 {% block content %}
   {% set img_path = driver_image if driver_image else None %}
   {% set latest_team = latest_team if latest_team is defined else (seasons[-1]['team'] if seasons else '') %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Apex POV — First-Person F1 Driver Engine · Local F1{% endblock %}
+{% block title %}Apex POV — First-Person F1 Driver Engine · APEX GRID{% endblock %}
 {% block head %}
   <link rel="stylesheet" href="/static/css/drive.css?v={{ asset_v }}">
 {% endblock %}
@@ -100,28 +100,34 @@
     </div>
   </div>
 
-  <!-- PRE-SESSION LAUNCHER / PADDOCK HUB OVERLAY -->
+  <!-- PRE-SESSION LAUNCHER / FULL PADDOCK HQ OVERLAY -->
   <div id="drive-launcher" class="drive-overlay">
-    <div class="dl-card">
+    <div class="dl-card dl-card-paddock">
       <div class="dl-head">
         <div>
-          <span class="dl-kicker">120 HZ CUSTOM F1 ENGINE · 79 GPS CIRCUITS · 1950–2026</span>
-          <h1>APEX POV <span class="dl-accent">DRIVER ENGINE</span></h1>
+          <span class="dl-kicker">APEX GRID · 120 HZ CUSTOM F1 ENGINE · 79 GPS CIRCUITS · 1950–2026</span>
+          <h1>APEX <span class="dl-accent">POV</span> <span class="dl-subbrand">PADDOCK HQ</span></h1>
         </div>
-        <div class="dl-head-right">
-          <span id="dl-gamepad-badge" class="dh-pill">⌨️ KEYBOARD READY</span>
+        <div class="dl-head-right" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button type="button" id="dl-gamepad-badge" class="dh-pill dh-pill-btn" title="Open Gamepad &amp; Keybind Studio">⌨️ KEYBOARD READY</button>
         </div>
       </div>
 
-      <!-- Bridge Notice Banner (when launched from /ladder or /career) -->
+      <!-- Live Paddock Status & Weekend Buff Strip -->
+      <div id="dl-paddock-metrics" class="dl-metrics-bar"></div>
+
+      <!-- Bridge Notice Banner (when launched from /ladder, /career, or /sim) -->
       <div id="dl-bridge-banner" class="dl-bridge hidden"></div>
 
-      <!-- Mode Selector Tabs -->
+      <!-- Mode & Paddock HQ Tabs -->
       <div class="dl-mode-tabs" role="tablist">
-        <button type="button" class="dl-mtab active" data-dmode="timetrial"><i class="fas fa-stopwatch"></i> Time Trial &amp; Ghost</button>
-        <button type="button" class="dl-mtab" data-dmode="gp"><i class="fas fa-flag-checkered"></i> Quick Grand Prix</button>
-        <button type="button" class="dl-mtab" data-dmode="weekend"><i class="fas fa-trophy"></i> Full GP Weekend</button>
-        <button type="button" class="dl-mtab" data-dmode="career"><i class="fas fa-helmet-safety"></i> POV Driver Career</button>
+        <button type="button" class="dl-mtab active" data-dmode="timetrial"><i class="fas fa-stopwatch"></i> Time Trial</button>
+        <button type="button" class="dl-mtab" data-dmode="gp"><i class="fas fa-flag-checkered"></i> Quick GP</button>
+        <button type="button" class="dl-mtab" data-dmode="weekend"><i class="fas fa-trophy"></i> GP Weekend</button>
+        <button type="button" class="dl-mtab" data-dmode="career"><i class="fas fa-helmet-safety"></i> Career HQ</button>
+        <button type="button" class="dl-mtab" data-dmode="stories"><i class="fas fa-newspaper"></i> Stories &amp; Buzz <span id="dl-story-dot" class="dl-badge-dot">2</span></button>
+        <button type="button" class="dl-mtab" data-dmode="lore"><i class="fas fa-id-card"></i> Cards &amp; Lore</button>
+        <button type="button" class="dl-mtab" data-dmode="controls"><i class="fas fa-gamepad"></i> Controls</button>
       </div>
 
       <!-- Standard Session Setup Grid (TT / GP / Weekend) -->
@@ -268,6 +274,40 @@
           <button type="button" id="dc-btn-drive-round" class="dh-btn dh-btn-red dl-launch-btn"><i class="fas fa-flag-checkered"></i> DRIVE NEXT CAREER GRAND PRIX</button>
         </div>
       </div>
+
+      <!-- PADDOCK STORIES, BREAKING NEWS, SOCIAL BUZZ & COMMITMENTS PANE -->
+      <div id="dl-stories-pane" class="dl-body hidden">
+        <div class="dl-paddock-grid">
+          <div class="dl-panel">
+            <h3><i class="fas fa-book-open"></i> Driver &amp; Team Principal Stories</h3>
+            <div id="dp-stories-list" class="dl-scroll dp-scroll-tall"></div>
+            <h3 style="margin-top:10px;"><i class="fas fa-calendar-check"></i> Pre-Race Events &amp; Commitments <small class="muted">(Up to 3 / GP)</small></h3>
+            <div id="dp-commitments-list" class="dp-commit-grid"></div>
+          </div>
+          <div class="dl-panel">
+            <h3><i class="fas fa-bolt"></i> Breaking Paddock News</h3>
+            <div id="dp-news-list" class="dl-scroll" style="max-height:200px;"></div>
+            <h3 style="margin-top:10px;"><i class="fas fa-hashtag"></i> Social Media Buzz · #ApexGrid</h3>
+            <div id="dp-social-list" class="dl-scroll" style="max-height:230px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRIVER CARDS SHOWCASE & F1 LORE VAULT PANE -->
+      <div id="dl-lore-pane" class="dl-body hidden">
+        <div class="dl-lore-subtabs">
+          <button type="button" class="dh-btn active" data-lore-filter="grid"><i class="fas fa-id-card"></i> 2026 Grid Cards</button>
+          <button type="button" class="dh-btn" data-lore-filter="legends"><i class="fas fa-crown"></i> All-Time Legends</button>
+          <button type="button" class="dh-btn" data-lore-filter="vault"><i class="fas fa-landmark"></i> Circuit, Era &amp; FIA Lore</button>
+          <button type="button" class="dh-btn" data-lore-filter="tp"><i class="fas fa-user-tie"></i> Team Principal Dossiers</button>
+        </div>
+        <div id="dp-lore-host" class="dl-scroll dp-lore-host"></div>
+      </div>
+
+      <!-- GAMEPAD & KEYBOARD CONTROLLER STUDIO PANE -->
+      <div id="dl-controls-pane" class="dl-body hidden">
+        <div id="dp-gamepad-studio-host"></div>
+      </div>
     </div>
   </div>
 
@@ -298,6 +338,7 @@
     window.__DRIVE_CAREERS__ = {{ careers | tojson }};
   </script>
   <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_gamepad_studio.js?v={{ asset_v }}"></script>
   <script src="/static/js/f1_track_architect.js?v={{ asset_v }}"></script>
   <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
   <script src="/static/js/f1_drive_physics.js?v={{ asset_v }}"></script>

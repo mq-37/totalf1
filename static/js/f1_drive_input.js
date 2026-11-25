@@ -1,12 +1,9 @@
 /**
- * Apex POV (/drive) — Unified Keyboard + HTML5 Gamepad API Input & Rumble Controller.
+ * APEX GRID (/drive) — Unified Keyboard + Customizable HTML5 Gamepad API Input & Rumble Controller.
  *
- * Features:
- *   - Keyboard (WASD / Arrows) with speed-sensitive steering smoothing so high-speed corners
- *     feel razor-sharp without twitchiness
- *   - HTML5 Gamepad API (Xbox / PlayStation / Racing Wheels): analog triggers, cubic stick
- *     curve with deadzone, paddle shifters, DRS/ERS/Camera/Pit buttons & dual-rumble haptics
- *   - Edge-triggered discrete actions (shiftUp, shiftDown, cycleCam, toggleHalo, toggleLine, pause)
+ * Connected to window.F1GamepadStudio so custom deadzones, steering linearity curves,
+ * click-to-rebind keyboard/gamepad mappings, PlayStation/Xbox glyph hints, look-back,
+ * D-pad brake bias & box requests, and rumble strength all work seamlessly.
  */
 (function (global) {
   "use strict";
@@ -22,6 +19,7 @@
     let throttleSmooth = 0;
     let brakeSmooth = 0;
     let gamepadName = "";
+    let gamepadFamily = "keyboard";
     let prevPadBtns = [];
     let lastRumbleMs = 0;
 
@@ -31,23 +29,45 @@
       togglePitLimiter: false,
     };
 
+    function getBinds() {
+      const S = global.F1GamepadStudio;
+      if (S && S.getDriveBinds) return S.getDriveBinds();
+      return {
+        ers: { key: "Space", pad: 0 },
+        drs: { key: "KeyR", pad: 2 },
+        shiftUp: { key: "KeyE", pad: 5 },
+        shiftDown: { key: "KeyQ", pad: 4 },
+        cycleCam: { key: "KeyC", pad: 3 },
+        toggleHalo: { key: "KeyH", pad: 8 },
+        toggleLine: { key: "KeyT", pad: 12 },
+        boxRequest: { key: "KeyF", pad: 13 },
+        pitLimiter: { key: "KeyL", pad: 1 },
+        brakeBiasDown: { key: "KeyB", pad: 14 },
+        brakeBiasUp: { key: "KeyN", pad: 15 },
+        lookBack: { key: "KeyX", pad: 10 },
+        pause: { key: "KeyP", pad: 9 },
+      };
+    }
+
     function onKeyDown(e) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) return;
       const code = e.code;
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(code)) {
         e.preventDefault();
       }
+      if (global.F1GamepadStudio) global.F1GamepadStudio.setLastDevice("keyboard");
+      const b = getBinds();
       if (!keys.has(code)) {
-        if (code === "KeyE" || code === "ShiftRight") oneShot.shiftUp = true;
-        if (code === "KeyQ" || code === "ControlRight") oneShot.shiftDown = true;
-        if (code === "KeyL") oneShot.togglePitLimiter = true;
-        if (code === "KeyC" && cb.onCycleCamera) cb.onCycleCamera();
-        if (code === "KeyH" && cb.onToggleHalo) cb.onToggleHalo();
-        if (code === "KeyT" && cb.onToggleRacingLine) cb.onToggleRacingLine();
-        if ((code === "Escape" || code === "KeyP") && cb.onTogglePause) cb.onTogglePause();
-        if (code === "KeyB" && cb.onBrakeBias) cb.onBrakeBias(-1);
-        if (code === "KeyN" && cb.onBrakeBias) cb.onBrakeBias(+1);
-        if (code === "KeyF" && cb.onBoxRequest) cb.onBoxRequest();
+        if (code === b.shiftUp.key || code === "ShiftRight") oneShot.shiftUp = true;
+        if (code === b.shiftDown.key || code === "ControlRight") oneShot.shiftDown = true;
+        if (code === b.pitLimiter.key) oneShot.togglePitLimiter = true;
+        if (code === b.cycleCam.key && cb.onCycleCamera) cb.onCycleCamera();
+        if (code === b.toggleHalo.key && cb.onToggleHalo) cb.onToggleHalo();
+        if (code === b.toggleLine.key && cb.onToggleRacingLine) cb.onToggleRacingLine();
+        if ((code === "Escape" || code === b.pause.key) && cb.onTogglePause) cb.onTogglePause();
+        if (code === b.brakeBiasDown.key && cb.onBrakeBias) cb.onBrakeBias(-1);
+        if (code === b.brakeBiasUp.key && cb.onBrakeBias) cb.onBrakeBias(+1);
+        if (code === b.boxRequest.key && cb.onBoxRequest) cb.onBoxRequest();
       }
       keys.add(code);
     }
@@ -66,14 +86,18 @@
 
     function poll(dt, speedKph) {
       const stepDt = Math.max(0.001, Math.min(0.05, dt || 0.016));
+      const b = getBinds();
+      const S = global.F1GamepadStudio;
+
       let kbThrottle = (keys.has("KeyW") || keys.has("ArrowUp")) ? 1 : 0;
       let kbBrake = (keys.has("KeyS") || keys.has("ArrowDown")) ? 1 : 0;
       let kbSteer = 0;
       if (keys.has("KeyA") || keys.has("ArrowLeft")) kbSteer -= 1;
       if (keys.has("KeyD") || keys.has("ArrowRight")) kbSteer += 1;
 
-      let ers = keys.has("Space");
-      let drs = keys.has("KeyR");
+      let ers = keys.has(b.ers.key);
+      let drs = keys.has(b.drs.key);
+      let lookBack = keys.has(b.lookBack.key);
 
       let shiftUp = oneShot.shiftUp;
       let shiftDown = oneShot.shiftDown;
@@ -82,40 +106,50 @@
       oneShot.shiftDown = false;
       oneShot.togglePitLimiter = false;
 
-      // Poll HTML5 Gamepad API
+      // Poll HTML5 Gamepad API with custom deadzones, linearity curves & remapped buttons
       let padThrottle = 0, padBrake = 0, padSteer = 0, padActive = false;
       gamepadName = "";
+      gamepadFamily = "keyboard";
       try {
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const pad = Array.from(pads || []).find((p) => p && p.connected);
+        const pad = S ? S.getConnectedGamepad() : (Array.from((navigator.getGamepads && navigator.getGamepads()) || []).find((p) => p && p.connected) || null);
         if (pad) {
           gamepadName = pad.id || "Gamepad";
+          gamepadFamily = S ? S.detectFamily(pad) : "xbox";
           const rawX = Number(pad.axes[0] || 0);
-          const dz = 0.08;
-          if (Math.abs(rawX) > dz) {
-            const norm = (Math.abs(rawX) - dz) / (1 - dz);
-            padSteer = Math.sign(rawX) * (0.58 * norm + 0.42 * norm * norm * norm);
-            padActive = true;
-          }
-          const rt = pad.buttons[7] ? pad.buttons[7].value : 0;
-          const lt = pad.buttons[6] ? pad.buttons[6].value : 0;
-          if (rt > 0.03) { padThrottle = rt; padActive = true; }
-          if (lt > 0.03) { padBrake = lt; padActive = true; }
+          padSteer = S ? S.applyStickCurve(rawX) : (Math.abs(rawX) > 0.08 ? rawX : 0);
+          if (Math.abs(padSteer) > 0.01) padActive = true;
 
-          const pressed = (idx) => Boolean(pad.buttons[idx] && pad.buttons[idx].pressed);
+          const rtRaw = pad.buttons[7] ? pad.buttons[7].value : 0;
+          const ltRaw = pad.buttons[6] ? pad.buttons[6].value : 0;
+          padThrottle = S ? S.applyTriggerCurve(rtRaw) : (rtRaw > 0.03 ? rtRaw : 0);
+          padBrake = S ? S.applyTriggerCurve(ltRaw) : (ltRaw > 0.03 ? ltRaw : 0);
+          if (padThrottle > 0.01 || padBrake > 0.01) padActive = true;
+
+          const pressed = (idx) => idx != null && Boolean(pad.buttons[idx] && pad.buttons[idx].pressed);
           const edge = (idx) => pressed(idx) && !prevPadBtns[idx];
-          if (pressed(0)) ers = true;            // A / Cross = ERS Overtake
-          if (pressed(2)) drs = true;            // X / Square = DRS
-          if (edge(5)) shiftUp = true;           // RB = Upshift
-          if (edge(4)) shiftDown = true;         // LB = Downshift
-          if (edge(1)) togglePitLimiter = true;  // B / Circle = Pit Limiter
-          if (edge(3) && cb.onCycleCamera) cb.onCycleCamera(); // Y / Triangle = Camera
-          if (edge(9) && cb.onTogglePause) cb.onTogglePause(); // Start = Pause
-          prevPadBtns = pad.buttons.map((b) => Boolean(b && b.pressed));
+          const anyPressed = pad.buttons.some((bt) => bt && bt.pressed);
+          if (padActive || anyPressed) {
+            if (S) S.setLastDevice("gamepad");
+          }
+
+          if (pressed(b.ers.pad)) ers = true;
+          if (pressed(b.drs.pad)) drs = true;
+          if (pressed(b.lookBack.pad)) lookBack = true;
+          if (edge(b.shiftUp.pad)) shiftUp = true;
+          if (edge(b.shiftDown.pad)) shiftDown = true;
+          if (edge(b.pitLimiter.pad)) togglePitLimiter = true;
+          if (edge(b.cycleCam.pad) && cb.onCycleCamera) cb.onCycleCamera();
+          if (edge(b.toggleHalo.pad) && cb.onToggleHalo) cb.onToggleHalo();
+          if (edge(b.toggleLine.pad) && cb.onToggleRacingLine) cb.onToggleRacingLine();
+          if (edge(b.boxRequest.pad) && cb.onBoxRequest) cb.onBoxRequest();
+          if (edge(b.brakeBiasDown.pad) && cb.onBrakeBias) cb.onBrakeBias(-1);
+          if (edge(b.brakeBiasUp.pad) && cb.onBrakeBias) cb.onBrakeBias(+1);
+          if (edge(b.pause.pad) && cb.onTogglePause) cb.onTogglePause();
+
+          prevPadBtns = pad.buttons.map((bt) => Boolean(bt && bt.pressed));
         }
       } catch (_) {}
 
-      // Smooth keyboard inputs (instant analog pass-through when gamepad is active)
       if (padActive && kbSteer === 0 && kbThrottle === 0 && kbBrake === 0) {
         steerSmooth = padSteer;
         throttleSmooth = padThrottle;
@@ -135,10 +169,12 @@
         steer: clamp(padActive && kbSteer === 0 ? padSteer : steerSmooth, -1, 1),
         ers,
         drs,
+        lookBack,
         shiftUp,
         shiftDown,
         togglePitLimiter,
         gamepadName,
+        gamepadFamily,
       };
     }
 
@@ -146,27 +182,18 @@
       const now = performance.now();
       if (now - lastRumbleMs < 75) return;
       lastRumbleMs = now;
-      try {
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const pad = Array.from(pads || []).find((p) => p && p.connected && p.vibrationActuator);
-        if (pad && pad.vibrationActuator && pad.vibrationActuator.playEffect) {
-          pad.vibrationActuator.playEffect("dual-rumble", {
-            startDelay: 0,
-            duration: durationMs || 90,
-            weakMagnitude: clamp(weakMag || 0, 0, 1),
-            strongMagnitude: clamp(strongMag || 0, 0, 1),
-          }).catch(() => {});
-        }
-      } catch (_) {}
+      if (global.F1GamepadStudio && global.F1GamepadStudio.rumble) {
+        global.F1GamepadStudio.rumble(weakMag, strongMag, durationMs);
+      }
     }
 
-    function dispose() {
+    function destroy() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     }
 
-    return { poll, rumble, getGamepadName: () => gamepadName, dispose };
+    return { poll, rumble, destroy };
   }
 
   global.F1DriveInput = { createDriveInput };

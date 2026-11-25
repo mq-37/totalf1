@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Local F1 — Home{% endblock %}
+{% block title %}APEX GRID — Formula 1 Simulation, Telemetry &amp; Paddock Engine{% endblock %}
 {% block content %}
   <div class="museum-hero">
     <div>
-      <p class="hero-kicker">The Private Collection · {{ latest or '' }}</p>
-      <h1 class="hero-title">LOCAL&nbsp;F1</h1>
-      <p class="hero-sub">Seventy-five seasons of Formula 1, catalogued. Driver cards, team liveries and career records — exhibited season by season, from 1950 to today.</p>
+      <p class="hero-kicker">Formula 1 Simulation, Telemetry &amp; Paddock Engine · {{ latest or '' }}</p>
+      <h1 class="hero-title">APEX&nbsp;<span class="logo-accent">GRID</span></h1>
+      <p class="hero-sub">Seventy-six seasons of Formula 1 — playable in 120 Hz POV cockpit, 3D TV broadcast sim, 5-tier motorsport career, collectible driver cards, and F1DB telemetry archive from 1950 to 2026.</p>
       <div class="hero-doors">
+        <a href="/drive" class="hero-door is-primary-door"><i class="fas fa-tachometer-alt"></i> Apex POV Driver</a>
         <a href="/sim" class="hero-door is-primary-door"><i class="fas fa-tv"></i> Full Broadcast Sim</a>
-        <a href="/career" class="hero-door is-primary-door"><i class="fas fa-briefcase"></i> F1 Career Manager</a>
+        <a href="/ladder" class="hero-door is-primary-door"><i class="fas fa-stairs"></i> Pit Wall: The Ladder</a>
+        <a href="/career" class="hero-door"><i class="fas fa-briefcase"></i> F1 Career Manager</a>
         <a href="/play" class="hero-door"><i class="fas fa-gamepad"></i> 3D Card Arena</a>
         <a href="/cards" class="hero-door"><i class="fas fa-id-card"></i> Driver Cards</a>
         <a href="/races/{{ latest or '' }}" class="hero-door"><i class="fas fa-flag-checkered"></i> Races {{ latest or '' }}</a>

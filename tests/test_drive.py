@@ -119,6 +119,90 @@ class TestApexPovDrive(unittest.TestCase):
         self.assertIn("drive_world_integrity", payload)
         self.assertTrue(payload["drive_world_integrity"]["ok"])
 
+    def test_paddock_hq_stories_commitments_cards_lore_and_rebrand(self) -> None:
+        import asyncio
+        import socket
+        import threading
+        import time
+        import urllib.request
+        import uvicorn
+        from f1data import drive_paddock as dpaddock
+
+        orig_base = f1data.server._career_base_dir
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            f1data.server._career_base_dir = lambda: base
+            # 1. Direct Paddock HQ engine + Career Story & Commitment WAL Persistence
+            pad = dpaddock.build_paddock_payload(
+                base, circuit_id="monza", era_key="2026", team_name="Ferrari", driver_name="Marco Bellini"
+            )
+            self.assertTrue(pad["ok"])
+            self.assertGreaterEqual(len(pad["stories"]), 2)
+            self.assertGreaterEqual(len(pad["commitments"]), 5)
+            self.assertGreaterEqual(len(pad["news_feed"]), 2)
+            self.assertGreaterEqual(len(pad["social_feed"]), 2)
+            self.assertEqual(pad["player_card"]["name"], "Marco Bellini")
+            self.assertGreaterEqual(len(pad["grid_cards"]), 18)
+            self.assertGreaterEqual(len(pad["legend_cards"]), 5)
+            self.assertEqual(pad["lore"]["circuit"]["id"], "monza")
+            self.assertGreaterEqual(len(pad["lore"]["tp_dossiers"]), 5)
+            self.assertGreaterEqual(len(pad["lore"]["ecosystem"]), 5)
+
+            st = deng.build_new_driver_career(
+                driver_name="Elena Vance", driver_number=33, team_name="McLaren", season_rounds=4
+            )
+            sid = ddb.save_career(base, st)
+            loaded = ddb.load_career(base, sid)
+            p_car = dpaddock.build_paddock_payload(base, career_state=loaded)
+            self.assertTrue(p_car["metrics"]["career_active"])
+            story = p_car["stories"][0]
+            choice = story["choices"][0]
+
+            ok_s, _msg_s, _extra_s = dpaddock.resolve_story_choice(loaded, story["id"], choice["id"])
+            self.assertTrue(ok_s)
+            ddb.save_career(base, loaded)
+            reloaded = ddb.load_career(base, sid)
+            self.assertEqual(len(reloaded["pending_stories"]), len(p_car["stories"]) - 1)
+            self.assertGreaterEqual(len(reloaded["story_history"]), 1)
+
+            ok_c, _msg_c, _extra_c = dpaddock.execute_commitment(reloaded, "sim_cal")
+            self.assertTrue(ok_c)
+            ddb.save_career(base, reloaded)
+            reloaded2 = ddb.load_career(base, sid)
+            self.assertTrue(any(b["key"] == "grip_boost" for b in reloaded2["active_buffs"]))
+
+            # 2. Live HTTP check for APEX GRID rebrand & /api/drive/paddock
+            with socket.socket() as s:
+                s.bind(("127.0.0.1", 0))
+                port = s.getsockname()[1]
+            cfg = uvicorn.Config(f1data.server.app, host="127.0.0.1", port=port, log_level="error")
+            server = uvicorn.Server(cfg)
+            th = threading.Thread(target=server.run, daemon=True)
+            th.start()
+            try:
+                for _ in range(40):
+                    try:
+                        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1)
+                        break
+                    except Exception:
+                        time.sleep(0.1)
+                for route in ("/", "/drive", "/sim"):
+                    html = urllib.request.urlopen(f"http://127.0.0.1:{port}{route}", timeout=5).read().decode("utf-8")
+                    self.assertIn("APEX", html)
+                    self.assertIn("GRID", html)
+                    self.assertNotIn("Local F1", html)
+                api_res = json.loads(
+                    urllib.request.urlopen(
+                        f"http://127.0.0.1:{port}/api/drive/paddock?save_id={sid}", timeout=5
+                    ).read().decode("utf-8")
+                )
+                self.assertTrue(api_res["ok"])
+                self.assertTrue(api_res["metrics"]["career_active"])
+            finally:
+                server.should_exit = True
+                th.join(timeout=3)
+                f1data.server._career_base_dir = orig_base
+
 
 if __name__ == "__main__":
     unittest.main()

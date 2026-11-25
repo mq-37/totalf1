@@ -50,6 +50,11 @@
   let weekendStage = "race";    // practice | quali | race
   let activeCareerId = null;
   let activeCareerView = null;
+  let paddockData = null;
+  let quickBuffs = [];
+  let quickCompletedCommitments = new Set();
+  let loreFilter = "grid";
+  let gpStudioUnmount = null;
   let bridgeInfo = null;
 
   let running = false;
@@ -163,6 +168,15 @@
     const runCfg = Object.assign({}, cfg, {
       mode: effectiveMode,
       laps: (cfg.mode === "weekend" && weekendStage === "practice") ? 2 : ((cfg.mode === "weekend" && weekendStage === "quali") ? 1 : cfg.laps),
+      physics_dna: Object.assign({}, cfg.physics_dna || {}),
+    });
+    // Apply active Paddock Story / Commitment weekend buffs into live driving physics!
+    const allBuffs = (activeCareerView && activeCareerView.state && activeCareerView.state.active_buffs)
+      ? activeCareerView.state.active_buffs
+      : quickBuffs;
+    allBuffs.forEach((bf) => {
+      if (bf && bf.grip_mult) runCfg.physics_dna.grip_mult = (runCfg.physics_dna.grip_mult || 1.0) * Number(bf.grip_mult);
+      if (bf && bf.power_mult) runCfg.physics_dna.top_speed_kph = Math.round((runCfg.physics_dna.top_speed_kph || 335) * Number(bf.power_mult));
     });
 
     const archFn = window.F1TrackArchitect && window.F1TrackArchitect.getCircuitElevationAndBank;
@@ -248,7 +262,19 @@
     const inp = inputCtrl ? inputCtrl.poll(rawDt, car ? car.speedKph : 0) : { throttle: 0, brake: 0, steer: 0 };
     if (inp.gamepadName) {
       const gb = document.getElementById("dl-gamepad-badge");
-      if (gb) gb.textContent = `🎮 ${inp.gamepadName.slice(0, 22)}`;
+      if (gb) gb.textContent = `🎮 ${inp.gamepadFamily ? inp.gamepadFamily.toUpperCase() + " · " : ""}${inp.gamepadName.slice(0, 18)}`;
+    }
+    if (window.F1GamepadStudio) {
+      const hintEl = document.getElementById("dh-input-hint");
+      if (hintEl) {
+        let dynLine = window.F1GamepadStudio.buildDynamicHintLine("drive");
+        if (car && car.drsAvailable && !car.drsOpen) {
+          dynLine = `⚡ DRS AVAILABLE — PRESS [${window.F1GamepadStudio.formatActionText("drive", "drs")}] · ` + dynLine;
+        } else if (car && (car.tyreLife < 26 || car.frontWingHealth < 65) && !car.inPit) {
+          dynLine = `🔧 BOX RECOMMENDED — PRESS [${window.F1GamepadStudio.formatActionText("drive", "boxRequest")}] · ` + dynLine;
+        }
+        hintEl.textContent = dynLine;
+      }
     }
 
     let proxLeft = false, proxRight = false;
@@ -651,22 +677,31 @@
     const acts = document.getElementById("dm-actions");
     acts.innerHTML = `
       <button type="button" id="dm-resume" class="dh-btn dh-btn-red">Resume Cockpit</button>
+      <button type="button" id="dm-controls" class="dh-btn"><i class="fas fa-gamepad"></i> Controller Setup</button>
       <button type="button" id="dm-restart" class="dh-btn">Restart Session</button>
       <button type="button" id="dm-paddock" class="dh-btn">Exit to Paddock</button>
     `;
     document.getElementById("dm-resume").addEventListener("click", resumeSession);
+    document.getElementById("dm-controls").addEventListener("click", () => {
+      if (!window.F1GamepadStudio) return;
+      document.getElementById("dm-telem-wrap")?.classList.add("hidden");
+      if (gpStudioUnmount) gpStudioUnmount();
+      gpStudioUnmount = window.F1GamepadStudio.mountStudio(document.getElementById("dm-body"), { context: "drive" });
+    });
     document.getElementById("dm-restart").addEventListener("click", () => launchSession(sessionCfg, weekendStage));
     document.getElementById("dm-paddock").addEventListener("click", exitToLauncher);
     document.getElementById("drive-modal").classList.remove("hidden");
   }
 
   function resumeSession() {
+    if (gpStudioUnmount) { gpStudioUnmount(); gpStudioUnmount = null; }
     paused = false;
     lastTs = performance.now();
     document.getElementById("drive-modal").classList.add("hidden");
   }
 
   function exitToLauncher() {
+    if (gpStudioUnmount) { gpStudioUnmount(); gpStudioUnmount = null; }
     running = false;
     paused = true;
     if (rafId) cancelAnimationFrame(rafId);
@@ -675,7 +710,8 @@
     document.getElementById("drive-hud").classList.add("hidden");
     document.getElementById("drive-launcher").classList.remove("hidden");
     refreshLeaderboards();
-    if (activeMode === "career" && activeCareerId) loadDriverCareer(activeCareerId);
+    if (activeCareerId) loadDriverCareer(activeCareerId);
+    refreshPaddockHub();
   }
 
   async function finishSession(standings, titleText) {
@@ -792,6 +828,293 @@
     activeCareerView = res.view;
     localStorage.setItem("traf1_drive_career", saveId);
     renderDriverCareer();
+    refreshPaddockHub();
+  }
+
+  // --- Full Paddock HQ: Stories, News, Social Buzz, Commitments, Driver Cards & F1 Lore ---
+  async function refreshPaddockHub() {
+    try {
+      const q = new URLSearchParams({
+        circuit: document.getElementById("in-circuit")?.value || "melbourne",
+        era: document.getElementById("in-era")?.value || "2026",
+        team: document.getElementById("in-team")?.value || "McLaren",
+        driver: document.getElementById("in-drv-name")?.value || "Alex Vance",
+      });
+      if (activeCareerId) q.set("save_id", activeCareerId);
+      paddockData = await api(`/api/drive/paddock?${q.toString()}`);
+      renderPaddockMetrics();
+      renderPaddockStoriesAndBuzz();
+      renderCardsAndLore();
+    } catch (_) {}
+  }
+
+  function renderPaddockMetrics() {
+    const bar = document.getElementById("dl-paddock-metrics");
+    const dot = document.getElementById("dl-story-dot");
+    if (!paddockData) return;
+    const m = paddockData.metrics || {};
+    const buffs = (paddockData.active_buffs || []).concat(m.career_active ? [] : quickBuffs);
+    if (dot) {
+      const cnt = (paddockData.stories || []).length;
+      dot.textContent = String(cnt);
+      dot.classList.toggle("hidden", cnt === 0);
+    }
+    if (!bar) return;
+    bar.innerHTML = `
+      <span class="dl-metric-pill">⭐ Acclaim <b>${m.acclaim ?? 42}</b></span>
+      <span class="dl-metric-pill">🤝 TP Trust <b>${m.tp_trust ?? 70}</b></span>
+      <span class="dl-metric-pill">🔧 Morale <b>${m.team_morale ?? 74}</b></span>
+      <span class="dl-metric-pill">🎙 Media <b>${m.media_rep ?? 58}</b></span>
+      <span class="dl-metric-pill">🧠 Focus <b>${m.focus ?? 90}</b></span>
+      <span class="dl-metric-pill">🔥 Rival (${esc(m.rival_name || "Rival")}) <b>${m.rivalry_heat ?? 28}</b></span>
+      ${buffs.map((bf) => `<span class="dl-metric-pill is-buff"><i class="fas fa-bolt"></i> ${esc(bf.label)}</span>`).join("")}
+    `;
+  }
+
+  function renderPaddockStoriesAndBuzz() {
+    if (!paddockData) return;
+    const sList = document.getElementById("dp-stories-list");
+    const cList = document.getElementById("dp-commitments-list");
+    const nList = document.getElementById("dp-news-list");
+    const socList = document.getElementById("dp-social-list");
+
+    if (sList) {
+      const stories = paddockData.stories || [];
+      const hist = paddockData.story_history || [];
+      sList.innerHTML = stories.length
+        ? stories.map((st) => `
+            <div class="dp-story-card" style="border-left-color:${esc(st.accent || "#e10600")}">
+              <div class="dp-story-head">
+                <span class="dp-story-badge${st.kind === "driver_story" ? " is-drv" : ""}">${esc(st.badge)}</span>
+                <span class="dp-story-actor">${esc(st.actor)} · ${esc(st.role)}</span>
+              </div>
+              <h4 class="dp-story-title">${esc(st.title)}</h4>
+              <p class="dp-story-body">${esc(st.body)}</p>
+              <div class="dp-choices-row">
+                ${(st.choices || []).map((ch) => `
+                  <button type="button" class="dp-choice-btn" data-story-id="${esc(st.id)}" data-choice-id="${esc(ch.id)}">
+                    <strong>${esc(ch.label)}</strong>
+                    <small>${esc(ch.hint)}</small>
+                  </button>
+                `).join("")}
+              </div>
+            </div>
+          `).join("")
+        : `<div class="dl-rec-row"><span>All paddock story chapters resolved for this Grand Prix weekend! Drive the race to unlock the next chapter.</span></div>`
+          + hist.slice(0, 3).map((h) => `<div class="dp-news-item"><div class="dp-news-meta"><span>RESOLVED · ${esc(h.badge)}</span><span>R${h.round}</span></div><b>${esc(h.actor)} — ${esc(h.chosen)}</b><p>${esc(h.outcome)}</p></div>`).join("");
+
+      sList.querySelectorAll(".dp-choice-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const sid = btn.dataset.storyId;
+          const cid = btn.dataset.choiceId;
+          if (activeCareerId) {
+            const res = await api(`/api/drive/career/${encodeURIComponent(activeCareerId)}/story/choose`, "POST", { story_id: sid, choice_id: cid });
+            activeCareerView = res.view;
+            paddockData = res.paddock;
+            renderDriverCareer();
+            renderPaddockMetrics();
+            renderPaddockStoriesAndBuzz();
+            showBanner(res.message, 3800);
+          } else {
+            // Standalone Quick Drive interactive resolution!
+            const idx = (paddockData.stories || []).findIndex((x) => x.id === sid);
+            if (idx >= 0) {
+              const stObj = paddockData.stories[idx];
+              const chObj = (stObj.choices || []).find((x) => x.id === cid);
+              if (chObj) {
+                if (chObj.buff) quickBuffs.push(chObj.buff);
+                if (chObj.social) {
+                  paddockData.social_feed.unshift({ handle: "@PaddockBuzz", author: "Paddock Buzz Live", verified: true, text: chObj.social, likes: 5400, reposts: 1120 });
+                }
+                paddockData.news_feed.unshift({ tag: "STORYLINE", source: stObj.badge, title: `${stObj.actor}: ${chObj.label}`, body: chObj.outcome, round: 1 });
+                Object.entries(chObj.deltas || {}).forEach(([k, dv]) => {
+                  if (paddockData.metrics && paddockData.metrics[k] != null) {
+                    paddockData.metrics[k] = Math.max(5, Math.min(100, paddockData.metrics[k] + dv));
+                  }
+                });
+                paddockData.stories.splice(idx, 1);
+                renderPaddockMetrics();
+                renderPaddockStoriesAndBuzz();
+                showBanner(chObj.outcome, 3800);
+              }
+            }
+          }
+        });
+      });
+    }
+
+    if (cList) {
+      const comms = paddockData.commitments || [];
+      cList.innerHTML = comms.map((c) => {
+        const done = c.completed || quickCompletedCommitments.has(c.id);
+        return `
+          <div class="dp-commit-card${done ? " is-done" : ""}">
+            <span class="dp-commit-cat"><i class="fas ${esc(c.icon || "fa-calendar")}"></i> ${esc(c.category)}</span>
+            <b>${esc(c.title)}</b>
+            <small>${esc(c.desc)}</small>
+            <span class="dp-commit-fx">${esc(c.effects_text)}</span>
+            <button type="button" class="dh-btn${done ? "" : " dh-btn-primary"} dp-commit-btn" data-commit-id="${esc(c.id)}" ${done ? "disabled" : ""}>${done ? "✓ Completed" : "Attend Event"}</button>
+          </div>
+        `;
+      }).join("");
+      cList.querySelectorAll(".dp-commit-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const cid = btn.dataset.commitId;
+          if (activeCareerId) {
+            try {
+              const res = await api(`/api/drive/career/${encodeURIComponent(activeCareerId)}/commitment`, "POST", { commitment_id: cid });
+              activeCareerView = res.view;
+              paddockData = res.paddock;
+              renderDriverCareer();
+              renderPaddockMetrics();
+              renderPaddockStoriesAndBuzz();
+              showBanner(res.message, 3400);
+            } catch (e) { showBanner(e.message, 3000); }
+          } else {
+            if (quickCompletedCommitments.size >= 3) { showBanner("Max 3 commitments per GP — hit Lights Out!", 2800); return; }
+            const tpl = (paddockData.commitments || []).find((x) => x.id === cid);
+            if (!tpl) return;
+            quickCompletedCommitments.add(cid);
+            if (tpl.buff) quickBuffs.push(tpl.buff);
+            Object.entries(tpl.deltas || {}).forEach(([k, dv]) => {
+              if (paddockData.metrics && paddockData.metrics[k] != null) {
+                paddockData.metrics[k] = Math.max(5, Math.min(100, paddockData.metrics[k] + dv));
+              }
+            });
+            paddockData.social_feed.unshift({ handle: "@ApexGridDaily", author: "APEX GRID Daily", verified: true, text: `📅 Completed ${tpl.title}! ${tpl.buff ? tpl.buff.label : ""}`, likes: 2450, reposts: 390 });
+            renderPaddockMetrics();
+            renderPaddockStoriesAndBuzz();
+            showBanner(`Completed: ${tpl.title}!`, 3000);
+          }
+        });
+      });
+    }
+
+    if (nList) {
+      nList.innerHTML = (paddockData.news_feed || []).map((n) => `
+        <div class="dp-news-item">
+          <div class="dp-news-meta"><span>${esc(n.tag || "NEWS")}</span><span>${esc(n.source || "APEX GRID")}</span></div>
+          <b>${esc(n.title)}</b>
+          <p>${esc(n.body)}</p>
+        </div>
+      `).join("");
+    }
+
+    if (socList) {
+      socList.innerHTML = (paddockData.social_feed || []).map((s) => `
+        <div class="dp-social-card">
+          <div class="dp-social-head">
+            <strong>${esc(s.author)}</strong>
+            ${s.verified ? `<i class="fas fa-check-circle dp-verified"></i>` : ""}
+            <span>${esc(s.handle)}</span>
+          </div>
+          <p class="dp-social-text">${esc(s.text)}</p>
+          <div class="dp-social-stats">
+            <span><i class="fas fa-heart"></i> ${Number(s.likes || 0).toLocaleString()}</span>
+            <span><i class="fas fa-retweet"></i> ${Number(s.reposts || 0).toLocaleString()}</span>
+          </div>
+        </div>
+      `).join("");
+    }
+  }
+
+  function renderCardHtml(c, isPlayer, actionLabel) {
+    const carImg = c.car_icon_url ? `<img src="${esc(c.car_icon_url)}" alt="${esc(c.team)}" class="dp-dcard-car" loading="lazy">` : "";
+    return `
+      <div class="dp-dcard${isPlayer ? " is-player" : ""}" style="--card-col:${esc(c.color || "#e10600")}">
+        <div class="dp-dcard-top">
+          <div>
+            <span class="dp-dcard-rarity">${esc(c.rarity || "GRID")}${c.era_label ? " · " + esc(c.era_label) : ""}</span>
+            <div class="dp-dcard-name">#${c.number || 1} ${esc(c.name)}</div>
+            <div class="dp-dcard-team">${esc(c.team)}</div>
+          </div>
+          <div class="dp-dcard-ovr">${c.overall || 85}</div>
+        </div>
+        ${carImg}
+        <div class="dp-dcard-stats">
+          <div class="dp-dstat">PAC<b>${c.pace || 82}</b></div>
+          <div class="dp-dstat">RAC<b>${c.racecraft || 82}</b></div>
+          <div class="dp-dstat">WET<b>${c.wet || 80}</b></div>
+          <div class="dp-dstat">TYR<b>${c.tyre_care || 80}</b></div>
+          <div class="dp-dstat">CON<b>${c.consistency || 82}</b></div>
+        </div>
+        <div class="dp-dcard-dna">${esc(c.dna_tag || "")}</div>
+        <div class="dp-dcard-quote">“${esc(c.quote || "")}”</div>
+        ${actionLabel ? `<button type="button" class="dh-btn dh-btn-primary dp-card-launch" data-card-team="${esc(c.team)}" data-card-era="${esc(c.era_key || "2026")}" data-card-name="${esc(c.name)}">${esc(actionLabel)}</button>` : ""}
+      </div>
+    `;
+  }
+
+  function renderCardsAndLore() {
+    const host = document.getElementById("dp-lore-host");
+    if (!host || !paddockData) return;
+
+    if (loreFilter === "grid") {
+      const pCard = paddockData.player_card ? renderCardHtml(paddockData.player_card, true, "") : "";
+      const gCards = (paddockData.grid_cards || []).map((c) => renderCardHtml(c, false, "Race Seat / Duel")).join("");
+      host.innerHTML = `<div class="dp-cards-grid">${pCard}${gCards}</div>`;
+    } else if (loreFilter === "legends") {
+      host.innerHTML = `<div class="dp-cards-grid">${(paddockData.legend_cards || []).map((c) => renderCardHtml(c, false, `Drive ${c.era_key} Era`)).join("")}</div>`;
+    } else if (loreFilter === "tp") {
+      const tps = (paddockData.lore && paddockData.lore.tp_dossiers) || [];
+      host.innerHTML = `<div class="dp-lore-grid">${tps.map((tp) => `
+        <div class="dp-lore-box" style="${tp.is_player_tp ? "border-color:#facc15" : ""}">
+          <h4><i class="fas fa-user-tie"></i> ${esc(tp.name)} · ${esc(tp.team)}</h4>
+          <div style="font-size:0.68rem;color:#94a3b8;font-weight:700">${esc(tp.style)} · FIA Clout ${tp.clout}/100 · ${esc(tp.nationality)}</div>
+          <div style="font-size:0.73rem;color:#cbd5e1">${esc(tp.voice)}</div>
+          <div class="dp-dcard-quote">“${esc(tp.quote)}”</div>
+        </div>
+      `).join("")}</div>`;
+    } else {
+      const l = paddockData.lore || {};
+      const cir = l.circuit || {};
+      const f1db = cir.f1db || {};
+      const era = l.era || {};
+      const fia = l.fia_precedents || [];
+      const eco = l.ecosystem || [];
+      host.innerHTML = `
+        <div class="dp-lore-grid">
+          <div class="dp-lore-box">
+            <h4><i class="fas fa-road"></i> Circuit Lore · ${esc(cir.name)}</h4>
+            <div class="dl-rec-row"><span>Length / Turns / DRS</span><b>${cir.length_km || "5.2"} km · ${cir.turns || 14}T · ${cir.drs_zones || 2} DRS</b></div>
+            <div class="dl-rec-row"><span>Lap Record / Top Speed</span><b>${esc(cir.lap_record)} · ${cir.top_speed_kph || 330} KPH</b></div>
+            <div class="dl-rec-row"><span>F1DB Heritage</span><b>${f1db.races_held || "Historic"} GPs ${f1db.first_year ? `(${f1db.first_year}–${f1db.last_year})` : ""}</b></div>
+            ${(f1db.winners || []).length ? `<div style="font-size:0.7rem;color:#cbd5e1"><b>Most Wins:</b> ${f1db.winners.map((w) => `${esc(w.driver)} (${w.wins})`).join(" · ")}</div>` : ""}
+            ${(cir.corners || []).length ? `<div style="font-size:0.68rem;color:#94a3b8"><b>Iconic Corners:</b> ${cir.corners.map((cn) => esc(cn)).join(" · ")}</div>` : ""}
+          </div>
+          <div class="dp-lore-box">
+            <h4><i class="fas fa-cogs"></i> Era Technical DNA · ${esc(era.label)}</h4>
+            <div class="dl-rec-row"><span>Top Speed / Gears / Mass</span><b>${era.top_speed_kph || 340} KPH · ${era.gears || 8}G · ${era.mass_kg || 768} kg</b></div>
+            <div class="dl-rec-row"><span>Safety &amp; Aero Tech</span><b>${era.has_halo ? "Halo" : "Open Cockpit"} · ${era.has_drs ? "DRS/X-Mode" : "Mechanical"} · ${era.has_ers ? "Hybrid ERS" : "Pure ICE"}</b></div>
+            <div class="dl-rec-row"><span>Powertrain Acoustic Profile</span><b>${esc(String(era.audio_profile || "v6_hybrid").toUpperCase())}</b></div>
+            ${fia.length ? `<div style="font-size:0.68rem;color:#94a3b8;margin-top:4px"><b>FIA Stewarding Precedents:</b><br>${fia.slice(0, 3).map((d) => `• [${esc(d.season)} ${esc(d.gp)}] ${esc(d.title)}`).join("<br>")}</div>` : ""}
+          </div>
+        </div>
+        <div class="dp-lore-box" style="margin-top:10px;">
+          <h4><i class="fas fa-layer-group"></i> Explore the Full APEX GRID Ecosystem</h4>
+          <div class="dp-eco-grid">
+            ${eco.map((e) => `<a href="${esc(e.href)}" class="dp-eco-link"><b><i class="fas ${esc(e.icon)}"></i> ${esc(e.title)}</b><small>${esc(e.stat)}</small></a>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    host.querySelectorAll(".dp-card-launch").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tm = btn.dataset.cardTeam;
+        const era = btn.dataset.cardEra;
+        const teamSel = document.getElementById("in-team");
+        const eraSel = document.getElementById("in-era");
+        if (teamSel && [...teamSel.options].some((o) => o.value.toLowerCase() === tm.toLowerCase())) {
+          teamSel.value = [...teamSel.options].find((o) => o.value.toLowerCase() === tm.toLowerCase()).value;
+        }
+        if (eraSel && [...eraSel.options].some((o) => o.value === era)) {
+          eraSel.value = era;
+        }
+        document.querySelector('.dl-mtab[data-dmode="gp"]')?.click();
+        showBanner(`Loaded ${btn.dataset.cardName}'s ${tm} (${era.toUpperCase()}) seat — hit Lights Out!`, 3200);
+      });
+    });
   }
 
   function renderDriverCareer() {
@@ -835,19 +1158,45 @@
     if (driveBtn) driveBtn.disabled = st.phase === "season_end";
   }
 
-  // Wire UI Events
-  document.querySelectorAll(".dl-mtab").forEach((b) => b.addEventListener("click", () => {
-    activeMode = b.dataset.dmode;
-    document.querySelectorAll(".dl-mtab").forEach((x) => x.classList.toggle("active", x === b));
-    document.getElementById("dl-setup-pane").classList.toggle("hidden", activeMode === "career");
-    document.getElementById("dl-career-pane").classList.toggle("hidden", activeMode !== "career");
+  // Wire UI Events (All 7 Paddock HQ Tabs + Lore Filters + Controller Studio!)
+  function showLauncherPane(modeKey) {
+    activeMode = modeKey;
+    document.querySelectorAll(".dl-mtab").forEach((x) => x.classList.toggle("active", x.dataset.dmode === modeKey));
+    const isSetup = ["timetrial", "gp", "weekend", "bridge"].includes(modeKey);
+    document.getElementById("dl-setup-pane")?.classList.toggle("hidden", !isSetup);
+    document.getElementById("dl-career-pane")?.classList.toggle("hidden", modeKey !== "career");
+    document.getElementById("dl-stories-pane")?.classList.toggle("hidden", modeKey !== "stories");
+    document.getElementById("dl-lore-pane")?.classList.toggle("hidden", modeKey !== "lore");
+    document.getElementById("dl-controls-pane")?.classList.toggle("hidden", modeKey !== "controls");
     const lapsWrap = document.getElementById("wrap-laps");
-    if (lapsWrap) lapsWrap.style.opacity = activeMode === "timetrial" ? "0.4" : "1";
-    if (activeMode === "career") refreshCareerSaves();
-  }));
+    if (lapsWrap) lapsWrap.style.opacity = modeKey === "timetrial" ? "0.4" : "1";
+
+    if (modeKey === "controls" && window.F1GamepadStudio && document.getElementById("dp-gamepad-studio-host")) {
+      if (gpStudioUnmount) gpStudioUnmount();
+      gpStudioUnmount = window.F1GamepadStudio.mountStudio(document.getElementById("dp-gamepad-studio-host"), { context: "drive" });
+    } else if (gpStudioUnmount) {
+      gpStudioUnmount();
+      gpStudioUnmount = null;
+    }
+
+    if (modeKey === "career") refreshCareerSaves();
+    if (modeKey === "stories" || modeKey === "lore") refreshPaddockHub();
+  }
+
+  document.querySelectorAll(".dl-mtab").forEach((b) => b.addEventListener("click", () => showLauncherPane(b.dataset.dmode)));
+  document.getElementById("dl-gamepad-badge")?.addEventListener("click", () => showLauncherPane("controls"));
+  document.querySelectorAll("[data-lore-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      loreFilter = btn.dataset.loreFilter || "grid";
+      document.querySelectorAll("[data-lore-filter]").forEach((x) => x.classList.toggle("active", x === btn));
+      renderCardsAndLore();
+    });
+  });
 
   document.querySelectorAll(".dl-preset").forEach((b) => b.addEventListener("click", () => applyAssistPreset(b.dataset.preset)));
-  document.getElementById("in-circuit")?.addEventListener("change", refreshLeaderboards);
+  document.getElementById("in-circuit")?.addEventListener("change", () => { refreshLeaderboards(); refreshPaddockHub(); });
+  document.getElementById("in-era")?.addEventListener("change", refreshPaddockHub);
+  document.getElementById("in-team")?.addEventListener("change", refreshPaddockHub);
 
   document.getElementById("btn-start-drive")?.addEventListener("click", async () => {
     try {
@@ -942,6 +1291,15 @@
     ensureEngines();
     refreshLeaderboards();
     const boot = window.__DRIVE_BOOT__ || {};
+    if (boot.weather && document.getElementById("in-weather")) {
+      const ws = document.getElementById("in-weather");
+      if ([...ws.options].some((o) => o.value === boot.weather)) ws.value = boot.weather;
+    }
+    if (boot.team && document.getElementById("in-team")) {
+      const ts = document.getElementById("in-team");
+      const mOpt = [...ts.options].find((o) => o.value.toLowerCase() === boot.team.toLowerCase());
+      if (mOpt) ts.value = mOpt.value;
+    }
     if (boot.source && boot.ref_id) {
       activeMode = "bridge";
       try {
@@ -953,9 +1311,10 @@
         }
         document.getElementById("btn-start-drive").innerHTML = `<i class="fas fa-flag-checkered"></i> TAKE THE WHEEL — LIGHTS OUT!`;
       } catch (_) {}
-    } else if (boot.mode && ["timetrial", "gp", "weekend", "career"].includes(boot.mode)) {
-      document.querySelector(`.dl-mtab[data-dmode="${boot.mode}"]`)?.click();
+    } else if (boot.mode && ["timetrial", "gp", "weekend", "career", "stories", "lore", "controls"].includes(boot.mode)) {
+      showLauncherPane(boot.mode);
     }
+    refreshPaddockHub();
     // Render a crisp idle circuit preview behind the launcher
     try {
       const prevCfg = await api(`/api/drive/config?circuit=${encodeURIComponent(boot.circuit || "melbourne")}&era=${encodeURIComponent(boot.era || "2026")}&mode=timetrial`);

@@ -315,15 +315,37 @@ class TestSim3DBrowserCDP(unittest.TestCase):
                     await ev('document.querySelector("[data-fsim-3d=tv]")?.click();')
                     await asyncio.sleep(0.9)
 
-                    # Exercise camera modes on spa & singapore
+                    # Exercise camera modes on spa & singapore (incl. new 3D Carbon Halo Cockpit POV!)
                     cam_ok = {}
+                    cockpit_check = None
                     if cid in ("spa", "singapore"):
-                        for cam in ("tv", "chase", "pov", "pitlane"):
+                        for cam in ("tv", "cockpit", "chase", "pov", "pitlane"):
                             await ev(f'document.querySelector("[data-fsim-3d={cam}]")?.click();')
                             await asyncio.sleep(0.35)
                             cam_ok[cam] = await ev('document.getElementById("fsim-3d-hud")?.textContent.trim() || ""')
-                        # Trigger Safety Car + Red Flag on Spa to verify live marshal LEDs & SC 3D mesh
+                            if cam == "cockpit":
+                                cockpit_check = await ev("""(() => {
+                                    const b3d = window.__fsimB3d;
+                                    const dock = document.getElementById("fsim-pov-dock");
+                                    const health = document.getElementById("fsim-f-health-strip");
+                                    return {
+                                        cockpit: b3d && b3d.getCockpitState ? b3d.getCockpitState() : null,
+                                        dockVisible: dock ? !dock.classList.contains("hidden") : false,
+                                        healthVisible: Boolean(health && health.textContent.includes("FL")),
+                                    };
+                                })()""")
+                        # Verify keyboard director hotkeys on spa: O (POV toggle), H (Halo Ghost), ArrowDown (next car), ? (Controls modal)
                         if cid == "spa":
+                            await ev("""(() => {
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "o", code: "KeyO", bubbles: true }));
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "h", code: "KeyH", bubbles: true }));
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true }));
+                                document.dispatchEvent(new KeyboardEvent("keydown", { key: "?", code: "Slash", shiftKey: true, bubbles: true }));
+                            })()""")
+                            await asyncio.sleep(0.25)
+                            modal_open = await ev('!document.getElementById("fsim-keys-modal")?.classList.contains("hidden")')
+                            await ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));')
+                            cam_ok["_modal_hotkey_ok"] = bool(modal_open)
                             await ev('document.getElementById("fsim-rc-sc-btn")?.click();')
                             await asyncio.sleep(0.35)
                             await ev('document.getElementById("fsim-rc-rf-btn")?.click();')
@@ -341,6 +363,7 @@ class TestSim3DBrowserCDP(unittest.TestCase):
                         };
                     })()""")
                     rep["cams"] = cam_ok
+                    rep["cockpit_check"] = cockpit_check
                     circuit_reports[cid] = rep
 
                 return {
@@ -366,6 +389,15 @@ class TestSim3DBrowserCDP(unittest.TestCase):
             self.assertGreater(rep["stats"]["brakingBoards"], 0)
             self.assertGreater(rep["stats"]["drsGantries"], 0)
             self.assertGreater(rep["stats"]["marshalPosts"], 0)
+            if cid in ("spa", "singapore"):
+                cc = rep["cockpit_check"]
+                self.assertIsNotNone(cc)
+                self.assertTrue(cc["cockpit"]["mounted"], f"{cid}: 3D cockpit not mounted")
+                self.assertTrue(cc["cockpit"]["visible"], f"{cid}: 3D cockpit not visible in cockpit mode")
+                self.assertTrue(cc["dockVisible"], f"{cid}: contextual POV dock not shown")
+                self.assertTrue(cc["healthVisible"], f"{cid}: 4-corner tyre/component strip missing")
+            if cid == "spa":
+                self.assertTrue(rep["cams"].get("_modal_hotkey_ok"), "Controls modal hotkey [?] did not open")
 
 
 if __name__ == "__main__":
