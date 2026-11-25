@@ -1,8 +1,8 @@
 # Handover — TRAF1 (f1 sim/traf1)
-Updated: 2026-11-25 · Branch: master (clean @ f2357b0)
+Updated: 2026-11-25 (late) · Branch: master (clean @ da896e5, pushed to origin)
 
 ## Current state
-Per-year livery system fully committed: registry resolves every DB team-year 1950–2026, era splits landed (Gold Leaf Lotus 49B, Ferrari 126C2 white deck, Sauber per-era incl. team-keyed BMW branch). 12/12 livery tests pass, JS syntax clean. Live instance on :8001 restarted with new code; temp audit instance on :8017 (safe to kill).
+Per-year livery system fully committed; era splits landed. AI lore/voice depth engine landed: interviews compose persona × mood × confidence-band × DNA-trait segments (seeded, deterministic), persona radio pack, ladder debrief quotes (`ladder_lore.py` + `/api/ladder/{id}/debrief-quotes` + Paddock Voices panel), circuit lore blurbs in the /drive Lore Vault. 94/94 suite passes. A PARALLEL SESSION was active late on 2026-11-25 doing livery_registry year-refinements — its work was swept into da896e5 (noted in the commit body). If another session is still running, re-check `git status` before committing.
 Remote: `origin` = https://github.com/mq-37/totalf1.git (private, mq-37's account — NOT the MartinQuinnSOI stored account). Push creds for mq-37 live in `~/.git-credentials`; token is burnable — if revoked, replace that line on next push.
 
 ## Last session
