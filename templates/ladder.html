@@ -11,6 +11,7 @@
       <span class="lr-kicker">PIT WALL</span>
       <h1>THE LADDER</h1>
       <p id="lr-team-subtitle">Select or Start Career</p>
+      <div id="lr-car-preview" class="lr-car-preview hidden"></div>
     </div>
 
     <div class="lr-rungs" id="lr-rungs">
@@ -36,9 +37,12 @@
 
     <div class="lr-actions">
       <button type="button" id="btn-open-new" class="ld-btn ld-btn-primary"><i class="fas fa-plus"></i> New Ladder</button>
-      <select id="sel-saves" class="ld-select" aria-label="Load saved Ladder career">
-        <option value="">Load Saved Career...</option>
-      </select>
+      <div class="lr-save-row">
+        <select id="sel-saves" class="ld-select" aria-label="Load saved Ladder career">
+          <option value="">Load Saved Career...</option>
+        </select>
+        <button type="button" id="btn-delete-save" class="ld-btn ld-btn-sm ld-btn-danger" title="Delete current saved career" aria-label="Delete current saved career"><i class="fas fa-trash"></i></button>
+      </div>
     </div>
   </aside>
 
@@ -74,7 +78,10 @@
           <div id="cmd-inbox" class="ld-scroll-body"></div>
         </div>
         <div class="ld-card">
-          <h3><i class="fas fa-calendar-alt"></i> Calendar &amp; Last Debrief</h3>
+          <div class="ld-card-head-row">
+            <h3><i class="fas fa-calendar-alt"></i> Calendar &amp; Last Debrief</h3>
+            <button type="button" id="btn-open-reports" class="ld-btn ld-btn-sm"><i class="fas fa-book-open"></i> Archive</button>
+          </div>
           <div id="cmd-calendar" class="ld-scroll-body"></div>
         </div>
       </div>
@@ -227,6 +234,38 @@
     </div>
     <div class="ld-modal-foot">
       <button type="button" id="btn-create-ladder" class="ld-btn ld-btn-red"><i class="fas fa-flag-checkered"></i> Launch Ladder Career</button>
+    </div>
+  </div>
+</div>
+
+<!-- RACE REPORTS & MULTI-SEASON ARCHIVE MODAL -->
+<div id="reports-modal" class="ld-modal hidden" role="dialog" aria-modal="true" aria-label="Race Reports and Season Archive">
+  <div class="ld-modal-card">
+    <div class="ld-modal-head">
+      <div>
+        <span class="lr-kicker">HISTORICAL TELEMETRY</span>
+        <h2>Race Reports &amp; Season Archive</h2>
+      </div>
+      <button type="button" id="btn-close-reports" class="ld-btn ld-btn-sm">✕</button>
+    </div>
+    <p class="ld-modal-sub">Every race debrief archived in SQLite WAL alongside your multi-season Ladder championship record.</p>
+    <div id="reports-modal-body" class="ld-reports-body"></div>
+  </div>
+</div>
+
+<!-- POST-RACE DEBRIEF MODAL -->
+<div id="debrief-modal" class="ld-modal hidden" role="dialog" aria-modal="true" aria-label="Post-Race Debrief">
+  <div class="ld-modal-card" style="width:min(720px,95vw)">
+    <div class="ld-modal-head">
+      <div>
+        <span class="lr-kicker" id="debrief-kicker">CHEQUERED FLAG</span>
+        <h2 id="debrief-title">Post-Race Debrief</h2>
+      </div>
+      <button type="button" id="btn-close-debrief" class="ld-btn ld-btn-sm">✕</button>
+    </div>
+    <div id="debrief-modal-body" class="ld-reports-body" style="margin-top:10px"></div>
+    <div class="ld-modal-foot" style="margin-top:12px;gap:8px">
+      <button type="button" id="btn-debrief-continue" class="ld-btn ld-btn-red">Continue →</button>
     </div>
   </div>
 </div>

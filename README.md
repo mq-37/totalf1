@@ -1,6 +1,6 @@
 # Local F1 Results & Simulator (traf1)
 
-Scrapes 1950–2026 race results, driver/team standings, fastest laps, and per-race classifications from [formula1.com](https://www.formula1.com) into a local SQLite DB for offline browsing, printable collector & game trading cards, a 3D Card Arena (`/play`), a 100% CPU F1 TV Broadcast Director (`/sim`), and an F1 Team Principal Career Manager (`/career`).
+Scrapes 1950–2026 race results, driver/team standings, fastest laps, and per-race classifications from [formula1.com](https://www.formula1.com) into a local SQLite DB (paired with TracingInsights `f1db.sqlite` and 11,919 `fia_docs.sqlite` steward/regulatory records) for offline browsing, printable collector & game trading cards, a 3D Card Arena (`/play`), a 100% CPU F1 TV Broadcast Director (`/sim`), an F1 Team Principal Career Manager (`/career`), and **Pit Wall: The Ladder** (`/ladder` — 5-tier Karting → F4 → F3 → F2 → F1 career).
 
 **AI and onboarding:** For context, reading order, and task shortcuts, start from the project root [AI_CONTEXT.md](../AI_CONTEXT.md).
 
@@ -60,13 +60,20 @@ cd traf1
 python3 -m f1data.cli serve
 ```
 
-Then open **http://127.0.0.1:8000** for Cards, F1 Card Arena (`/play`), Full CPU Broadcast Sim (`/sim`), Team Principal Career (`/career`), Driver Search, Races, Teams, Analytics, and Team Colors & 3D Livery Studio.
+Then open **http://127.0.0.1:8000** for Cards, **Pit Wall: The Ladder (`/ladder`)**, F1 Card Arena (`/play`), Full CPU Broadcast Sim (`/sim`), Team Principal Career (`/career`), F1DB Data Browser (`/f1db`), Driver Search, Races, Teams, Analytics, and Team Colors & 3D Livery Studio.
 
 ### Run the test suite
 
 ```bash
 cd traf1
-.venv/bin/python -m unittest discover -s tests -v
+# Fast 49-test core unit suite (~5.6s)
+.venv/bin/python -m unittest tests/test_ladder.py tests/test_ladder_world_ai.py \
+  tests/test_ladder_economy.py tests/test_fair_ratings.py tests/test_weekend_weather.py \
+  tests/test_livery_regs_politics.py tests/test_career_upgrade.py tests/test_f1db.py \
+  tests/test_expansion_systems.py -v
+
+# Full HTTP/PDF route suite & Headless Chrome E2E suite
+.venv/bin/python -m unittest tests/test_routes.py tests/test_browser_e2e.py -v
 ```
 
 ### CLI browse (no server)

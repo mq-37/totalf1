@@ -9,6 +9,8 @@
   let liveSim = null;
   let radarWidget = null;
   let fpRunner = null;
+  let pendingMidrace = null;
+  let selectedLobbyTps = new Set();
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
   const fmtMoney = (k) => {
@@ -53,15 +55,130 @@
     ).join("");
   }
 
+  async function refreshMidraceAutosave(saveId) {
+    pendingMidrace = null;
+    if (!saveId || !currentView) return;
+    try {
+      const res = await api(`/api/ladder/${encodeURIComponent(saveId)}/race/autosave`);
+      const mr = res.midrace;
+      const st = currentView.state;
+      if (
+        mr &&
+        mr.snapshot &&
+        Array.isArray(mr.snapshot.cars) &&
+        mr.snapshot.cars.length &&
+        st.weekend.phase !== "season_end" &&
+        Number(mr.season) === Number(st.season) &&
+        Number(mr.round) === Number(st.round) &&
+        String(mr.tier) === String(st.tier)
+      ) {
+        pendingMidrace = mr.snapshot;
+      }
+    } catch (_) {
+      pendingMidrace = null;
+    }
+  }
+
   async function loadSave(saveId) {
     if (!saveId) return;
     const res = await api(`/api/ladder/state/${encodeURIComponent(saveId)}`);
     currentSaveId = saveId;
     currentView = res.view;
     worldViewTier = currentView.state.tier;
+    selectedLobbyTps.clear();
     localStorage.setItem("traf1_ladder_save", saveId);
+    await refreshMidraceAutosave(saveId);
     renderAll();
     refreshSavesDropdown();
+  }
+
+  async function openReportsModal() {
+    if (!currentSaveId || !currentView) return;
+    const modal = document.getElementById("reports-modal");
+    const body = document.getElementById("reports-modal-body");
+    if (!modal || !body) return;
+    modal.classList.remove("hidden");
+    body.innerHTML = `<div class="ld-item"><p>Loading archived race reports...</p></div>`;
+    try {
+      const res = await api(`/api/ladder/${encodeURIComponent(currentSaveId)}/reports?limit=50`);
+      const reports = res.reports || [];
+      const hist = (currentView.state && currentView.state.season_history) || [];
+      const histHtml = hist.length ? `
+        <h4 class="ld-subhead" style="margin-top:0">Completed Seasons (${hist.length})</h4>
+        ${hist.map((h) => `
+          <div class="ld-item">
+            <div class="ld-item-top">
+              <strong>Season ${h.season} · ${esc((h.tier || "").toUpperCase())} — ${esc(h.team_name)}</strong>
+              <span class="ld-tag ld-tag-ok">P${h.team_pos} · ${h.points} pts</span>
+            </div>
+            <p>Champion: <b>${esc(h.champion_driver || "—")}</b> · Path: ${esc(h.career_path || "owner_ladder")}</p>
+          </div>
+        `).join("")}
+      ` : "";
+      const repHtml = reports.length ? `
+        <h4 class="ld-subhead">Race Reports (${reports.length})</h4>
+        ${reports.map((r) => {
+          const deb = (r.report && r.report.debrief) || {};
+          const prs = deb.player_results || [];
+          return `
+            <div class="ld-item">
+              <div class="ld-item-top">
+                <strong>S${r.season} R${r.round} · ${esc((r.tier || "").toUpperCase())} · ${esc(deb.circuit_name || r.circuit_id)}</strong>
+                <span class="ld-tag">${esc(r.weather_summary || "Dry")}${r.sc_count ? ` · ${r.sc_count} SC` : ""}</span>
+              </div>
+              <p>Winner: <b>${esc(r.winner_name || deb.winner || "—")}</b>${r.winner_team ? ` (${esc(r.winner_team)})` : ""}${deb.income_k != null ? ` · Net ${fmtMoney((deb.income_k || 0) - (deb.expenses_k || 0))}` : ""}${deb.crash_bill_k > 0 ? ` · <span style="color:#f87171">Repairs ${fmtMoney(deb.crash_bill_k)}</span>` : ""}</p>
+              ${prs.length ? `<p>${prs.map((p) => `${esc(p.name)}: <b>${p.dnf ? "DNF" : "P" + p.pos}</b> (+${p.pts} pts)`).join(" · ")}</p>` : ""}
+            </div>
+          `;
+        }).join("")}
+      ` : `<div class="ld-item"><p>No races completed yet in this save. Finish your first race to populate the SQLite archive!</p></div>`;
+      body.innerHTML = histHtml + repHtml;
+    } catch (e) {
+      body.innerHTML = `<div class="ld-item"><p style="color:#fca5a5">${esc(e.message)}</p></div>`;
+    }
+  }
+
+  function openDebriefModal(debrief, seasonComplete) {
+    if (!debrief) return;
+    const modal = document.getElementById("debrief-modal");
+    const body = document.getElementById("debrief-modal-body");
+    const titleEl = document.getElementById("debrief-title");
+    const kickerEl = document.getElementById("debrief-kicker");
+    const contBtn = document.getElementById("btn-debrief-continue");
+    if (!modal || !body) return;
+    const netK = Number(debrief.income_k || 0) - Number(debrief.expenses_k || 0);
+    if (kickerEl) kickerEl.textContent = seasonComplete ? "SEASON FINALE COMPLETE" : `ROUND ${debrief.round} CHEQUERED FLAG`;
+    if (titleEl) titleEl.textContent = `${debrief.circuit_name || "Race"} — Winner: ${debrief.winner || "—"}`;
+    const prs = debrief.player_results || [];
+    const partsUsed = prs.flatMap((r) => r.parts_consumed || []);
+    const emergParts = prs.flatMap((r) => r.emergency_parts || []);
+    body.innerHTML = `
+      <div class="ld-debrief-grid">
+        <div class="ld-debrief-stat"><span>NET CASH</span><b style="color:${netK >= 0 ? "#4ade80" : "#f87171"}">${netK >= 0 ? "+" : ""}${fmtMoney(netK)}</b></div>
+        <div class="ld-debrief-stat"><span>INCOME</span><b>${fmtMoney(debrief.income_k || 0)}</b></div>
+        <div class="ld-debrief-stat"><span>CRASH BILL</span><b style="color:${debrief.crash_bill_k > 0 ? "#f87171" : "#94a3b8"}">${fmtMoney(debrief.crash_bill_k || 0)}</b></div>
+        <div class="ld-debrief-stat"><span>REPUTATION</span><b style="color:${debrief.rep_delta >= 0 ? "#38bdf8" : "#f87171"}">${debrief.rep_delta >= 0 ? "+" : ""}${debrief.rep_delta}</b></div>
+      </div>
+      <div class="ld-item">
+        <div class="ld-item-top"><strong>Your Drivers</strong><span class="ld-tag">${esc(debrief.weather || "Dry")}${debrief.safety_cars ? ` · ${debrief.safety_cars} SC` : ""}</span></div>
+        ${prs.map((r) => `
+          <p><b>${esc(r.name)}</b>: ${r.dnf ? `<span style="color:#f87171">DNF</span>` : `<b>P${r.pos}</b>`} (+${r.pts} pts)${r.crash_bill_k > 0 ? ` · <span style="color:#fca5a5">Crash ${fmtMoney(r.crash_bill_k)}</span>` : ""}${r.obeyed_orders === false ? ` · <span style="color:#fbbf24">Ignored Team Orders</span>` : ""}</p>
+        `).join("")}
+        ${partsUsed.length ? `<p style="color:#fbbf24"><b>Spare Parts Consumed:</b> ${partsUsed.map(esc).join(", ")}</p>` : ""}
+        ${emergParts.length ? `<p style="color:#f87171"><b>Emergency Overnight Builds (1.45×):</b> ${emergParts.map(esc).join(", ")}</p>` : ""}
+      </div>
+      ${(debrief.world_headlines || []).length ? `
+        <div class="ld-item">
+          <div class="ld-item-top"><strong>5-Tier Paddock Headlines</strong><span class="ld-tag ld-tag-ok">LIVING WORLD</span></div>
+          ${debrief.world_headlines.slice(0, 5).map((h) => `<p>• ${esc(h)}</p>`).join("")}
+        </div>
+      ` : ""}
+    `;
+    if (contBtn) {
+      contBtn.textContent = seasonComplete ? "Open Promotion & Career Fork →" : "Continue to Next Round →";
+      contBtn.dataset.seasonComplete = seasonComplete ? "1" : "0";
+    }
+    modal.classList.remove("hidden");
   }
 
   function renderAll() {
@@ -72,6 +189,16 @@
 
     // 1. Left Rail 5-Rung Ladder
     document.getElementById("lr-team-subtitle").textContent = `${st.player.team_name} · ${st.player.principal_name}`;
+    const carPrev = document.getElementById("lr-car-preview");
+    if (carPrev) {
+      if (currentView.player_car_icon) {
+        carPrev.innerHTML = `<img src="${esc(currentView.player_car_icon)}" alt="${esc(st.player.team_name)} car" loading="lazy">`;
+        carPrev.classList.remove("hidden");
+      } else {
+        carPrev.innerHTML = "";
+        carPrev.classList.add("hidden");
+      }
+    }
     const order = ["karting", "f4", "f3", "f2", "f1"];
     const curIdx = order.indexOf(st.tier);
     document.querySelectorAll(".lr-rung").forEach((el) => {
@@ -175,7 +302,15 @@
 
     const cal = st.tiers[st.tier].calendar;
     const deb = st.weekend.last_race_debrief;
+    const resumeQuickHtml = pendingMidrace ? `
+      <div class="ld-item ld-resume-card">
+        <div class="ld-item-top"><strong>⏸ Interrupted Race Saved</strong><span class="ld-tag ld-tag-ok">LAP ${pendingMidrace.lap}/${pendingMidrace.total_laps || st.weekend.laps}</span></div>
+        <p>Mid-race autosave ready for <b>${esc(st.weekend.circuit_name)}</b>.</p>
+        <div class="ld-ctrl-row"><button type="button" id="btn-cmd-resume" class="ld-btn ld-btn-sm ld-btn-primary">Resume Live Pit Wall →</button></div>
+      </div>
+    ` : "";
     document.getElementById("cmd-calendar").innerHTML = `
+      ${resumeQuickHtml}
       ${deb ? `
         <div class="ld-item" style="border-color:rgba(56,189,248,0.45)">
           <div class="ld-item-top"><strong>Last Debrief: R${deb.round} ${esc(deb.circuit_name)}</strong><span class="ld-tag ld-tag-ok">Rep ${deb.rep_delta >= 0 ? "+" : ""}${deb.rep_delta}</span></div>
@@ -193,6 +328,10 @@
         </div>
       `).join("")}
     `;
+    document.getElementById("btn-cmd-resume")?.addEventListener("click", () => {
+      switchTab("weekend");
+      if (pendingMidrace) startLivePitWall(pendingMidrace);
+    });
   }
 
   function renderWeekendTab() {
@@ -259,6 +398,21 @@
       </div>
     `;
 
+    const sprintCard = wk.sprint_result ? `
+      <div class="ld-item" style="border-color:rgba(250,204,21,0.45)">
+        <div class="ld-item-top">
+          <strong>Reverse-Grid Sprint Result (Top ${wk.sprint_result.reversed_count || 10} Reversed)</strong>
+          <span class="ld-tag ld-tag-warn">SPRINT PTS AWARDED</span>
+        </div>
+        <div class="ld-sprint-grid">
+          ${(wk.sprint_result.top10 || []).slice(0, 6).map((sr) => {
+            const isMine = (st.player.driver_ids || []).includes(sr.driver_id);
+            return `<div class="ld-sprint-row${isMine ? " is-me" : ""}"><span>P${sr.pos} ${esc(sr.name)}</span><span>+${sr.pts}</span></div>`;
+          }).join("")}
+        </div>
+      </div>
+    ` : "";
+
     const qualiBlock = `
       <div class="ld-item">
         <div class="ld-item-top"><strong>Qualifying Release Window</strong><span class="ld-tag ${wk.quali_done ? "ld-tag-ok" : ""}">${wk.quali_done ? "GRID SET" : "READY"}</span></div>
@@ -268,9 +422,23 @@
           <button type="button" class="ld-btn ld-btn-sm btn-quali" data-tactic="late_evolution">Late Track Evolution (-0.34s · Med Risk)</button>
           <button type="button" class="ld-btn ld-btn-sm btn-quali" data-tactic="tow_gamble">Slipstream Tow Gamble (-0.48s · High Risk)</button>
         </div>
-        ${wk.sprint_result ? `<p style="color:#fcd34d;margin-top:6px"><b>Reverse-Grid Sprint Winner:</b> ${esc(wk.sprint_result.top10[0]?.name)} (${esc(wk.sprint_result.top10[0]?.team)})</p>` : ""}
       </div>
+      ${sprintCard}
     `;
+
+    const resumeBlock = pendingMidrace ? `
+      <div class="ld-item ld-resume-card">
+        <div class="ld-item-top">
+          <strong>⏸ Resume Mid-Race Autosave (Lap ${pendingMidrace.lap}/${pendingMidrace.total_laps || wk.laps})</strong>
+          <span class="ld-tag ld-tag-ok">WAL SNAPSHOT</span>
+        </div>
+        <p>An active Pit Wall race at <b>${esc(wk.circuit_name)}</b> was autosaved (Wetness ${pendingMidrace.wetness || 0}%${pendingMidrace.safety_car_laps ? " · SC Active" : ""}).</p>
+        <div class="ld-ctrl-row">
+          <button type="button" id="btn-resume-live" class="ld-btn ld-btn-primary"><i class="fas fa-play-circle"></i> Resume From Lap ${pendingMidrace.lap}</button>
+          <button type="button" id="btn-discard-autosave" class="ld-btn ld-btn-sm ld-btn-danger">Discard Autosave</button>
+        </div>
+      </div>
+    ` : "";
 
     const launchBlock = wk.quali_done ? `
       <div class="ld-item" style="border-color:#ef4444">
@@ -309,7 +477,7 @@
       </div>
     ` : "";
 
-    prepBox.innerHTML = setupControls + fpProgBlock + qualiBlock + launchBlock;
+    prepBox.innerHTML = resumeBlock + setupControls + fpProgBlock + qualiBlock + launchBlock;
 
     // Render qualifying grid in timing tower if set
     if (wk.quali_grid && wk.quali_grid.length) {
@@ -364,15 +532,26 @@
       try {
         const res = await api(`/api/ladder/${currentSaveId}/race/quick`, "POST", {});
         currentView = res.view;
+        pendingMidrace = null;
         toast(`Race complete! Winner: ${res.debrief.winner}.`);
         renderAll();
+        openDebriefModal(res.debrief, res.season_complete);
       } catch (e) { toast(e.message, true); }
     });
 
-    document.getElementById("btn-launch-live")?.addEventListener("click", startLivePitWall);
+    document.getElementById("btn-launch-live")?.addEventListener("click", () => startLivePitWall(null));
+    document.getElementById("btn-resume-live")?.addEventListener("click", () => startLivePitWall(pendingMidrace));
+    document.getElementById("btn-discard-autosave")?.addEventListener("click", async () => {
+      try {
+        await api(`/api/ladder/${encodeURIComponent(currentSaveId)}/race/autosave`, "DELETE");
+        pendingMidrace = null;
+        toast("Mid-race autosave discarded.");
+        renderAll();
+      } catch (e) { toast(e.message, true); }
+    });
   }
 
-  function startLivePitWall() {
+  function startLivePitWall(resumeSnap) {
     const prepBox = document.getElementById("pw-prep-box");
     const liveWrap = document.getElementById("pw-live-wrap");
     prepBox.classList.add("hidden");
@@ -413,15 +592,21 @@
         try {
           const res = await api(`/api/ladder/${currentSaveId}/race/commit`, "POST", { standings, telemetry });
           currentView = res.view;
+          pendingMidrace = null;
           toast(`Chequered Flag! Winner: ${res.debrief.winner} · Cash ${fmtMoney(currentView.state.economy.cash_k)}`);
           setTimeout(() => {
             if (liveSim) liveSim.stop();
             renderAll();
-          }, 1400);
+            openDebriefModal(res.debrief, res.season_complete);
+          }, 900);
         } catch (e) { toast(e.message, true); }
       },
     });
-    liveSim.initRace(currentView);
+    if (resumeSnap) {
+      liveSim.restoreFromSnapshot(currentView, resumeSnap);
+    } else {
+      liveSim.initRace(currentView);
+    }
   }
 
   function renderLiveHud(hud) {
@@ -445,9 +630,10 @@
     document.getElementById("pw-radar-strip").innerHTML = `
       <span>🌧 <b>Rain Radar:</b> Track Wetness ${hud.wetness}% (Forecast ${hud.targetWetness}% ±${hud.rainUncertainty}%)</span>
       <span>${hud.safetyCarLaps > 0 ? "<b style='color:#facc15'>🟡 SAFETY CAR ACTIVE (Pit Loss -44%)</b>" : "🟢 GREEN TRACK"}</span>
-      ${u.team_orders ? `<button type="button" class="ld-btn ld-btn-sm" id="btn-order-swap">Swap Cars (Team Order)</button>` : `<span>${u.live_radio ? "📻 Live Pit Radio Active" : "🔇 Karting: Zero Radio / Zero Pit Stops"}</span>`}
+      ${u.team_orders ? `<span style="display:inline-flex;gap:4px"><button type="button" class="ld-btn ld-btn-sm" id="btn-order-swap">Swap Cars</button><button type="button" class="ld-btn ld-btn-sm" id="btn-order-hold">Hold Pos</button></span>` : `<span>${u.live_radio ? "📻 Live Pit Radio Active" : "🔇 Karting: Zero Radio / Zero Pit Stops"}</span>`}
     `;
     document.getElementById("btn-order-swap")?.addEventListener("click", () => liveSim && liveSim.issueTeamOrder("swap"));
+    document.getElementById("btn-order-hold")?.addEventListener("click", () => liveSim && liveSim.issueTeamOrder("hold"));
 
     // Dual Player Driver Strategy Cards
     document.getElementById("pw-drivers-deck").innerHTML = hud.playerCars.map((c) => {
@@ -458,6 +644,12 @@
           ${["soft", "medium", "hard", "inter", "wet"].map((ck) => `<button type="button" class="ld-btn ld-btn-sm btn-box" data-did="${esc(c.driver_id)}" data-comp="${ck}" style="${c.boxPending === ck ? "border-color:#22c55e;background:rgba(34,197,94,0.25)" : ""}">${ck[0].toUpperCase()}</button>`).join("")}
         </div>
       ` : "";
+      const engBtns = u.ers_engine_modes ? `
+        <div class="ld-ctrl-row">
+          <span style="font-size:0.62rem;color:#94a3b8;font-weight:800">PU MAP:</span>
+          ${[["lean", "LEAN"], ["standard", "STD"], ["rich", "RICH"]].map(([em, lbl]) => `<button type="button" class="ld-btn ld-btn-sm btn-eng${c.engineMode === em ? " active" : ""}" data-did="${esc(c.driver_id)}" data-eng="${em}">${lbl}</button>`).join("")}
+        </div>
+      ` : "";
       const paceBtns = u.live_radio ? `
         <div class="ld-ctrl-row">
           ${["conserve", "neutral", "push"].map((pm) => `<button type="button" class="ld-btn ld-btn-sm btn-pace${c.paceMode === pm ? " active" : ""}" data-did="${esc(c.driver_id)}" data-mode="${pm}">${pm.toUpperCase()}</button>`).join("")}
@@ -465,6 +657,7 @@
             <button type="button" class="ld-btn ld-btn-sm btn-ers${c.ersMode === "overtake" ? " active" : ""}" data-did="${esc(c.driver_id)}" data-ers="${c.ersMode === "overtake" ? "harvest" : "overtake"}">⚡ ERS ${Math.round(c.ers)}%</button>
           ` : ""}
         </div>
+        ${engBtns}
       ` : `<p style="font-size:0.65rem;color:#94a3b8;margin-top:4px">Pre-race coaching active (no radio in Karting).</p>`;
 
       return `
@@ -473,8 +666,9 @@
             <strong>P${c.pos} · ${esc(c.name)}</strong>
             <span class="ld-tag" style="color:${comp.color}">${comp.code} ${Math.round(c.tyreLife)}%</span>
           </div>
-          <div style="font-size:0.66rem;color:#94a3b8;display:flex;gap:8px;margin-top:2px">
+          <div style="font-size:0.66rem;color:#94a3b8;display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
             <span>Surf ${Math.round(c.surfTemp)}°C / Core ${Math.round(c.coreTemp)}°C</span>
+            ${c.trait ? `<span style="color:#a5f3fc">${esc(c.trait)}</span>` : ""}
             ${c.thermalCliff ? `<b style="color:#f87171">🔥 THERMAL CLIFF</b>` : ""}
             ${c.inDirtyAir ? `<b style="color:#fbbf24">💨 DIRTY AIR</b>` : ""}
           </div>
@@ -486,6 +680,7 @@
 
     document.querySelectorAll(".btn-pace").forEach((b) => b.addEventListener("click", () => liveSim && liveSim.setDriverPace(b.dataset.did, b.dataset.mode)));
     document.querySelectorAll(".btn-ers").forEach((b) => b.addEventListener("click", () => liveSim && liveSim.setDriverErs(b.dataset.did, b.dataset.ers)));
+    document.querySelectorAll(".btn-eng").forEach((b) => b.addEventListener("click", () => liveSim && liveSim.setDriverEngine(b.dataset.did, b.dataset.eng)));
     document.querySelectorAll(".btn-box").forEach((b) => b.addEventListener("click", () => liveSim && liveSim.callPitBox(b.dataset.did, b.dataset.comp)));
 
     document.getElementById("pw-timing-tower").innerHTML = hud.standings.slice(0, 22).map((c) => {
@@ -694,7 +889,10 @@
     document.getElementById("world-teams").innerHTML = cur.teams.map((t, i) => `
       <div class="ld-item" style="${t.is_player ? "border-color:#fde047" : ""}">
         <div class="ld-item-top">
-          <strong>#${i + 1} <span style="color:${esc(t.color)}">●</span> ${esc(t.name)}</strong>
+          <span class="ld-team-row-left">
+            ${t.car_icon_url ? `<img class="ld-car-thumb" src="${esc(t.car_icon_url)}" alt="${esc(t.name)}" loading="lazy">` : ""}
+            <strong>#${i + 1} <span style="color:${esc(t.color)}">●</span> ${esc(t.name)}</strong>
+          </span>
           <span class="ld-mono">${t.points} pts</span>
         </div>
         <p>Principal: ${esc(t.principal)} · Car Rating ${t.car_rating}</p>
@@ -717,6 +915,8 @@
     const tcfg = currentView.tier_config;
     const u = tcfg.unlocks;
 
+    const f1Icons = currentView.f1_car_icons || {};
+
     // 1. Promotion & Hybrid Career Fork
     const forkEl = document.getElementById("pol-fork");
     const isSeasonEnd = st.weekend.phase === "season_end";
@@ -733,7 +933,7 @@
           <div class="ld-item-top"><strong>Path A / C — ${st.tier === "f2" ? "The Poach (F1 TP Offer)" : "The Mercenary Move"}</strong></div>
           <p>Accept a Team Principal offer from an F1 constructor. Your original feeder team (${esc(st.player.original_feeder_team)}) continues as a living AI rival!</p>
           <div class="ld-ctrl-row">
-            ${offers.map((o) => `<button type="button" class="ld-btn ld-btn-sm btn-fork" data-act="${st.tier === "f2" ? "poach" : "mercenary"}" data-team="${esc(o.f1_team)}">Join ${esc(o.f1_team)} (Car ${o.car_rating})</button>`).join("")}
+            ${offers.map((o) => `<button type="button" class="ld-btn ld-btn-sm btn-fork" data-act="${st.tier === "f2" ? "poach" : "mercenary"}" data-team="${esc(o.f1_team)}" style="display:inline-flex;align-items:center;gap:5px">${f1Icons[o.f1_team] ? `<img class="ld-car-thumb" style="height:16px" src="${esc(f1Icons[o.f1_team])}" alt="" loading="lazy">` : ""}Join ${esc(o.f1_team)} (Car ${o.car_rating})</button>`).join("")}
           </div>
         </div>
         ${st.tier === "f2" ? `
@@ -775,7 +975,13 @@
     } else {
       acadEl.innerHTML = (st.academy_offers || []).map((o) => `
         <div class="ld-item">
-          <div class="ld-item-top"><strong>${esc(o.f1_team)}</strong><span class="ld-tag ld-tag-ok">+${fmtMoney(o.funding_k)}/yr</span></div>
+          <div class="ld-item-top">
+            <span class="ld-team-row-left">
+              ${f1Icons[o.f1_team] ? `<img class="ld-car-thumb" src="${esc(f1Icons[o.f1_team])}" alt="" loading="lazy">` : ""}
+              <strong>${esc(o.f1_team)}</strong>
+            </span>
+            <span class="ld-tag ld-tag-ok">+${fmtMoney(o.funding_k)}/yr</span>
+          </div>
           <p>Places Junior <b>${esc(o.junior_name)}</b> (OVR ${o.junior_ovr}, POT ${o.junior_pot}) in Seat #2 · KPI: Top P${o.kpi_min_pos}.</p>
           <div class="ld-ctrl-row"><button type="button" class="ld-btn ld-btn-sm btn-acad" data-oid="${esc(o.id)}">Sign Affiliate Contract</button></div>
         </div>
@@ -798,11 +1004,32 @@
       const tally = gov.last_tally;
       const prec = (tally && tally.fia_precedent) || currentView.fia_precedent;
       const tpVotes = (tally && tally.votes) ? tally.votes : [];
+      const playerTeamLow = String(st.player.team_name || "").toLowerCase();
+      const lobbyCandidates = (!gov.voted ? (gov.tp_roster || []) : [])
+        .filter((tp) => String(tp.team || "").toLowerCase() !== playerTeamLow)
+        .slice(0, 8);
+      const lobbyHtml = lobbyCandidates.length ? `
+        <div style="margin-top:6px">
+          <span style="font-size:0.64rem;color:#94a3b8;font-weight:800;text-transform:uppercase">Backroom Lobbying (select up to 3 rival TPs):</span>
+          <div class="ld-lobby-grid">
+            ${lobbyCandidates.map((tp) => {
+              const checked = selectedLobbyTps.has(tp.id);
+              return `
+                <label class="ld-lobby-chip">
+                  <input type="checkbox" class="chk-lobby-tp" value="${esc(tp.id)}"${checked ? " checked" : ""}>
+                  <span><b>${esc(tp.name)}</b> · ${esc(tp.team)} (${tp.job_stress || 40}% stress)</span>
+                </label>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      ` : "";
       fiaEl.innerHTML = `
         <div class="ld-item">
           <div class="ld-item-top"><strong>${esc(p.title)}</strong><span class="ld-tag">${esc(p.category)}</span></div>
           <p>${esc(p.desc)}</p>
           ${prec ? `<p class="ld-fia-prec"><b>FIA Precedent (${prec.year} ${esc(prec.event_name)}):</b> ${esc(prec.title)} — <i>${esc(prec.excerpt)}</i></p>` : ""}
+          ${lobbyHtml}
           <div class="ld-ctrl-row">
             <button type="button" class="ld-btn ld-btn-sm btn-fia-vote" data-v="yes" ${gov.voted ? "disabled" : ""}>Vote YES</button>
             <button type="button" class="ld-btn ld-btn-sm btn-fia-vote" data-v="no" ${gov.voted ? "disabled" : ""}>Vote NO</button>
@@ -819,9 +1046,25 @@
           </div>
         `).join("")}</div>` : ""}
       `;
+      fiaEl.querySelectorAll(".chk-lobby-tp").forEach((chk) => chk.addEventListener("change", () => {
+        if (chk.checked) {
+          if (selectedLobbyTps.size >= 3) {
+            chk.checked = false;
+            toast("You can lobby at most 3 Team Principals per Commission vote.", true);
+            return;
+          }
+          selectedLobbyTps.add(chk.value);
+        } else {
+          selectedLobbyTps.delete(chk.value);
+        }
+      }));
       fiaEl.querySelectorAll(".btn-fia-vote").forEach((b) => b.addEventListener("click", async () => {
         try {
-          const res = await api(`/api/ladder/${currentSaveId}/fia/vote`, "POST", { vote: b.dataset.v });
+          const res = await api(`/api/ladder/${currentSaveId}/fia/vote`, "POST", {
+            vote: b.dataset.v,
+            lobbied_tp_ids: Array.from(selectedLobbyTps),
+          });
+          selectedLobbyTps.clear();
           currentView = res.view; toast(res.message, !res.ok); renderAll();
         } catch (e) { toast(e.message, true); }
       }));
@@ -833,7 +1076,35 @@
   document.getElementById("btn-go-weekend")?.addEventListener("click", () => switchTab("weekend"));
   document.getElementById("btn-open-new")?.addEventListener("click", () => document.getElementById("new-ladder-modal").classList.remove("hidden"));
   document.getElementById("btn-close-modal")?.addEventListener("click", () => document.getElementById("new-ladder-modal").classList.add("hidden"));
+  document.getElementById("btn-open-reports")?.addEventListener("click", openReportsModal);
+  document.getElementById("btn-close-reports")?.addEventListener("click", () => document.getElementById("reports-modal").classList.add("hidden"));
+  document.getElementById("btn-close-debrief")?.addEventListener("click", () => document.getElementById("debrief-modal").classList.add("hidden"));
+  document.getElementById("btn-debrief-continue")?.addEventListener("click", (e) => {
+    document.getElementById("debrief-modal").classList.add("hidden");
+    if (e.currentTarget.dataset.seasonComplete === "1") switchTab("politics");
+  });
   document.getElementById("sel-saves")?.addEventListener("change", (e) => { if (e.target.value) loadSave(e.target.value); });
+  document.getElementById("btn-delete-save")?.addEventListener("click", async () => {
+    if (!currentSaveId || !currentView) return;
+    const tName = currentView.state.player.team_name || "this career";
+    if (!window.confirm(`Delete Ladder save "${tName}" permanently?`)) return;
+    try {
+      await api(`/api/ladder/state/${encodeURIComponent(currentSaveId)}`, "DELETE");
+      localStorage.removeItem("traf1_ladder_save");
+      pendingMidrace = null;
+      const listRes = await api("/api/ladder/saves");
+      const remaining = listRes.saves || [];
+      toast(`Deleted "${tName}".`);
+      if (remaining.length > 0) {
+        await loadSave(remaining[0].save_id);
+      } else {
+        currentSaveId = null;
+        currentView = null;
+        await refreshSavesDropdown();
+        document.getElementById("new-ladder-modal").classList.remove("hidden");
+      }
+    } catch (e) { toast(e.message, true); }
+  });
 
   document.querySelectorAll(".ld-tier-opt").forEach((b) => b.addEventListener("click", () => {
     selectedStartTier = b.dataset.startTier;

@@ -17,6 +17,9 @@
     inter:  { code: "I", name: "Intermediate",  color: "#22c55e", pace:  1.20, wear: 0.85, optCore: 86,  wet: 1 },
     wet:    { code: "W", name: "Full Wet",      color: "#3b82f6", pace:  2.40, wear: 0.72, optCore: 78,  wet: 2 },
   };
+  const STREET_CIRCUITS = new Set([
+    "monaco", "jeddah", "singapore", "baku", "melbourne", "lasvegas", "miami", "montreal",
+  ]);
 
   class LadderRaceSim {
     constructor(canvas, callbacks) {
@@ -38,6 +41,8 @@
     resetState() {
       this.tier = "karting";
       this.unlocks = {};
+      this.facilities = {};
+      this.isStreetCircuit = false;
       this.circuit = null;
       this.totalLaps = 15;
       this.pitLossS = 20.5;
@@ -58,7 +63,7 @@
       this.lastAutosaveLap = 0;
     }
 
-    initRace(view) {
+    initRace(view, snapshot) {
       this.stop();
       this.resetState();
       const st = view.state;
@@ -67,6 +72,7 @@
       this.season = Number(st.season || 1);
       this.roundNum = Number(st.round || 1);
       this.unlocks = (view.tier_config && view.tier_config.unlocks) || {};
+      this.facilities = Object.assign({}, st.facilities || {});
       // Strictly gate live team radio by tier unlock (Karting = ZERO radio!)
       if (this.unlocks.live_radio && window.F1RadioEngine && this.cb.radioContainer) {
         this.radio = window.F1RadioEngine.createRadioController(this.cb.radioContainer, {
@@ -77,6 +83,7 @@
         this.radio = null;
       }
       this.circuit = view.circuit || { id: "monza", name: wk.circuit_name, base_lap_s: 82, pit_loss_s: 21, pts: [] };
+      this.isStreetCircuit = STREET_CIRCUITS.has(String(this.circuit.id || "").toLowerCase());
       this.totalLaps = Number(wk.laps || 15);
       this.pitLossS = Number(this.circuit.pit_loss_s || 20.5);
       this.baseLapS = Number(this.circuit.base_lap_s || 82.0) * (this.tier === "karting" ? 1.24 : (this.tier === "f4" ? 1.16 : (this.tier === "f3" ? 1.10 : (this.tier === "f2" ? 1.05 : 1.0))));
@@ -129,12 +136,79 @@
 
       this._buildTrackCache();
       this.running = true;
-      this.paused = false;
       this.finished = false;
       this.lastTs = performance.now();
-      this.pushEvent("LIGHTS OUT!", `Green flag at ${this.circuit.name} (${this.totalLaps} laps · ${this.tier.toUpperCase()})`, "info");
+
+      if (snapshot && Array.isArray(snapshot.cars) && snapshot.cars.length) {
+        this._applySnapshot(snapshot);
+        this.paused = true;
+        const resumeLap = Number(snapshot.lap || 1);
+        this.pauseBanner = {
+          title: `RACE RESUMED — LAP ${resumeLap}/${this.totalLaps}`,
+          text: "Mid-race autosave restored from SQLite WAL. Review tyre life, gaps & strategy, then click Acknowledge & Resume.",
+        };
+        this.pushEvent("AUTOSAVE RESTORED", `Resumed ${this.circuit.name} at Lap ${resumeLap}/${this.totalLaps}.`, "info");
+      } else {
+        this.paused = false;
+        this.pushEvent("LIGHTS OUT!", `Green flag at ${this.circuit.name} (${this.totalLaps} laps · ${this.tier.toUpperCase()})`, "info");
+      }
       this._emitHud();
       this._loop(this.lastTs);
+    }
+
+    restoreFromSnapshot(view, snapshot) {
+      this.initRace(view, snapshot);
+    }
+
+    _applySnapshot(snap) {
+      if (snap.race_time_s != null) this.raceTimeS = Number(snap.race_time_s);
+      if (snap.wetness != null) this.wetness = Number(snap.wetness);
+      if (snap.target_wetness != null) this.targetWetness = Number(snap.target_wetness);
+      if (snap.safety_car_laps != null) this.safetyCarLaps = Number(snap.safety_car_laps);
+      if (snap.vsc_laps != null) this.vscLaps = Number(snap.vsc_laps);
+      if (snap.safety_cars_total != null) this.safetyCarsTotal = Number(snap.safety_cars_total);
+      if (snap.rubber_grip != null) this.rubberGrip = Number(snap.rubber_grip);
+      if (snap.rain_notified != null) this.rainNotified = Boolean(snap.rain_notified);
+      if (snap.pit_window_notified != null) this.pitWindowNotified = Boolean(snap.pit_window_notified);
+      this.lastAutosaveLap = Number(snap.lap || 0);
+      if (Array.isArray(snap.events)) this.events = snap.events.slice(0, 26);
+
+      const byId = new Map(snap.cars.map((sc) => [sc.driver_id, sc]));
+      for (const c of this.cars) {
+        const sc = byId.get(c.driver_id);
+        if (!sc) continue;
+        if (sc.pos != null) c.pos = Number(sc.pos);
+        if (sc.prog != null) {
+          c.prog = Number(sc.prog);
+          c.lap = Math.max(0, Math.floor(c.prog));
+        }
+        if (sc.compound && COMPOUNDS[sc.compound]) c.compound = sc.compound;
+        if (Array.isArray(sc.usedCompounds) && sc.usedCompounds.length) {
+          c.usedCompounds = new Set(sc.usedCompounds);
+        } else {
+          c.usedCompounds = new Set([c.compound]);
+        }
+        if (sc.tyreLife != null) c.tyreLife = Number(sc.tyreLife);
+        if (sc.surfTemp != null) c.surfTemp = Number(sc.surfTemp);
+        if (sc.coreTemp != null) c.coreTemp = Number(sc.coreTemp);
+        if (sc.thermalCliff != null) c.thermalCliff = Boolean(sc.thermalCliff);
+        if (sc.paceMode) c.paceMode = sc.paceMode;
+        if (sc.ersMode) c.ersMode = sc.ersMode;
+        if (sc.ers != null) c.ers = Number(sc.ers);
+        if (sc.engineMode) c.engineMode = sc.engineMode;
+        c.boxPending = sc.boxPending || null;
+        if (sc.inPitS != null) c.inPitS = Number(sc.inPitS);
+        if (sc.pits != null) c.pits = Number(sc.pits);
+        if (sc.dnf != null) c.dnf = Boolean(sc.dnf);
+        if (sc.crash_damage != null) c.crash_damage = Boolean(sc.crash_damage);
+        if (sc.obeyed_orders != null) c.obeyed_orders = Boolean(sc.obeyed_orders);
+      }
+      const active = this.cars.filter((c) => !c.dnf).sort((a, b) => b.prog - a.prog);
+      active.forEach((c, idx) => {
+        c.pos = idx + 1;
+        c.gapAheadS = idx === 0 ? 0 : Math.max(0.05, (active[idx - 1].prog - c.prog) * this.baseLapS);
+        c.gapLeaderS = idx === 0 ? 0 : Math.max(0.05, (active[0].prog - c.prog) * this.baseLapS);
+      });
     }
 
     _buildTrackCache() {
@@ -193,7 +267,8 @@
 
     _emitAutosave() {
       if (!this.cb.onAutosave || this.finished) return;
-      const leadLap = Math.min(this.totalLaps, Math.max(1, Math.floor((this.cars[0]?.prog || 0) + 1)));
+      const ordered = [...this.cars].sort((a, b) => (a.dnf === b.dnf ? b.prog - a.prog : (a.dnf ? 1 : -1)));
+      const leadLap = Math.min(this.totalLaps, Math.max(1, Math.floor((ordered[0]?.prog || 0) + 1)));
       this.cb.onAutosave({
         season: this.season || 1,
         round: this.roundNum || 1,
@@ -201,11 +276,37 @@
         circuit_id: this.circuit ? this.circuit.id : "",
         lap: leadLap,
         total_laps: this.totalLaps,
+        race_time_s: +this.raceTimeS.toFixed(1),
         wetness: Math.round(this.wetness),
+        target_wetness: Math.round(this.targetWetness),
         safety_car_laps: this.safetyCarLaps,
+        vsc_laps: this.vscLaps,
+        safety_cars_total: this.safetyCarsTotal,
+        rubber_grip: +this.rubberGrip.toFixed(4),
+        rain_notified: this.rainNotified,
+        pit_window_notified: this.pitWindowNotified,
+        events: this.events.slice(0, 12),
         cars: this.cars.map((c) => ({
-          driver_id: c.driver_id, code3: c.code3, pos: c.pos, prog: +c.prog.toFixed(3),
-          compound: c.compound, tyreLife: Math.round(c.tyreLife), dnf: c.dnf,
+          driver_id: c.driver_id,
+          code3: c.code3,
+          pos: c.pos,
+          prog: +c.prog.toFixed(4),
+          compound: c.compound,
+          usedCompounds: Array.from(c.usedCompounds || [c.compound]),
+          tyreLife: +c.tyreLife.toFixed(1),
+          surfTemp: +c.surfTemp.toFixed(1),
+          coreTemp: +c.coreTemp.toFixed(1),
+          thermalCliff: c.thermalCliff,
+          paceMode: c.paceMode,
+          ersMode: c.ersMode,
+          ers: +c.ers.toFixed(1),
+          engineMode: c.engineMode,
+          boxPending: c.boxPending,
+          inPitS: +c.inPitS.toFixed(2),
+          pits: c.pits,
+          dnf: c.dnf,
+          crash_damage: c.crash_damage,
+          obeyed_orders: c.obeyed_orders,
         })),
       });
     }
@@ -266,8 +367,9 @@
       if (mine.length < 2) return;
       const front = mine[0], back = mine[1];
       if (orderType === "swap") {
-        // Relationship & Ego Matrix Check!
-        const disobeyProb = Math.max(0.05, ((front.ego - front.trust) + 12) / 100);
+        // Relationship & Ego Matrix Check! (Iron Nerve lowers pushback risk)
+        const nerveAdj = front.trait === "Iron Nerve" ? -15 : 0;
+        const disobeyProb = Math.max(0.05, ((front.ego - front.trust) + 12 + nerveAdj) / 100);
         if (Math.random() < disobeyProb) {
           front.obeyed_orders = false;
           this._triggerCriticalPause("RADIO PUSHBACK!", `${front.name}: "Negative! I have the pace — tell ${back.code3} to race me on track!" (Ego ${front.ego} vs Trust ${front.trust})`);
@@ -388,21 +490,25 @@
         }
 
         const comp = COMPOUNDS[c.compound] || COMPOUNDS.medium;
-        // Surface vs Core Tyre Thermal Model!
+        // Surface vs Core Tyre Thermal Model! (Tire Whisperer tolerates +4°C core heat)
         const pushHeat = c.paceMode === "push" ? 9.0 : (c.paceMode === "conserve" ? -6.5 : 0.0);
         const dirtyHeat = c.inDirtyAir ? 4.8 : 0.0;
         const wetCool = this.wetness >= 25 && comp.wet === 0 ? -14.0 : (this.wetness < 12 && comp.wet > 0 ? 16.0 : 0.0);
         const targetSurf = comp.optCore + pushHeat + dirtyHeat + wetCool;
         c.surfTemp += (targetSurf - c.surfTemp) * Math.min(1, simDtS * 0.09);
         c.coreTemp += (c.surfTemp - c.coreTemp) * Math.min(1, simDtS * 0.032);
-        c.thermalCliff = c.coreTemp > comp.optCore + 10.5 || c.tyreLife < 24;
+        const cliffOffset = c.trait === "Tire Whisperer" ? 14.5 : 10.5;
+        c.thermalCliff = c.coreTemp > comp.optCore + cliffOffset || c.tyreLife < 24;
 
-        // Tyre wear scaled by thermal cliff & Tire Whisperer trait
+        // Tyre wear scaled by thermal cliff, facilities (adv_sim) & traits
+        const advSimLv = c.is_player ? Math.max(1, Number(this.facilities.adv_sim || 1)) : 1;
+        const traitWearMult = c.trait === "Tire Whisperer" ? 0.85 : (c.trait === "Smooth Operator" ? 0.95 : 1.0);
         const wearRate = (comp.wear * (100 / Math.max(10, this.totalLaps * 1.15)))
           * (c.paceMode === "push" ? 1.32 : (c.paceMode === "conserve" ? 0.72 : 1.0))
           * (c.thermalCliff ? 1.48 : 1.0)
           * (1.0 - (c.stats.tyre_care - 72) * 0.008)
-          * (c.trait === "Tire Whisperer" ? 0.85 : 1.0);
+          * traitWearMult
+          * (1.0 - (advSimLv - 1) * 0.03);
         const lapFrac = simDtS / this.baseLapS;
         c.tyreLife = Math.max(4, c.tyreLife - wearRate * lapFrac);
 
@@ -419,18 +525,28 @@
         lapS -= (perf - 70) * 0.078;
         lapS -= this.rubberGrip;
         lapS += comp.pace;
+        // Karting garage bays facility bonus for player
+        if (c.is_player && this.tier === "karting") {
+          const garageLv = Math.max(1, Number(this.facilities.garage_bays || 1));
+          lapS -= (garageLv - 1) * 0.12;
+        }
+        // Trait pace bonuses (Street Fighter, Crash-Prone Charger)
+        if (c.trait === "Street Fighter" && this.isStreetCircuit) lapS -= 0.26;
+        if (c.trait === "Crash-Prone Charger" && c.paceMode === "push") lapS -= 0.16;
         // Tyre degradation & thermal cliff penalty
         if (c.tyreLife < 40) lapS += (40 - c.tyreLife) * 0.045;
         if (c.thermalCliff) lapS += 1.15;
-        // Dirty air downforce loss (<1.5s) vs DRS / Slipstream gain
+        // Dirty air downforce loss (<1.5s) vs DRS / Slipstream / Late Braker gain
         if (c.inDirtyAir) {
           lapS += this.tier === "karting" ? -0.22 : (this.unlocks.drs && c.gapAheadS < 1.0 ? -0.18 : 0.34);
+          if (c.trait === "Late Braker") lapS -= 0.18;
         }
-        // Wet weather & wrong-tyre crossover penalty!
+        // Wet weather & wrong-tyre crossover penalty! (Wet Weather Specialist shines)
         if (this.wetness >= 22) {
           if (comp.wet === 0) lapS += (this.wetness - 18) * 0.14;
           else if (comp.wet === 1 && this.wetness >= 68) lapS += (this.wetness - 64) * 0.08;
           lapS -= (c.stats.wet - 70) * 0.028;
+          if (c.trait === "Wet Weather Specialist") lapS -= 0.35;
         } else if (comp.wet > 0) {
           lapS += 2.6;
         }
@@ -470,8 +586,20 @@
             else if (needLife) this._executePitStop(c, c.compound === "soft" ? "hard" : "medium");
           }
 
-          // Incident & Safety Car check!
-          const incProb = (0.0042 - (c.stats.consistency - 70) * 0.00009) * (this.tier === "f3" ? 1.45 : 1.0) * (c.paceMode === "push" ? 1.35 : 1.0) * (c.thermalCliff ? 1.5 : 1.0);
+          // Incident & Safety Car check (scaled by traits & Sports Science Lab)!
+          const sportSciLv = c.is_player ? Math.max(1, Number(this.facilities.sports_science || 1)) : 1;
+          let traitIncMult = 1.0;
+          if (c.trait === "Iron Nerve") traitIncMult *= 0.70;
+          else if (c.trait === "Smooth Operator") traitIncMult *= 0.80;
+          else if (c.trait === "Wet Weather Specialist" && this.wetness >= 22) traitIncMult *= 0.78;
+          else if (c.trait === "Crash-Prone Charger") traitIncMult *= 1.45;
+          else if (c.trait === "Fragile Confidence" && (c.thermalCliff || c.paceMode === "push")) traitIncMult *= 1.35;
+          const incProb = (0.0042 - (c.stats.consistency - 70) * 0.00009)
+            * (this.tier === "f3" ? 1.45 : 1.0)
+            * (c.paceMode === "push" ? 1.35 : 1.0)
+            * (c.thermalCliff ? 1.5 : 1.0)
+            * traitIncMult
+            * Math.max(0.65, 1.0 - (sportSciLv - 1) * 0.08);
           if (newLap >= 2 && this.safetyCarLaps === 0 && Math.random() < Math.max(0.001, incProb)) {
             c.dnf = true;
             c.crash_damage = true;
@@ -521,8 +649,13 @@
     }
 
     _executePitStop(car, newComp) {
-      const baseLoss = (this.safetyCarLaps > 0 || this.vscLaps > 0) ? this.pitLossS * 0.56 : this.pitLossS;
-      const crewError = this.unlocks.pit_crew_drills && Math.random() < 0.08 ? 2.8 : 0.0;
+      const pitRigLv = car.is_player ? Math.max(1, Number(this.facilities.pit_rig || 1)) : 1;
+      const campusLv = car.is_player ? Math.max(1, Number(this.facilities.factory_campus || 1)) : 1;
+      const rigGainS = (pitRigLv - 1) * 0.22 + (campusLv - 1) * 0.08;
+      const rawLoss = Math.max(12.0, this.pitLossS - rigGainS);
+      const baseLoss = (this.safetyCarLaps > 0 || this.vscLaps > 0) ? rawLoss * 0.56 : rawLoss;
+      const errProb = Math.max(0.015, 0.10 - (pitRigLv - 1) * 0.02);
+      const crewError = this.unlocks.pit_crew_drills && Math.random() < errProb ? 2.8 : 0.0;
       car.inPitS = baseLoss + crewError;
       car.compound = newComp;
       car.usedCompounds.add(newComp);
@@ -532,9 +665,10 @@
       car.thermalCliff = false;
       car.pits++;
       if (car.is_player) {
+        const stationaryS = Math.max(1.9, 2.6 - rigGainS + crewError);
         this.pushEvent(
           crewError > 0 ? "SLOW PIT STOP!" : "PIT STOP CLEAN",
-          `${car.code3} boxed for ${COMPOUNDS[newComp].name} (${(2.4 + crewError).toFixed(1)}s stationary).`,
+          `${car.code3} boxed for ${COMPOUNDS[newComp].name} (${stationaryS.toFixed(1)}s stationary${pitRigLv > 1 ? ` · Rig Lv${pitRigLv}` : ""}).`,
           crewError > 0 ? "warn" : "pit"
         );
       }

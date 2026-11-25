@@ -97,6 +97,8 @@ class TestBrowserE2E(unittest.TestCase):
                 m = entry["metrics"]
                 self.assertEqual(m["brokenImgs"], [], f"Broken images on {name}: {m['brokenImgs']}")
                 self.assertLessEqual(m["overflow"], 1, f"Horizontal overflow on {name}: {m['overflow']}px")
+                if name == "ladder":
+                    self.assertLessEqual(m["vOverflow"], 2, f"Zero-scroll violation on /ladder: +{m['vOverflow']}px")
                 self.assertEqual(m["stuckReveal"], 0, f"Stuck invisible .reveal elements on {name}")
                 if entry["tab_check"] is not None:
                     for tab in entry["tab_check"]:
@@ -184,6 +186,7 @@ class TestBrowserE2E(unittest.TestCase):
                     ("play_arena", "/play"),
                     ("full_sim", "/sim"),
                     ("career", "/career"),
+                    ("ladder", "/ladder"),
                     ("car_composition", "/dev/car-composition"),
                     ("car_composition_v2", "/dev/car-composition-v2"),
                 ]
@@ -263,15 +266,32 @@ class TestBrowserE2E(unittest.TestCase):
                             const imgs = Array.from(document.querySelectorAll('img')).filter(i => i.offsetParent !== null);
                             const brokenImgs = imgs.filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src'));
                             const overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+                            const vOverflow = document.documentElement.scrollHeight - window.innerHeight;
                             const stuckReveal = Array.from(document.querySelectorAll('.reveal')).filter(el => {
                                 const r = el.getBoundingClientRect();
                                 return el.offsetParent !== null && r.top >= 0 && r.top < window.innerHeight && parseFloat(getComputedStyle(el).opacity) < 0.5;
                             }).length;
-                            return { overflow, brokenImgs, stuckReveal };
+                            return { overflow, vOverflow, brokenImgs, stuckReveal };
                         })()""")
 
                         tab_check = None
-                        if not mobile and name in ("home", "driver_profile", "team_profile"):
+                        if not mobile and name == "ladder":
+                            tab_check = await eval_js("""(async () => {
+                                const tabs = Array.from(document.querySelectorAll('.ld-tab[data-ld-tab]'));
+                                const res = [];
+                                for (const t of tabs) {
+                                    t.click();
+                                    await new Promise(r => setTimeout(r, 120));
+                                    const p = document.querySelector(`.ld-panel[data-ld-panel="${t.dataset.ldTab}"]`);
+                                    res.push({ tab: t.dataset.ldTab, active: p ? p.classList.contains('active') : false, hiddenRevealCards: 0 });
+                                }
+                                if (tabs[0]) {
+                                    tabs[0].click();
+                                    await new Promise(r => setTimeout(r, 120));
+                                }
+                                return res;
+                            })()""")
+                        elif not mobile and name in ("home", "driver_profile", "team_profile"):
                             tab_check = await eval_js("""(async () => {
                                 const tabs = Array.from(document.querySelectorAll('[data-tabs] [data-tab]'));
                                 const res = [];

@@ -112,6 +112,7 @@ class TestReadRoutes(unittest.TestCase):
             "/play",
             "/sim",
             "/career",
+            "/ladder",
             "/driver",
             "/driver?q=Hamilton",
             f"/driver/{self.sample_driver_slug}",
@@ -158,6 +159,8 @@ class TestReadRoutes(unittest.TestCase):
     def test_all_read_api_routes(self) -> None:
         api_paths = [
             "/api/seasons",
+            "/api/health",
+            "/api/ladder/saves",
             f"/api/races/{self.latest}",
             f"/api/drivers/{self.latest}",
             f"/api/teams/{self.latest}",
@@ -194,6 +197,7 @@ class TestReadRoutes(unittest.TestCase):
     def test_security_data_directory_not_exposed(self) -> None:
         self.assertEqual(self.sess.get(f"{self.base_url}/data/f1.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/career_saves.sqlite", timeout=5).status_code, 404)
+        self.assertEqual(self.sess.get(f"{self.base_url}/data/ladder_saves.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/driver_images/../../f1.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/flags/gb.png", timeout=5).status_code, 200)
 

@@ -413,7 +413,7 @@
           <div class="stat"><b data-count="79" data-suffix="">79</b><span>Real 2D/3D Circuits</span></div>
           <div class="stat"><b data-count="241" data-suffix="">241</b><span>Deduped 3D PNGs</span></div>
           <div class="stat"><b data-count="4.4" data-decimals="1" data-suffix="ms">4.4ms</b><span>Cached Deck API</span></div>
-          <div class="stat"><b data-count="38" data-suffix="/38">38/38</b><span>Passing Tests</span></div>
+          <div class="stat"><b data-count="49" data-suffix="/49">49/49</b><span>Core Unit Tests</span></div>
         </div>
       </div>
     </section>
@@ -449,7 +449,7 @@
           <h2><span class="num-chip">04</span> Backend Engineering &amp; Infra</h2>
           <span class="pill gold">FastAPI + Uvicorn</span>
         </div>
-        <p>The server runs on <strong>Python, FastAPI, Uvicorn, and Jinja2</strong>, cleanly structured into seven domain routers (<code>archive</code>, <code>cards</code>, <code>game</code>, <code>career</code>, <code>ladder</code>, <code>f1db</code>, and <code>dev</code>) backed by decoupled engines for practice programmes, wind-tunnel R&amp;D correlation, cost-cap accounting, FIA regulation voting, paddock politics, and five-tier world AI. Infrastructure middleware provides GZip compression (shrinking HTML and JS payloads by over 72%), immutable versioned static caching, startup index warmups, sub-5-millisecond cached deck APIs, a live <code>/api/health</code> diagnostics endpoint, and a 38-test automated verification suite ensuring rock-solid reliability across every layer.</p>
+        <p>The server runs on <strong>Python, FastAPI, Uvicorn, and Jinja2</strong>, cleanly structured into seven domain routers (<code>archive</code>, <code>cards</code>, <code>game</code>, <code>career</code>, <code>ladder</code>, <code>f1db</code>, and <code>dev</code>) backed by decoupled engines for practice programmes, wind-tunnel R&amp;D correlation, spare-parts &amp; cost-cap accounting, FIA regulation voting with authentic <code>fia_docs.sqlite</code> precedents, paddock politics, and five-tier world AI. Infrastructure middleware provides GZip compression (shrinking HTML and JS payloads by over 72%), immutable versioned static caching, startup index warmups, sub-5-millisecond cached deck APIs, a live <code>/api/health</code> diagnostics endpoint with Ladder DB integrity checks, and a 49-test core verification suite plus headless Chrome E2E checks across every layer.</p>
       </section>
     </article>
 
@@ -489,38 +489,38 @@
             <tr>
               <td><strong>Persistence</strong></td>
               <td><code>career_db.py</code> — 8 tables in <code>career_saves.sqlite</code> (slots, checkpoints, mid-race snapshots, reports, telemetry).</td>
-              <td><code>ladder_db.py</code> — 2 tables in <code>ladder_saves.sqlite</code> (<code>ladder_saves</code> + indexed <code>ladder_history</code>).</td>
-              <td><span class="st-badge st-dup">Separate DBs</span></td>
+              <td><code>ladder_db.py</code> — 4 tables in <code>ladder_saves.sqlite</code> (<code>ladder_saves</code>, <code>ladder_history</code>, <code>ladder_midrace</code>, <code>ladder_race_reports</code>) with atomic WAL transitions.</td>
+              <td><span class="st-badge st-shared">Normalized WAL</span></td>
             </tr>
             <tr>
               <td><strong>Weekend FP &amp; Quali</strong></td>
               <td>Full <code>FP1 → FP2 → FP3 → Q1/Q2/Q3</code> via <code>weekend_engine.py</code> (6 programmes, Dev Points, watchable via <code>weekend_session_sim.js</code>).</td>
-              <td>Single-shot setup slider (Kart flex/gear/PSI vs F4+ wings) + 3 Quali tactics + F3/F2 Reverse-Grid Sprints.</td>
-              <td><span class="st-badge st-gap">Upgrade Seam</span></td>
+              <td>Tier-gated Practice Programmes via shared <code>weekend_engine.py</code> (off in Karting, FP1 in F4, FP1–2 in F3, FP1–3 in F2/F1) + setup sliders + Quali tactics + F3/F2 Reverse-Grid Sprints.</td>
+              <td><span class="st-badge st-shared">Shared Weekend</span></td>
             </tr>
             <tr>
               <td><strong>Live Race Sim</strong></td>
               <td><code>full_sim.js</code> + <code>f1_race_engine.js</code> — 2D + 3D broadcast viewports, 6-component wear, Edge-TTS radio.</td>
-              <td><code>ladder_race_sim.js</code> — 2D <code>F1TrackRenderer</code> map, Pit-Rejoin Ghosts, surface/core tyre cliffs, dirty air (&lt;1.5s), 1×–16× auto-pause.</td>
-              <td><span class="st-badge st-shared">Shared Track 2D</span><br><span class="st-badge st-dup" style="margin-top:4px">Parallel Sim JS</span></td>
+              <td><code>ladder_race_sim.js</code> — 2D <code>F1TrackRenderer</code> map, Pit-Rejoin Ghosts, Doppler Radar, tier-gated radio, facility/trait physics, Engine/ERS modes, mid-race autosave &amp; restore.</td>
+              <td><span class="st-badge st-shared">Shared Track/Radar</span><br><span class="st-badge st-v1" style="margin-top:4px">Resume Live</span></td>
             </tr>
             <tr>
               <td><strong>5-Tier Ecosystem</strong></td>
               <td>Single F1 tier + side feeder series module (<code>feeders.py</code>) for recruiting F2/F3/F1A juniors.</td>
-              <td>All 5 tiers (<code>KART → F4 → F3 → F2 → F1</code>) advance concurrently with strict Unlock Matrix &amp; rolling 3-yr 40-pt Super License.</td>
-              <td><span class="st-badge st-v1">Live v1</span><br><span class="st-badge st-gap" style="margin-top:4px">Needs AI Transfers</span></td>
+              <td><code>ladder_world_ai.py</code> — All 5 tiers advance concurrently with 40-pt SL auto-graduation, 13yo Karting regens, AI principal firings &amp; staff poaching.</td>
+              <td><span class="st-badge st-shared">World AI Shipped</span></td>
             </tr>
             <tr>
               <td><strong>Driver Ratings</strong></td>
               <td>Inherits calibrated 8-stat profiles directly from <code>rating_engine.py</code> + F1DB/FIA Docs.</td>
-              <td>Uses <code>feeders.py</code> for F2/F3/F1A + hardcoded <code>f1_seeds</code> for Tier 5 F1 (not yet wired to <code>rating_engine.py</code>).</td>
-              <td><span class="st-badge st-gap">Wire Rating Engine</span></td>
+              <td>Wired directly to <code>rating_engine.py</code> for Tier 5 F1 + Fog-of-War wrapper &amp; <code>feeders.py</code> for junior tiers + 3D car PNG icons.</td>
+              <td><span class="st-badge st-shared">Synced F1DB</span></td>
             </tr>
             <tr>
               <td><strong>Politics &amp; Fork</strong></td>
               <td><code>paddock_profiles.py</code> (TP personalities + job stress) &amp; <code>regulation_architect.py</code> (2D CAD / 3D custom tools).</td>
-              <td>F3/F2 F1 Academy KPI contracts, F1 Gardening Leave poaching, FIA proposals, &amp; F2→F1 Hybrid Career Fork (Poach / Bid / Mercenary).</td>
-              <td><span class="st-badge st-v1">Fork Live v1</span><br><span class="st-badge st-gap" style="margin-top:4px">Plug TP Profiles</span></td>
+              <td><code>ladder_economy.py</code> — Spare parts inventory, interactive inbox dilemmas, F1 Academy KPI deals, TP lobbying + FIA voting with <code>fia_docs.sqlite</code> precedents &amp; F2→F1 Career Fork.</td>
+              <td><span class="st-badge st-shared">Paddock Bridged</span></td>
             </tr>
           </tbody>
         </table>
@@ -566,7 +566,7 @@
         </div>
 
         <div class="er-panel">
-          <h3><span><code>data/ladder_saves.sqlite</code></span><span class="pill green">2 Tables · 1 Index</span></h3>
+          <h3><span><code>data/ladder_saves.sqlite</code></span><span class="pill green">4 Tables · WAL Atomic</span></h3>
           <div class="er-nodes" style="grid-template-columns:1fr;">
             <div class="er-tbl is-root" style="border-top-color:var(--green)">
               <div class="er-tbl-name"><span>ladder_saves</span><span style="color:var(--green)">ROOT</span></div>
@@ -576,9 +576,9 @@
               <div class="er-tbl-name"><span>ladder_history</span><span>1:N Indexed</span></div>
               <div class="er-cols"><span class="pk">PK id</span> · <span class="fk">FK save_id</span> · season · tier · team_name · team_pos · champion_driver · points · career_path · summary_json</div>
             </div>
-            <div class="er-tbl" style="--tc:#e10600;border-style:dashed;opacity:0.88">
-              <div class="er-tbl-name"><span>Planned Normalized Seam</span><span style="color:#fca5a5">NEXT</span></div>
-              <div class="er-cols">+ <code>ladder_race_reports</code> &amp; <code>ladder_midrace</code> (mirrors Career's normalized pattern for 15+ season telemetry &amp; mid-race resume)</div>
+            <div class="er-tbl" style="--tc:#27f4d2">
+              <div class="er-tbl-name"><span>ladder_midrace &amp; ladder_race_reports</span><span style="color:#4ade80">SHIPPED</span></div>
+              <div class="er-cols"><code>ladder_midrace</code> (1:1 WAL snapshot for mid-race resume) · <code>ladder_race_reports</code> (1:N archived debriefs, weather, SC count &amp; standings)</div>
             </div>
           </div>
         </div>
@@ -744,28 +744,28 @@
       </div>
     </section>
 
-    <!-- AUDIT AREA 6: CLEAN EXTENSION SEAMS & DEBT MAP -->
+    <!-- AUDIT AREA 6: SHIPPED EXTENSION SEAMS & NEXT FRONTIER -->
     <section id="seams" class="section-block section-card reveal">
       <div class="section-head">
-        <h2><span class="num-chip">A6</span> Clean Extension Seams &amp; Technical Debt Guardrails</h2>
-        <span class="pill green">38/38 Tests Safe Boundary</span>
+        <h2><span class="num-chip">A6</span> Shipped Architecture Seams &amp; Next Frontier</h2>
+        <span class="pill green">49/49 Core Tests · Headless Chrome E2E Verified</span>
       </div>
       <div class="seams-grid">
-        <div class="seam-card" style="--sc:#27f4d2">
-          <h4><span>Seam 1 · Wire <code>rating_engine.py</code> into Ladder Tier 5</span><span class="pill teal">Low Risk</span></h4>
-          <p>Replace hardcoded <code>f1_seeds</code> in <code>ladder_engine._build_5tier_world()</code> with live 8-attribute profiles from <code>compute_fair_attributes()</code> so F1 grids, wet pace, and fault DNF% stay 100% synced with F1DB.</p>
+        <div class="seam-card" style="--sc:#22c55e">
+          <h4><span>Seam 1 · <code>rating_engine.py</code> Wired into Tier 5</span><span class="pill green">Shipped PR 1</span></h4>
+          <p><code>ladder_engine._load_real_f1_grid_seeds()</code> computes live 8-attribute F1DB profiles via <code>compute_fair_attributes()</code> with Fog-of-War scouting &amp; pre-rendered 3D car PNG icons.</p>
+        </div>
+        <div class="seam-card" style="--sc:#22c55e">
+          <h4><span>Seam 2 · Shared Weekend, Radar, Radio &amp; Resume</span><span class="pill green">Shipped PR 3–6</span></h4>
+          <p>Reuses <code>weekend_engine.py</code> (tier-gated FP1–FP3), <code>weather_radar_ui.js</code>, <code>f1_radio_engine.js</code>, facility/trait race physics, F1 PU modes, debrief modals &amp; WAL mid-race resume.</p>
+        </div>
+        <div class="seam-card" style="--sc:#22c55e">
+          <h4><span>Seam 3 · <code>ladder_world_ai.py</code> &amp; <code>ladder_economy.py</code></span><span class="pill green">Shipped PR 2 &amp; 4</span></h4>
+          <p>Decoupled 5-tier World AI (40-pt SL auto-graduation, 13yo Karting regens, TP firings) plus spare-parts stock, inbox dilemmas, TP lobbying &amp; <code>fia_docs.sqlite</code> regulatory precedents.</p>
         </div>
         <div class="seam-card" style="--sc:#38bdf8">
-          <h4><span>Seam 2 · Plug Shared Weekend, Radar &amp; Radio Engines</span><span class="pill blue">High Leverage</span></h4>
-          <p>Reuse <code>weekend_engine.py</code> (tier-gated: off in Karting, 1–2 programmes in F4/F3, full FP1–FP3 in F2/F1), <code>weather_radar_ui.js</code>, and <code>f1_radio_engine.js</code> (gated by <code>unlocks.live_radio</code>) instead of duplicating logic.</p>
-        </div>
-        <div class="seam-card" style="--sc:#ff8000">
-          <h4><span>Seam 3 · Extract <code>f1data/ladder_world_ai.py</code></span><span class="pill papaya">Anti-Monolith</span></h4>
-          <p><code>ladder_engine.py</code> is already 1,829 LOC. Keep inter-tier AI driver promotions, 40-pt Super License graduates, 13yo Karting regens, and Silly Season TP firings in a clean new module invoked at season end.</p>
-        </div>
-        <div class="seam-card" style="--sc:#facc15">
-          <h4><span>Seam 4 · Normalize <code>ladder_saves.sqlite</code> &amp; Preserve Tests</span><span class="pill gold">Backwards-Compat</span></h4>
-          <p>Add <code>ladder_race_reports</code> and <code>ladder_midrace</code> tables alongside existing <code>ladder_saves</code> &amp; <code>ladder_history</code>, and reuse <code>paddock_profiles.py</code> in Tier 5 politics while keeping all 38 existing unit tests green.</p>
+          <h4><span>Next Frontier · Modular ES, 3D FX &amp; Co-Op</span><span class="pill blue">Up Next</span></h4>
+          <p>Decompose legacy monoliths (<code>career.js</code>, <code>full_sim.js</code>), add DRS wing animation &amp; rain spray shaders in <code>f1_car_3d.js</code>, and build WebSocket synchronized Pit Wall co-op.</p>
         </div>
       </div>
     </section>
@@ -793,8 +793,8 @@
           <div class="meter-track"><div class="meter-fill" data-fill="96"></div></div>
         </div>
         <div class="bench-item">
-          <div class="bench-top"><strong>Quality &amp; Zero-Scroll Runtime Gate</strong><span class="bench-delta">38/38 Tests · 0 JS Errors</span></div>
-          <div class="bench-sub">All 5 SQLite DBs in WAL mode, 0 Starlette warnings, verified via headless Chrome CDP</div>
+          <div class="bench-top"><strong>Quality &amp; Zero-Scroll Runtime Gate</strong><span class="bench-delta">49/49 Core · E2E Pass</span></div>
+          <div class="bench-sub">All 5 SQLite DBs in WAL mode, 0 Starlette warnings, verified via headless Chrome CDP incl. /ladder</div>
           <div class="meter-track"><div class="meter-fill" data-fill="100"></div></div>
         </div>
       </div>
@@ -874,11 +874,12 @@
             <span>bash — traf1/</span>
             <button type="button" class="copy-btn" id="copy-cmd">Copy</button>
           </div>
-          <pre class="term-code" id="term-code"><span class="cm"># 1. Run full 38-test engineering suite (~4.8s)</span>
-.venv/bin/python -m unittest tests/test_ladder.py tests/test_fair_ratings.py \
-  tests/test_weekend_weather.py tests/test_livery_regs_politics.py \
-  tests/test_career_upgrade.py tests/test_f1db.py tests/test_expansion_systems.py -v
-<span class="ok">→ Ran 38 tests in 5.01s — OK</span>
+          <pre class="term-code" id="term-code"><span class="cm"># 1. Run full 49-test core engineering suite (~5.6s)</span>
+.venv/bin/python -m unittest tests/test_ladder.py tests/test_ladder_world_ai.py \
+  tests/test_ladder_economy.py tests/test_fair_ratings.py tests/test_weekend_weather.py \
+  tests/test_livery_regs_politics.py tests/test_career_upgrade.py tests/test_f1db.py \
+  tests/test_expansion_systems.py -v
+<span class="ok">→ Ran 49 tests in 5.6s — OK</span>
 
 <span class="cm"># 2. Boot local FastAPI + GZip + WAL server</span>
 .venv/bin/python -m uvicorn f1data.server:app --port 8001

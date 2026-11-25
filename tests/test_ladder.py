@@ -233,6 +233,40 @@ class TestPitWallTheLadder(unittest.TestCase):
         self.assertGreater(st_1["rd"]["correlation_accuracy"], corr_before)
         self.assertGreater(rep1["correlation_boost"], 0.0)
 
+    def test_pr5_pr6_car_icons_sponsor_magnet_and_fia_lobbying(self):
+        from f1data.f1_car_palettes import CAR_PNG_DIR, load_png_manifest
+
+        st = leng.build_new_ladder(team_name="Scuderia Ferrari", start_tier="f1", seed=77)
+        view = leng.serialize_ladder_view(st)
+        self.assertIn("f1_car_icons", view)
+        self.assertGreater(len(view["f1_car_icons"]), 0)
+        manifest = load_png_manifest()
+        for url in view["f1_car_icons"].values():
+            self.assertTrue(url.startswith("/static/cars/png/"))
+            slug = url.rsplit("/", 1)[-1].removesuffix(".png")
+            canon = manifest.get(slug, slug)
+            self.assertTrue((CAR_PNG_DIR / f"{canon}.png").is_file(), f"Missing car PNG for {url}")
+        self.assertIsNotNone(view["player_car_icon"])
+
+        # Sponsor Magnet trait yields +8% sponsor income on race commit
+        st_a = leng.build_new_ladder(team_name="Trait A", start_tier="karting", seed=88)
+        st_b = leng.build_new_ladder(team_name="Trait B", start_tier="karting", seed=88)
+        for did in st_a["player"]["driver_ids"]:
+            st_a["drivers"][did]["trait"] = "Smooth Operator"
+        for did in st_b["player"]["driver_ids"]:
+            st_b["drivers"][did]["trait"] = "Smooth Operator"
+        st_b["drivers"][st_b["player"]["driver_ids"][0]]["trait"] = "Sponsor Magnet"
+        res_a = leng.quick_sim_race(st_a)
+        res_b = leng.quick_sim_race(st_b)
+        self.assertGreater(res_b["debrief"]["income_k"], res_a["debrief"]["income_k"])
+
+        # FIA TP lobbying passes lobbied_tp_ids cleanly through vote_fia_proposal
+        roster = st["fia_governance"]["tp_roster"]
+        lobby_ids = [tp["id"] for tp in roster[:3]]
+        ok_v, msg_v = leng.vote_fia_proposal(st, "yes", lobbied_tp_ids=lobby_ids)
+        self.assertTrue(ok_v, msg_v)
+        self.assertIn("votes", st["fia_governance"]["last_tally"])
+
 
 if __name__ == "__main__":
     unittest.main()

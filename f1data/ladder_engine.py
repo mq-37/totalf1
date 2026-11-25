@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .circuits import CIRCUITS, get_circuit
+from .f1_car_palettes import CAR_PNG_DIR, find_car_png_slug, load_png_manifest
 from .feeders import FEEDER_ROSTER_SEED
 from . import ladder_economy as _eco
 from . import ladder_world_ai as _world_ai
@@ -1359,7 +1360,12 @@ def commit_race_results(
 
     # Sponsor & Pay-driver round income + Staff/Driver salaries
     tr_lv = int(state["facilities"].get("race_trailer", state["facilities"].get("factory_campus", 1)))
-    sponsor_k = round(state["economy"]["sponsor_per_round_k"] * (1.0 + (tr_lv - 1) * 0.12), 1)
+    has_sponsor_magnet = any(
+        state["drivers"].get(did, {}).get("trait") == "Sponsor Magnet"
+        for did in state["player"]["driver_ids"]
+    )
+    sponsor_mult = (1.0 + (tr_lv - 1) * 0.12) * (1.08 if has_sponsor_magnet else 1.0)
+    sponsor_k = round(state["economy"]["sponsor_per_round_k"] * sponsor_mult, 1)
     pay_k = sum(round(state["drivers"][did].get("pay_driver_k", 0.0) / tcfg["rounds"], 1) for did in state["player"]["driver_ids"] if did in state["drivers"])
     acad_k = 0.0
     if state.get("academy_deal"):
@@ -1888,12 +1894,27 @@ def choose_career_fork_or_promote(
     return True, msg
 
 
+def _resolve_car_icon_url(team_name: str | None, year: int = 2026) -> str | None:
+    """Resolve an existing pre-rendered 3D car PNG URL for an F1 team (None if unavailable)."""
+    if not team_name:
+        return None
+    slug = find_car_png_slug(team_name, year=year)
+    if not slug:
+        return None
+    manifest = load_png_manifest()
+    canon = manifest.get(slug, slug)
+    if (CAR_PNG_DIR / f"{canon}.png").is_file():
+        return f"/static/cars/png/{slug}.png"
+    return None
+
+
 def serialize_ladder_view(state: dict[str, Any]) -> dict[str, Any]:
     """Enrich state with computed standings, tier config, unlock matrix, & circuit data for the Pit Wall UI."""
     tier = state["tier"]
     tcfg = TIER_CONFIG[tier]
     tier_obj = state["tiers"][tier]
     cir = get_circuit(state["weekend"]["circuit_id"]) or CIRCUITS[0]
+    cur_year = int(state.get("year") or 2026)
 
     tier_standings = {}
     for tid in TIER_ORDER:
@@ -1908,7 +1929,18 @@ def serialize_ladder_view(state: dict[str, Any]) -> dict[str, Any]:
             "color": tobj["color"],
             "round": tobj["round"],
             "total_rounds": len(tobj["calendar"]),
-            "teams": [{"name": t["name"], "color": t["color"], "points": round(float(t["points"]), 1), "is_player": bool(t.get("is_player")), "car_rating": t["car_rating"], "principal": t.get("principal", "")} for t in t_sorted],
+            "teams": [
+                {
+                    "name": t["name"],
+                    "color": t["color"],
+                    "points": round(float(t["points"]), 1),
+                    "is_player": bool(t.get("is_player")),
+                    "car_rating": t["car_rating"],
+                    "principal": t.get("principal", ""),
+                    "car_icon_url": _resolve_car_icon_url(t["name"], year=cur_year) if tid == "f1" else None,
+                }
+                for t in t_sorted
+            ],
             "drivers": [
                 {
                     "id": d["id"], "name": d["name"], "code3": d["code3"], "team": d["team"],
@@ -1950,14 +1982,22 @@ def serialize_ladder_view(state: dict[str, Any]) -> dict[str, Any]:
     _eco.ensure_dilemmas(state)
     fia_prec = None
     if tier == "f1" and state.get("fia_governance", {}).get("active_proposal"):
+        _eco.ensure_f1_paddock_roster(state)
         ap = state["fia_governance"]["active_proposal"]
         fia_prec = _eco.fetch_fia_technical_precedent(str(ap.get("category") or "Aero"), seed=int(state.get("rng_seed") or 1) + int(state.get("season") or 1) * 19)
+    f1_car_icons = {
+        tm["name"]: _resolve_car_icon_url(tm["name"], year=cur_year)
+        for tm in (state.get("tiers", {}).get("f1", {}).get("teams") or [])
+    }
+    player_car_icon = _resolve_car_icon_url(state["player"]["team_name"], year=cur_year)
     return {
         "state": state,
         "tier_config": tcfg,
         "practice_rules": get_ladder_practice_rules(tier),
         "spare_parts": _eco.get_spare_parts_view(state),
         "fia_precedent": fia_prec,
+        "f1_car_icons": {k: v for k, v in f1_car_icons.items() if v},
+        "player_car_icon": player_car_icon,
         "all_tiers_meta": [
             {
                 "id": tid, "rank": TIER_CONFIG[tid]["rank"], "name": TIER_CONFIG[tid]["name"],
