@@ -116,7 +116,7 @@ _FLAGS_DIR = BASE_DIR / "data" / "flags"
 if _FLAGS_DIR.exists():
     app.mount("/data/flags", StaticFiles(directory=str(_FLAGS_DIR)), name="data_flags")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-ASSET_VERSION = "20261125a"
+ASSET_VERSION = "20261125b"
 templates.env.globals["asset_v"] = ASSET_VERSION
 
 
@@ -154,7 +154,7 @@ def api_health():
     from . import f1_car_palettes as _fcp
     from . import rating_engine as _re
     dbs = {}
-    for fname in ("f1.sqlite", "f1db.sqlite", "fia_docs.sqlite", "career_saves.sqlite", "ladder_saves.sqlite"):
+    for fname in ("f1.sqlite", "f1db.sqlite", "fia_docs.sqlite", "career_saves.sqlite", "ladder_saves.sqlite", "drive_saves.sqlite"):
         p = BASE_DIR / "data" / fname
         if not p.exists():
             dbs[fname] = {"exists": False}
@@ -176,7 +176,9 @@ def api_health():
             dbs[fname] = {"exists": True, "error": str(exc)}
     manifest = _fcp.load_png_manifest()
     from . import ladder_db as _ldb
+    from . import drive_db as _ddb
     ladder_integrity = _ldb.check_ladder_integrity(BASE_DIR)
+    drive_integrity = _ddb.check_drive_integrity(BASE_DIR)
     return JSONResponse({
         "ok": True,
         "uptime_s": round(time.time() - _SERVER_START_TS, 1),
@@ -186,6 +188,7 @@ def api_health():
         "car_png_manifest_aliases": len(manifest),
         "car_png_unique_files": len(set(manifest.values())) if manifest else len(list(_fcp.CAR_PNG_DIR.glob("*.png"))),
         "ladder_world_integrity": ladder_integrity,
+        "drive_world_integrity": drive_integrity,
         "databases": dbs,
     })
 
@@ -525,7 +528,7 @@ def _career_base_dir() -> Path:
 
 
 # Mount modular APIRouters (game before career to prevent circular imports)
-from .routers import archive as _r_archive, cards as _r_cards, game as _r_game, career as _r_career, dev as _r_dev, f1db as _r_f1db, ladder as _r_ladder
+from .routers import archive as _r_archive, cards as _r_cards, game as _r_game, career as _r_career, dev as _r_dev, f1db as _r_f1db, ladder as _r_ladder, drive as _r_drive
 app.include_router(_r_archive.router)
 app.include_router(_r_cards.router)
 app.include_router(_r_game.router)
@@ -533,3 +536,4 @@ app.include_router(_r_career.router)
 app.include_router(_r_dev.router)
 app.include_router(_r_f1db.router)
 app.include_router(_r_ladder.router)
+app.include_router(_r_drive.router)

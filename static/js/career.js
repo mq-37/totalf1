@@ -4459,6 +4459,11 @@
     DATA = res;
     showPostRaceDebrief(res.debrief);
   });
+  getEl("car-q-pov-btn")?.addEventListener("click", () => {
+    const slotId = (DATA && (DATA.active_slot_id || DATA.slot_id || (DATA.slots && (DATA.slots.find((s) => s.is_active) || DATA.slots[0])?.slot_id))) || "";
+    const url = slotId ? `/drive?source=career&ref_id=${encodeURIComponent(slotId)}` : "/drive?mode=gp";
+    window.location.href = url;
+  });
   getEl("car-q-lightsout-btn").addEventListener("click", async () => {
     if (wkCtx.runner) wkCtx.runner.stop();
     if (!cr.quali || (cr.quali.stage && cr.quali.stage !== "done")) {

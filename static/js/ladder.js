@@ -443,9 +443,10 @@
     const launchBlock = wk.quali_done ? `
       <div class="ld-item" style="border-color:#ef4444">
         <div class="ld-item-top"><strong>Race Day — Pit Wall Command</strong><span class="ld-tag ld-tag-ok">LIGHTS READY</span></div>
-        <p>Launch the live 2D Pit Wall track map with Pit-Rejoin Ghost Predictor, thermal tyre cliff telemetry &amp; 1×–16× smart auto-pause — or Quick Sim to debrief.</p>
+        <p>Launch the live 2D Pit Wall track map, jump straight into the 3D cockpit in Apex POV, or Quick Sim to debrief.</p>
         <div class="ld-ctrl-row">
           <button type="button" id="btn-launch-live" class="ld-btn ld-btn-red"><i class="fas fa-play"></i> Launch Live Pit Wall</button>
+          <a href="/drive?source=ladder&amp;ref_id=${encodeURIComponent(currentSaveId || "")}" class="ld-btn ld-btn-primary" style="text-decoration:none"><i class="fas fa-tachometer-alt"></i> Take the Wheel (3D POV)</a>
           <button type="button" id="btn-quick-sim" class="ld-btn">Quick Sim Race</button>
         </div>
       </div>

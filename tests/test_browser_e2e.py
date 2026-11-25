@@ -97,8 +97,8 @@ class TestBrowserE2E(unittest.TestCase):
                 m = entry["metrics"]
                 self.assertEqual(m["brokenImgs"], [], f"Broken images on {name}: {m['brokenImgs']}")
                 self.assertLessEqual(m["overflow"], 1, f"Horizontal overflow on {name}: {m['overflow']}px")
-                if name == "ladder":
-                    self.assertLessEqual(m["vOverflow"], 2, f"Zero-scroll violation on /ladder: +{m['vOverflow']}px")
+                if name in ("ladder", "drive"):
+                    self.assertLessEqual(m["vOverflow"], 2, f"Zero-scroll violation on /{name}: +{m['vOverflow']}px")
                 self.assertEqual(m["stuckReveal"], 0, f"Stuck invisible .reveal elements on {name}")
                 if entry["tab_check"] is not None:
                     for tab in entry["tab_check"]:
@@ -187,6 +187,7 @@ class TestBrowserE2E(unittest.TestCase):
                     ("full_sim", "/sim"),
                     ("career", "/career"),
                     ("ladder", "/ladder"),
+                    ("drive", "/drive"),
                     ("car_composition", "/dev/car-composition"),
                     ("car_composition_v2", "/dev/car-composition-v2"),
                 ]

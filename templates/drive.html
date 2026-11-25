@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Apex POV — First-Person F1 Driver Engine · Local F1{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="/static/css/drive.css?v={{ asset_v }}">
+{% endblock %}
+{% block content %}
+<div id="drive-shell" class="drive-shell">
+  <!-- FULLSCREEN 3D WEBGL VIEWPORT -->
+  <canvas id="drive-canvas" class="drive-canvas"></canvas>
+
+  <!-- LIVE IN-CAR BROADCAST HUD (shown while driving) -->
+  <div id="drive-hud" class="drive-hud hidden">
+    <!-- Top-Left: Session Pill & Compact Timing Tower -->
+    <div class="dh-top-left">
+      <div class="dh-session-bar">
+        <span id="dh-mode-pill" class="dh-pill">TIME TRIAL</span>
+        <span id="dh-lap-text" class="dh-mono">LAP 1</span>
+        <span id="dh-pos-text" class="dh-mono dh-pos">P1/20</span>
+      </div>
+      <div id="dh-timing-tower" class="dh-tower"></div>
+    </div>
+
+    <!-- Top-Center: 5-Red-Lights + Live Delta + Sector / Radio Toast -->
+    <div class="dh-top-center">
+      <div id="dh-start-lights" class="dh-start-lights hidden">
+        <i class="dh-pod"></i><i class="dh-pod"></i><i class="dh-pod"></i><i class="dh-pod"></i><i class="dh-pod"></i>
+      </div>
+      <div class="dh-delta-strip">
+        <span id="dh-cur-lap" class="dh-mono">0:00.000</span>
+        <span id="dh-delta-pill" class="dh-delta">0.000</span>
+        <span id="dh-best-lap" class="dh-sub">BEST --:--.---</span>
+      </div>
+      <div id="dh-banner" class="dh-banner hidden"></div>
+    </div>
+
+    <!-- Top-Right: Quick Cockpit Controls -->
+    <div class="dh-top-right">
+      <button type="button" id="btn-hud-cam" class="dh-btn" title="Cycle Camera [C]">COCKPIT [C]</button>
+      <button type="button" id="btn-hud-halo" class="dh-btn" title="Toggle Halo Pillar Opacity [H]">HALO: GHOST</button>
+      <button type="button" id="btn-hud-line" class="dh-btn" title="Cycle 3D Braking Line [T]">LINE: FULL</button>
+      <button type="button" id="btn-hud-box" class="dh-btn" title="Box for Fresh Tyres & Wing Repair [F]">BOX [F]</button>
+      <button type="button" id="btn-hud-mute" class="dh-btn" title="Mute Engine Audio"><i class="fas fa-volume-up"></i></button>
+      <button type="button" id="btn-hud-pause" class="dh-btn dh-btn-red" title="Pause [P / Esc]">PAUSE</button>
+    </div>
+
+    <!-- Bottom-Left: 2D Live Circuit Minimap + Weather + Controls Hint -->
+    <div class="dh-bot-left">
+      <canvas id="dh-minimap" class="dh-minimap" width="168" height="132"></canvas>
+      <div class="dh-mini-meta">
+        <span id="dh-circuit-mini">Circuit</span>
+        <span id="dh-weather-mini">DRY 0%</span>
+      </div>
+      <div id="dh-input-hint" class="dh-hint">WASD/Arrows Steer · Space ERS · R DRS · Q/E Gear · F Box</div>
+    </div>
+
+    <!-- Bottom-Right: Modern F1 TV Telemetry Pod -->
+    <div class="dh-bot-right">
+      <div class="dh-telem-pod">
+        <div class="dh-rpm-bar"><span id="dh-rpm-fill"></span></div>
+        <div class="dh-telem-main">
+          <div class="dh-pedals">
+            <div class="dh-pedal-col"><div class="dh-p-track"><span id="dh-thr-fill" class="dh-thr"></span></div><small>THR</small></div>
+            <div class="dh-pedal-col"><div class="dh-p-track"><span id="dh-brk-fill" class="dh-brk"></span></div><small>BRK</small></div>
+          </div>
+          <div class="dh-speed-block">
+            <div id="dh-gear" class="dh-gear">1</div>
+            <div id="dh-kph" class="dh-kph">0</div>
+            <small>KPH · <span id="dh-rpm-num">3600</span> RPM</small>
+          </div>
+          <div class="dh-status-col">
+            <span id="dh-drs-tag" class="dh-badge">DRS</span>
+            <span id="dh-ers-tag" class="dh-badge">ERS 100%</span>
+            <span id="dh-pit-tag" class="dh-badge">LIMITER</span>
+          </div>
+        </div>
+        <div class="dh-ers-track"><span id="dh-ers-fill"></span></div>
+        <div class="dh-telem-foot">
+          <span id="dh-tyre-stat">S · 100% · 90°C</span>
+          <span id="dh-wing-stat">WING 100%</span>
+          <span id="dh-bb-stat">BB 56%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRE-SESSION LAUNCHER / PADDOCK HUB OVERLAY -->
+  <div id="drive-launcher" class="drive-overlay">
+    <div class="dl-card">
+      <div class="dl-head">
+        <div>
+          <span class="dl-kicker">120 HZ CUSTOM F1 ENGINE · 79 GPS CIRCUITS · 1950–2026</span>
+          <h1>APEX POV <span class="dl-accent">DRIVER ENGINE</span></h1>
+        </div>
+        <div class="dl-head-right">
+          <span id="dl-gamepad-badge" class="dh-pill">⌨️ KEYBOARD READY</span>
+        </div>
+      </div>
+
+      <!-- Bridge Notice Banner (when launched from /ladder or /career) -->
+      <div id="dl-bridge-banner" class="dl-bridge hidden"></div>
+
+      <!-- Mode Selector Tabs -->
+      <div class="dl-mode-tabs" role="tablist">
+        <button type="button" class="dl-mtab active" data-dmode="timetrial"><i class="fas fa-stopwatch"></i> Time Trial &amp; Ghost</button>
+        <button type="button" class="dl-mtab" data-dmode="gp"><i class="fas fa-flag-checkered"></i> Quick Grand Prix</button>
+        <button type="button" class="dl-mtab" data-dmode="weekend"><i class="fas fa-trophy"></i> Full GP Weekend</button>
+        <button type="button" class="dl-mtab" data-dmode="career"><i class="fas fa-helmet-safety"></i> POV Driver Career</button>
+      </div>
+
+      <!-- Standard Session Setup Grid (TT / GP / Weekend) -->
+      <div id="dl-setup-pane" class="dl-body">
+        <div class="dl-grid-2">
+          <div class="dl-panel">
+            <h3><i class="fas fa-road"></i> Circuit, Era &amp; Grid</h3>
+            <div class="dl-form">
+              <label>Circuit (79 Real GPS Tracks)
+                <select id="in-circuit" class="dl-select">
+                  {% for c in circuits_meta %}
+                  <option value="{{ c.id }}"{% if c.id == boot_params.circuit %} selected{% endif %}>{{ c.name }} ({{ c.country }} · {{ c.length_km }} km)</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="dl-row-2">
+                <label>F1 Regulation Era
+                  <select id="in-era" class="dl-select">
+                    {% for e in eras %}
+                    <option value="{{ e.key }}"{% if e.key == boot_params.era %} selected{% endif %}>{{ e.label }} ({{ e.top_speed }} KPH)</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Constructor Seat
+                  <select id="in-team" class="dl-select">
+                    {% for t in teams %}
+                    <option value="{{ t.name }}">{{ t.name }} (Car {{ t.rating }})</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+              <div class="dl-row-3">
+                <label>Driver Name <input type="text" id="in-drv-name" class="dl-input" value="Alex Vance" maxlength="28"></label>
+                <label>Weather
+                  <select id="in-weather" class="dl-select">
+                    <option value="dry">Dry</option>
+                    <option value="dynamic">Dynamic Showers</option>
+                    <option value="rain">Heavy Rain</option>
+                  </select>
+                </label>
+                <label id="wrap-laps">Race Laps
+                  <select id="in-laps" class="dl-select">
+                    <option value="3">3 Laps (Sprint)</option>
+                    <option value="5" selected>5 Laps</option>
+                    <option value="8">8 Laps</option>
+                    <option value="12">12 Laps</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div id="dl-tt-records" class="dl-records"></div>
+          </div>
+
+          <div class="dl-panel">
+            <h3><i class="fas fa-sliders-h"></i> EA F1 Sim-Cade Assists &amp; Controls</h3>
+            <div class="dl-preset-row">
+              <button type="button" class="dh-btn dl-preset" data-preset="rookie">Rookie</button>
+              <button type="button" class="dh-btn dl-preset active" data-preset="standard">EA F1 Standard</button>
+              <button type="button" class="dh-btn dl-preset" data-preset="pro">Pro Sim</button>
+            </div>
+            <div class="dl-assists-grid">
+              <label>Traction Control
+                <select id="as-tc" class="dl-select">
+                  <option value="full">Full</option>
+                  <option value="med" selected>Medium</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label>ABS Braking
+                <select id="as-abs" class="dl-select">
+                  <option value="1" selected>On</option>
+                  <option value="0">Off (Lockups)</option>
+                </select>
+              </label>
+              <label>Gearbox
+                <select id="as-gear" class="dl-select">
+                  <option value="1" selected>Automatic</option>
+                  <option value="0">Manual (Q/E or LB/RB)</option>
+                </select>
+              </label>
+              <label>Braking Assist
+                <select id="as-brk" class="dl-select">
+                  <option value="0" selected>Off</option>
+                  <option value="1">Low Assist</option>
+                </select>
+              </label>
+              <label>3D Racing Line
+                <select id="as-line" class="dl-select">
+                  <option value="full" selected>Full Dynamic</option>
+                  <option value="corners">Corners Only</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label>Start Camera
+                <select id="as-cam" class="dl-select">
+                  <option value="cockpit" selected>Cockpit Halo POV</option>
+                  <option value="tcam">T-Cam Onboard</option>
+                  <option value="nose">Nose Cam</option>
+                  <option value="chase">Chase Cam</option>
+                </select>
+              </label>
+            </div>
+            <div class="dl-key-legend">
+              <b>Controls:</b> <code>WASD</code> / <code>Arrows</code> or <b>Gamepad Stick + RT/LT</b> · <code>Space</code>/<code>A</code> ERS · <code>R</code>/<code>X</code> DRS · <code>C</code>/<code>Y</code> Camera · <code>H</code> Halo Ghost · <code>F</code> Pit Box · <code>B/N</code> Brake Bias
+            </div>
+          </div>
+        </div>
+        <div class="dl-foot">
+          <button type="button" id="btn-start-drive" class="dh-btn dh-btn-red dl-launch-btn"><i class="fas fa-play"></i> LIGHTS OUT — ENTER COCKPIT</button>
+        </div>
+      </div>
+
+      <!-- Persistent POV Driver Career Pane -->
+      <div id="dl-career-pane" class="dl-body hidden">
+        <div class="dl-grid-2">
+          <div class="dl-panel">
+            <h3><i class="fas fa-id-card"></i> Driver Career Saves</h3>
+            <div class="dl-row-2" style="margin-bottom:8px">
+              <select id="dc-save-sel" class="dl-select"></select>
+              <button type="button" id="dc-btn-del" class="dh-btn">Delete</button>
+            </div>
+            <div id="dc-new-form" class="dl-form" style="padding:8px;border:1px solid rgba(148,163,184,0.18);border-radius:8px;margin-bottom:8px">
+              <div class="dl-row-3">
+                <label>Driver Name <input type="text" id="dc-in-name" class="dl-input" value="Alex Vance" maxlength="28"></label>
+                <label>No. <input type="number" id="dc-in-num" class="dl-input" value="27" min="2" max="99"></label>
+                <label>Rookie Team
+                  <select id="dc-in-team" class="dl-select">
+                    {% for t in teams %}
+                    <option value="{{ t.name }}"{% if t.name == 'Williams' %} selected{% endif %}>{{ t.name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+              <button type="button" id="dc-btn-create" class="dh-btn dh-btn-primary" style="margin-top:6px"><i class="fas fa-plus"></i> Start New POV Driver Career</button>
+            </div>
+            <div id="dc-overview" class="dl-scroll"></div>
+          </div>
+          <div class="dl-panel">
+            <h3><i class="fas fa-trophy"></i> WDC Standings, Teammate H2H &amp; Contracts</h3>
+            <div id="dc-standings" class="dl-scroll"></div>
+          </div>
+        </div>
+        <div class="dl-foot">
+          <button type="button" id="dc-btn-drive-round" class="dh-btn dh-btn-red dl-launch-btn"><i class="fas fa-flag-checkered"></i> DRIVE NEXT CAREER GRAND PRIX</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE / POST-RACE / TELEMETRY ANALYZER MODAL -->
+  <div id="drive-modal" class="drive-overlay hidden">
+    <div class="dl-card" style="width:min(760px,95vw)">
+      <div class="dl-head">
+        <div>
+          <span id="dm-kicker" class="dl-kicker">PAUSED</span>
+          <h2 id="dm-title" style="margin:2px 0 0;font-family:'Orbitron',sans-serif">Session Paused</h2>
+        </div>
+        <button type="button" id="dm-btn-close" class="dh-btn">✕</button>
+      </div>
+      <div id="dm-body" class="dl-scroll" style="max-height:56vh;margin-top:10px"></div>
+      <div id="dm-telem-wrap" class="hidden" style="margin-top:10px">
+        <div style="font-size:0.7rem;color:#94a3b8;font-weight:800;margin-bottom:4px">LAP TELEMETRY TRACE — SPEED (CYAN) · THROTTLE (GREEN) · BRAKE (RED)</div>
+        <canvas id="dm-telem-canvas" width="700" height="150" class="dm-telem-canvas"></canvas>
+      </div>
+      <div id="dm-actions" class="dl-foot" style="margin-top:12px;gap:8px"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    window.__DRIVE_BOOT__ = {{ boot_params | tojson }};
+    window.__DRIVE_CAREERS__ = {{ careers | tojson }};
+  </script>
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/js/f1_track_architect.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_car_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_physics.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_input.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_audio.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_cockpit_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_world_3d.js?v={{ asset_v }}"></script>
+  <script src="/static/js/f1_drive_ai.js?v={{ asset_v }}"></script>
+  <script src="/static/js/drive.js?v={{ asset_v }}"></script>
+{% endblock %}

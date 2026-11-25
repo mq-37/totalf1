@@ -113,6 +113,7 @@ class TestReadRoutes(unittest.TestCase):
             "/sim",
             "/career",
             "/ladder",
+            "/drive",
             "/driver",
             "/driver?q=Hamilton",
             f"/driver/{self.sample_driver_slug}",
@@ -161,6 +162,9 @@ class TestReadRoutes(unittest.TestCase):
             "/api/seasons",
             "/api/health",
             "/api/ladder/saves",
+            "/api/drive/config?circuit=melbourne&era=2026&mode=timetrial",
+            "/api/drive/leaderboards",
+            "/api/drive/careers",
             f"/api/races/{self.latest}",
             f"/api/drivers/{self.latest}",
             f"/api/teams/{self.latest}",
@@ -198,6 +202,7 @@ class TestReadRoutes(unittest.TestCase):
         self.assertEqual(self.sess.get(f"{self.base_url}/data/f1.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/career_saves.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/ladder_saves.sqlite", timeout=5).status_code, 404)
+        self.assertEqual(self.sess.get(f"{self.base_url}/data/drive_saves.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/driver_images/../../f1.sqlite", timeout=5).status_code, 404)
         self.assertEqual(self.sess.get(f"{self.base_url}/data/flags/gb.png", timeout=5).status_code, 200)
 
