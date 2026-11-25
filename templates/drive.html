@@ -7,6 +7,8 @@
 <div id="drive-shell" class="drive-shell">
   <!-- FULLSCREEN 3D WEBGL VIEWPORT -->
   <canvas id="drive-canvas" class="drive-canvas"></canvas>
+  <!-- SCREEN-SPACE VISOR RAIN / SPEED-LINES / IMPACT FX OVERLAY -->
+  <canvas id="drive-visor-fx" class="drive-visor-fx"></canvas>
 
   <!-- LIVE IN-CAR BROADCAST HUD (shown while driving) -->
   <div id="drive-hud" class="drive-hud hidden">
@@ -74,11 +76,26 @@
           </div>
         </div>
         <div class="dh-ers-track"><span id="dh-ers-fill"></span></div>
+        <div class="dh-dmg-grid">
+          <div class="dh-tyres4">
+            <span id="dh-t-fl" class="dh-t4">FL 100</span>
+            <span id="dh-t-fr" class="dh-t4">FR 100</span>
+            <span id="dh-t-rl" class="dh-t4">RL 100</span>
+            <span id="dh-t-rr" class="dh-t4">RR 100</span>
+          </div>
+          <div class="dh-comp-list">
+            <span id="dh-c-fw">FW 100%</span>
+            <span id="dh-c-flr">FLR 100%</span>
+            <span id="dh-c-susp">SUS 100%</span>
+            <span id="dh-c-pu">PU 96°C</span>
+          </div>
+        </div>
         <div class="dh-telem-foot">
-          <span id="dh-tyre-stat">S · 100% · 90°C</span>
-          <span id="dh-wing-stat">WING 100%</span>
+          <span id="dh-tyre-stat">S · BRK 380°C</span>
+          <span id="dh-env-stat">RUB 35% · WND 12</span>
           <span id="dh-bb-stat">BB 56%</span>
         </div>
+        <div id="dh-alerts-row" class="dh-alerts-row"></div>
       </div>
     </div>
   </div>

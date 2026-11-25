@@ -1,17 +1,17 @@
 /**
- * Apex POV (/drive) — 120 Hz Fixed-Timestep Pacejka-Inspired F1 Vehicle Dynamics Engine.
+ * Apex POV (/drive) — 120 Hz Fixed-Timestep Pacejka F1 Vehicle Dynamics, Damage & Elements Engine.
  *
- * Pure JS (zero DOM/Three.js dependencies) so it runs identically at 120 Hz in the browser
- * and headlessly in Node automated physics tests.
+ * Pure JS (zero DOM/Three.js dependencies) — identical at 120 Hz in browser & Node tests.
  *
- * Key subsystems:
+ * Subsystems:
  *   1. C2 Catmull-Rom Track Spline + Analytical 2-Pass Forward/Backward Optimal Speed Envelope
- *   2. Exact O(1) Track-Frame Projection (s, n, surface, DRS zones, sectors, pit trigger)
- *   3. Multi-Era Powertrain (5..8 gears, torque curve, MGU-K ERS 4 MJ/lap, DRS & 2026 Active Aero)
- *   4. Pacejka Magic Formula Lateral Grip + Combined-Slip Friction Circle + Wet Aquaplaning
- *   5. Surface vs Core Tyre Thermals, Wear Cliff, Fuel Mass & Front-Wing Damage Understeer
- *   6. Tunable EA F1-Style Sim-Cade Assists (TC Full/Med/Off, ABS, Auto-Shift, Braking Assist)
- *   7. 4-DOF Chassis Pitch/Roll/Heave, Plank Bottoming Sparks & Glancing Barrier Collisions
+ *   2. Exact O(1) Track-Frame Projection (s, n, surface, puddles, marbles, kerbs, DRS, sectors)
+ *   3. Multi-Era Powertrain (5..8 gears, torque curve, MGU-K ERS 4 MJ/lap, DRS, 2026 X-Mode, PU Heat)
+ *   4. Per-Corner 4-Wheel Tyre Model (FL/FR/RL/RR wear, surface/core temps, flat-spots, dirty-tyre pickup)
+ *   5. Multi-Component Damage (Front Wing understeer, Floor DF loss, Suspension alignment pull, Carbon Brake Fade)
+ *   6. Elemental Interactions (Wind vector headwind/crosswind, Puddle aquaplaning, Drying Groove, Track Rubber)
+ *   7. Tunable Sim-Cade Assists (TC Full/Med/Off, ABS, Auto-Shift, Braking Assist, Stability)
+ *   8. 4-DOF Chassis Pitch/Roll/Heave, Kerb Kick, Plank Bottoming Sparks & Glancing Barrier Collisions
  */
 (function (root, factory) {
   const api = factory();
@@ -61,8 +61,18 @@
     );
   }
 
+  function hashStr(str) {
+    let h = 2166136261;
+    const s = String(str || "track");
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) / 4294967296;
+  }
+
   // ---------------------------------------------------------------------------
-  // 1. Track Spline + Analytical Racing-Line Speed Envelope
+  // 1. Track Spline + Analytical Racing-Line Speed Envelope + Bumps/Puddles
   // ---------------------------------------------------------------------------
   function buildDriveTrack(circuit, physicsDna, archElevFn) {
     const raw = (circuit && Array.isArray(circuit.points) && circuit.points.length >= 6)
@@ -80,7 +90,6 @@
     }
     cx /= nRaw; cz /= nRaw;
 
-    // Match F1VehiclePhysics world scale so 3D world & physics share identical coordinates!
     const lengthKm = Number((circuit && circuit.length_km) || 5.0);
     const targetPerimM = clamp(lengthKm * 660, 2400, 5400);
     const scale = targetPerimM / Math.max(10, perim);
@@ -104,6 +113,8 @@
           prog: 0,
           slopePitch: 0,
           bankRad: 0,
+          bumpMm: 0,
+          puddleDepth: 0, // 0..1 localized drainage puddle factor when wet
           vTarget: 90,
           optLat: 0,
           drsZone: false,
@@ -127,7 +138,6 @@
     }
     totalLen += Math.hypot(pts[0].x - pts[n - 1].x, pts[0].z - pts[n - 1].z);
 
-    // Smooth tangents (2 passes)
     for (let pass = 0; pass < 2; pass++) {
       const txc = pts.map((p) => p.tx);
       const tzc = pts.map((p) => p.tz);
@@ -142,6 +152,8 @@
     }
 
     const drsRanges = (circuit && Array.isArray(circuit.drs_ranges)) ? circuit.drs_ranges : [[0.88, 0.99]];
+    const seed = hashStr(circuit && circuit.id) * 97.3;
+    const isBumpy = Boolean(circuit && (circuit.biome === "street" || circuit.biome === "night_street" || circuit.biome === "harbour" || circuit.id === "austin" || circuit.id === "interlagos"));
 
     for (let i = 0; i < n; i++) {
       const p = pts[i];
@@ -161,20 +173,25 @@
         p.bankRad = Number(topo.bankRad || 0);
       }
 
+      // Deterministic road undulation + drainage dips (standing water spots in heavy rain!)
+      const u = i / n;
+      const w1 = Math.sin(u * Math.PI * 16 + seed) * 0.55;
+      const w2 = Math.cos(u * Math.PI * 44 + seed * 1.9) * 0.35;
+      const dip = Math.pow(Math.max(0, Math.sin(u * Math.PI * 10 + seed * 2.7)), 6);
+      p.bumpMm = (w1 + w2 + dip * 1.3) * (isBumpy ? 9.5 : 5.2);
+      p.puddleDepth = clamp(dip * 1.15, 0, 1);
+
       p.drsZone = drsRanges.some(([a, b]) => (a <= b ? (p.prog >= a && p.prog <= b) : (p.prog >= a || p.prog <= b)));
     }
 
-    // Smooth curvature slightly for clean optimal racing line & braking envelope
     const rawCurv = pts.map((p) => p.curv);
     for (let i = 0; i < n; i++) {
       let sum = 0;
       for (let k = -2; k <= 2; k++) sum += rawCurv[(i + k + n) % n];
       pts[i].curv = sum / 5;
-      // Outside-inside-outside racing line offset (apex hugging inside of curve!)
       pts[i].optLat = clamp(-pts[i].curv * 260, -4.6, 4.6);
     }
 
-    // Analytical 2-pass forward/backward optimal speed envelope (m/s)
     const dna = physicsDna || {};
     const vMaxMps = Number(dna.top_speed_kph || 345) / 3.6;
     const muEff = Number(dna.tyre_mu_base || 2.0) * 1.15;
@@ -188,14 +205,12 @@
       if (absC < 0.0005) {
         pts[i].vTarget = vMaxMps;
       } else {
-        // Solve mu * (m*g + 0.5*rho*Cl*A*v^2) = m * v^2 * |curv|
         const aeroTerm = (0.5 * AIR_RHO * clEff * FRONTAL_AREA * muEff) / massKg;
         const denom = Math.max(0.0004, absC - aeroTerm * 0.72);
         const vCorner = Math.sqrt((muEff * GRAVITY) / denom);
         pts[i].vTarget = clamp(vCorner, 18.0, vMaxMps);
       }
     }
-    // Backward braking pass (2 laps wrap-around so S/F line is continuous!)
     for (let pass = 0; pass < 2; pass++) {
       for (let i = n - 1; i >= 0; i--) {
         const next = pts[(i + 1) % n];
@@ -203,7 +218,6 @@
         const vAllow = Math.sqrt(next.vTarget * next.vTarget + 2 * aBrake * ds);
         if (vAllow < pts[i].vTarget) pts[i].vTarget = vAllow;
       }
-      // Forward acceleration pass
       for (let i = 0; i < n; i++) {
         const prev = pts[(i - 1 + n) % n];
         const ds = Math.max(0.5, Math.hypot(pts[i].x - prev.x, pts[i].z - prev.z));
@@ -211,6 +225,11 @@
         if (vAllow < pts[i].vTarget) pts[i].vTarget = vAllow;
       }
     }
+
+    // Circuit ambient wind baseline (coastal/desert tracks windier!)
+    const biome = String((circuit && circuit.biome) || "parkland");
+    const windBaseKph = (biome === "coastal" || biome === "desert" || biome === "harbour") ? 18 : 10;
+    const windAngleRad = seed * Math.PI * 2;
 
     function sample(prog) {
       const p = (((prog % 1) + 1) % 1) * n;
@@ -235,6 +254,8 @@
         curv: a.curv + (b.curv - a.curv) * f,
         slopePitch: a.slopePitch + (b.slopePitch - a.slopePitch) * f,
         bankRad: a.bankRad + (b.bankRad - a.bankRad) * f,
+        bumpMm: a.bumpMm + (b.bumpMm - a.bumpMm) * f,
+        puddleDepth: a.puddleDepth + (b.puddleDepth - a.puddleDepth) * f,
         vTarget: a.vTarget + (b.vTarget - a.vTarget) * f,
         optLat: a.optLat + (b.optLat - a.optLat) * f,
         drsZone: a.drsZone,
@@ -255,7 +276,6 @@
         }
       }
       if (bestD2 > 1800) {
-        // Full scan fallback if car jumped/reset
         for (let i = 0; i < n; i++) {
           const dx = x - pts[i].x;
           const dz = z - pts[i].z;
@@ -275,24 +295,16 @@
       if (absLat > BARRIER_HALF_WIDTH) surface = "barrier";
       else if (absLat > KERB_OUTER) surface = "runoff";
       else if (absLat > TRACK_HALF_WIDTH) surface = "kerb";
-      return {
-        idx: bestI,
-        prog,
-        s: sEst,
-        lat,
-        surface,
-        node: p,
-      };
+      return { idx: bestI, prog, s: sEst, lat, surface, node: p };
     }
 
-    return { pts, n, totalLen, lengthKm, sample, project };
+    return { pts, n, totalLen, lengthKm, windBaseKph, windAngleRad, sample, project };
   }
 
   // ---------------------------------------------------------------------------
   // 2. Pacejka Magic Formula Helper + Gearbox Ratios
   // ---------------------------------------------------------------------------
   function pacejkaFy(alphaRad, fzN, muPeak) {
-    // Simplified Magic Formula tuned for crisp sim-cade F1 tyres (peak around ~9-11 deg slip)
     const B = 10.5;
     const C = 1.48;
     const E = 0.25;
@@ -303,9 +315,8 @@
   function buildGearTopSpeedsMps(gearsCount, topSpeedKph) {
     const vMax = Number(topSpeedKph || 345) / 3.6;
     const g = clamp(Math.round(gearsCount || 8), 5, 8);
-    const out = [0]; // index 0 = neutral
+    const out = [0];
     for (let i = 1; i <= g; i++) {
-      // Progressive F1 ratio spacing: 1st ~34% vMax -> top gear 104% vMax
       const frac = 0.31 + 0.73 * Math.pow((i - 1) / (g - 1), 0.88);
       out.push(vMax * frac);
     }
@@ -313,7 +324,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Create Player Car Physics State
+  // 3. Create Player Car Physics State (4-Wheel + Full Component Damage + Elements)
   // ---------------------------------------------------------------------------
   function createCarState(track, physicsDna, opts) {
     const o = opts || {};
@@ -354,12 +365,12 @@
       y: sp.y,
       z: sp.z + sp.rz * startLat,
       yaw: startYaw,
-      vx: 0,     // local forward speed (m/s)
-      vy: 0,     // local lateral speed (m/s, +right)
+      vx: 0,
+      vy: 0,
       yawRate: 0,
       speedKph: 0,
-      steerWheelRad: 0, // visual steering wheel angle
-      frontSteerRad: 0, // front tyre steer angle
+      steerWheelRad: 0,
+      frontSteerRad: 0,
 
       // Track frame
       trackIdx: sp.idx,
@@ -367,7 +378,7 @@
       prevProg: startProg,
       lat: startLat,
       surface: "asphalt",
-      lap: Number(o.startLap ?? 0), // 0 = approaching S/F line on start
+      lap: Number(o.startLap ?? 0),
       totalProg: Number(o.startLap ?? 0) + (startProg > 0.5 && (o.startLap ?? 0) === 0 ? startProg - 1 : startProg),
       sector: 1,
       lapTimeMs: 0,
@@ -380,12 +391,12 @@
       trackLimitStrikes: 0,
       penaltySec: 0,
 
-      // Powertrain & Aero
+      // Powertrain, Aero & PU Thermals
       gear: 1,
       rpm: dna.idle_rpm,
       shiftCooldown: 0,
-      ersBattery: 100.0,     // %
-      ersLapDeployed: 0.0,   // MJ deployed this lap
+      ersBattery: 100.0,
+      ersLapDeployed: 0.0,
       ersActive: false,
       drsAvailable: false,
       drsOpen: false,
@@ -394,34 +405,60 @@
       inPit: false,
       pitTimerS: 0,
       fuelKg: Number(o.fuelKg ?? 32.0),
+      puTemp: 96.0,          // C (90..128; >118 = thermal derate!)
+      puWear: 100.0,         // 100 -> 0% health
+      puOverheat: false,
 
-      // Tyres & Brakes
+      // Per-Corner 4-Wheel Tyre State [FL, FR, RL, RR] + Aggregates
       compound,
       tyreLife: 100.0,
+      tyreLife4: [100, 100, 100, 100],
+      tyreSurf4: [cDef.opt_temp - 6, cDef.opt_temp - 6, cDef.opt_temp - 6, cDef.opt_temp - 6],
+      tyreCore4: [cDef.opt_temp - 8, cDef.opt_temp - 8, cDef.opt_temp - 8, cDef.opt_temp - 8],
       surfTemp: cDef.opt_temp - 6,
       coreTemp: cDef.opt_temp - 8,
       thermalCliff: false,
-      brakeBias: 56,         // % front
-      brakeTemp: 320,        // C
+      flatSpot: 0.0,         // 0..1 front lockup flat-spot severity (vibrates wheel & cuts braking grip!)
+      tyreDirty: 0.0,        // 0..1 gravel/grass dirt pickup on tyres (scrubs off over ~3s on asphalt)
+      offLineMarbles: false,
+
+      // Carbon-Carbon Brakes & Multi-Component Structural Damage
+      brakeBias: 56,
+      brakeTemp: 380,        // C (optimal 500..920, fade > 1020)
+      brakeFade: 0.0,        // 0..1
       lockingFront: false,
       wheelSpinRear: false,
       slipRatio: 0,
-      frontWingHealth: 100,  // 0..100
+      frontWingHealth: 100,  // 0..100 (reduces front DF -> understeer)
+      floorHealth: 100,      // 0..100 (reduces ground-effect DF from heavy kerbs/bottoming)
+      suspHealth: 100,       // 0..100 (adds steering alignment pull when damaged)
+      suspPull: 0.0,         // -0.06..+0.06 rad lateral pull
 
-      // 4-DOF Chassis feel
+      // Elemental Environment Interaction Telemetry
+      trackRubber: 0.35,     // 0..1 builds up lap-by-lap!
+      inPuddle: false,
+      aquaplane: 0.0,        // 0..1
+      headwindMps: 0.0,
+      crosswindMps: 0.0,
+      windKph: Math.round(track.windBaseKph || 12),
+
+      // 4-DOF Chassis Feel
       pitchRad: 0,
       rollRad: 0,
       heaveY: 0.045,
+      kerbBounceY: 0,
       longG: 0,
       latG: 0,
       downforceKg: 0,
       bottoming: 0,
       wheelSpin: 0,
 
-      // Telemetry / audio triggers
-      justShifted: 0,        // +1 upshift, -1 downshift, 0 none
+      // Telemetry / Audio / Particle FX Triggers
+      justShifted: 0,
       impactStrength: 0,
+      impactSide: 0,         // -1 left, +1 right, 0 center
       kerbIntensity: 0,
+      gravelIntensity: 0,
       tyreScrub: 0,
       inDirtyAir: false,
       inSlipstream: false,
@@ -441,25 +478,27 @@
     const stepDt = dt || FIXED_DT;
     const dna = car.dna;
     const a = Object.assign({
-      tc: "med",          // off | med | full
+      tc: "med",
       abs: true,
       autoShift: true,
       brakeAssist: false,
       stability: true,
     }, assists || {});
     const e = Object.assign({
-      wetness: 0,         // 0..100
-      carsAhead: [],      // optional [{prog, lat, vx}] for dirty air / slipstream
-      holdOnGrid: false,  // true during 5-red-lights before lights out
-      drsAllowed: true,   // true in TT/Quali or when <1s behind in Race
-      scLimitKph: 0,      // >0 if VSC/SC active
+      wetness: 0,
+      carsAhead: [],
+      holdOnGrid: false,
+      drsAllowed: true,
+      scLimitKph: 0,
+      raceTimeS: 0,
     }, env || {});
 
     car.justShifted = 0;
     car.impactStrength = 0;
+    car.impactSide = 0;
     if (car.shiftCooldown > 0) car.shiftCooldown = Math.max(0, car.shiftCooldown - stepDt);
 
-    // Pit Service stationary hold
+    // Pit Service stationary hold (repairs front wing, swaps fresh tyres, clears flat-spots & dirt!)
     if (car.pitTimerS > 0) {
       car.pitTimerS = Math.max(0, car.pitTimerS - stepDt);
       car.vx *= Math.max(0, 1 - stepDt * 10);
@@ -467,10 +506,18 @@
       car.yawRate = 0;
       car.speedKph = Math.abs(car.vx) * 3.6;
       car.rpm = dna.idle_rpm + (input.throttle || 0) * 2800;
+      car.brakeTemp = Math.max(320, car.brakeTemp - stepDt * 90);
+      car.puTemp = Math.max(92, car.puTemp - stepDt * 6);
       if (car.pitTimerS <= 0) {
         car.tyreLife = 100;
+        car.tyreLife4 = [100, 100, 100, 100];
         car.frontWingHealth = 100;
+        car.flatSpot = 0;
+        car.tyreDirty = 0;
+        car.suspPull *= 0.35;
         const cDef = DEFAULT_COMPOUNDS[car.compound] || DEFAULT_COMPOUNDS.medium;
+        car.tyreSurf4 = [cDef.opt_temp - 6, cDef.opt_temp - 6, cDef.opt_temp - 6, cDef.opt_temp - 6];
+        car.tyreCore4 = [cDef.opt_temp - 8, cDef.opt_temp - 8, cDef.opt_temp - 8, cDef.opt_temp - 8];
         car.surfTemp = cDef.opt_temp - 6;
         car.coreTemp = cDef.opt_temp - 8;
         car.inPit = false;
@@ -478,19 +525,14 @@
       return car;
     }
 
-    // Read normalized controls
     let throttle = clamp(Number(input.throttle || 0), 0, 1);
     let brake = clamp(Number(input.brake || 0), 0, 1);
     const steerIn = clamp(Number(input.steer || 0), -1, 1);
     if (input.togglePitLimiter) car.pitLimiter = !car.pitLimiter;
 
-    // Grid Hold (standing start revs allowed, car clamped until lights out!)
+    // Standing Start Grid Hold
     if (e.holdOnGrid) {
-      car.vx = 0;
-      car.vy = 0;
-      car.yawRate = 0;
-      car.speedKph = 0;
-      car.gear = 1;
+      car.vx = 0; car.vy = 0; car.yawRate = 0; car.speedKph = 0; car.gear = 1;
       const targetRpm = dna.idle_rpm + throttle * (dna.redline_rpm - dna.idle_rpm) * 0.88;
       car.rpm += (targetRpm - car.rpm) * Math.min(1, stepDt * 18);
       car.steerWheelRad = steerIn * 1.4;
@@ -509,17 +551,24 @@
     car.y = node.y;
     car.vTargetKph = Math.round(node.vTarget * 3.6);
 
-    // Optional light Braking Assist (EA F1 style: trims excess speed approaching hairpins)
+    // Track rubber evolution (builds up gently over race time when dry!)
+    if (e.wetness < 15) {
+      car.trackRubber = Math.min(1.0, car.trackRubber + stepDt * 0.00055);
+    } else {
+      // Rain washes away rubber grip!
+      car.trackRubber = Math.max(0.12, car.trackRubber - stepDt * 0.0022 * (e.wetness / 100));
+    }
+
+    // Optional light Braking Assist
     if (a.brakeAssist && car.vx > node.vTarget * 1.07 && brake < 0.4) {
       const excess = clamp((car.vx - node.vTarget * 1.04) / 22.0, 0, 0.85);
       brake = Math.max(brake, excess);
       throttle *= (1 - excess * 0.85);
     }
 
-    // Lap & Sector crossing detection
+    // Lap & Sector crossing
     const dProg = car.prog - car.prevProg;
     if (dProg < -0.5) {
-      // Crossed Start/Finish line forward!
       if (car.lap >= 1 && car.lapTimeMs > 12000) {
         car.s3Ms = Math.max(0, Math.round(car.lapTimeMs - car.s1Ms - car.s2Ms));
         car.lastLapMs = Math.round(car.lapTimeMs);
@@ -538,17 +587,13 @@
         });
       }
       car.lap += 1;
-      car.lapTimeMs = 0;
-      car.s1Ms = 0;
-      car.s2Ms = 0;
-      car.s3Ms = 0;
+      car.lapTimeMs = 0; car.s1Ms = 0; car.s2Ms = 0; car.s3Ms = 0;
       car.sector = 1;
       car.lapInvalid = false;
       car.ersLapDeployed = 0;
       car.lapSamples = [];
       car.sampleAccumS = 0;
     } else if (dProg > 0.5) {
-      // Reversed across line
       car.lap = Math.max(0, car.lap - 1);
     }
 
@@ -564,7 +609,7 @@
     }
     car.totalProg = Math.max(0, car.lap - 1) + car.prog;
 
-    // Dirty Air & Slipstream from cars immediately ahead
+    // Dirty Air & Slipstream
     car.inDirtyAir = false;
     car.inSlipstream = false;
     let nearestGapM = 999;
@@ -576,9 +621,7 @@
         if (dp > 0.5) dp -= 1;
         if (dp > 0 && dp < 0.03) {
           const distM = dp * track.totalLen;
-          if (distM < nearestGapM && Math.abs((oc.lat || 0) - car.lat) < 3.4) {
-            nearestGapM = distM;
-          }
+          if (distM < nearestGapM && Math.abs((oc.lat || 0) - car.lat) < 3.4) nearestGapM = distM;
         }
       }
     }
@@ -586,6 +629,17 @@
       car.inDirtyAir = true;
       if (nearestGapM < 42 && Math.abs(node.curv) < 0.005) car.inSlipstream = true;
     }
+
+    // Dynamic Wind Vector (gusting smoothly over time!)
+    const gust = 1.0 + 0.25 * Math.sin((e.raceTimeS || 0) * 0.22 + car.prog * 6.28);
+    const windMps = ((track.windBaseKph || 12) / 3.6) * gust;
+    car.windKph = Math.round(windMps * 3.6);
+    const wDirX = Math.sin(track.windAngleRad || 0.7);
+    const wDirZ = Math.cos(track.windAngleRad || 0.7);
+    const carSin = Math.sin(car.yaw);
+    const carCos = Math.cos(car.yaw);
+    car.headwindMps = -(wDirX * carSin + wDirZ * carCos) * windMps; // >0 = headwind
+    car.crosswindMps = (wDirX * (-carCos) + wDirZ * carSin) * windMps;
 
     // DRS & 2026 Active Aero X-Mode
     car.drsAvailable = Boolean(dna.drs_enabled && node.drsZone && e.drsAllowed && e.wetness < 25 && car.vx > 32);
@@ -596,40 +650,31 @@
     }
     car.xModeActive = Boolean(dna.active_aero && Math.abs(node.curv) < 0.0035 && car.vx > 55 && brake < 0.05 && e.wetness < 35);
 
-    // Manual / Auto Gearbox
+    // Gearbox
     const maxGear = dna.gears || 8;
     if (!a.autoShift) {
       if (input.shiftUp && car.shiftCooldown <= 0 && car.gear < maxGear) {
-        car.gear += 1;
-        car.shiftCooldown = 0.14;
-        car.justShifted = 1;
+        car.gear += 1; car.shiftCooldown = 0.14; car.justShifted = 1;
       } else if (input.shiftDown && car.shiftCooldown <= 0 && car.gear > 1) {
-        car.gear -= 1;
-        car.shiftCooldown = 0.14;
-        car.justShifted = -1;
+        car.gear -= 1; car.shiftCooldown = 0.14; car.justShifted = -1;
       }
     } else {
       const gTop = car.gearTops[car.gear] || 95;
       const gPrev = car.gear > 1 ? (car.gearTops[car.gear - 1] || 30) : 0;
       if (car.gear < maxGear && car.vx > gTop * 0.94 && car.shiftCooldown <= 0) {
-        car.gear += 1;
-        car.shiftCooldown = 0.16;
-        car.justShifted = 1;
+        car.gear += 1; car.shiftCooldown = 0.16; car.justShifted = 1;
       } else if (car.gear > 1 && car.vx < gPrev * 0.78 && car.shiftCooldown <= 0) {
-        car.gear -= 1;
-        car.shiftCooldown = 0.16;
-        car.justShifted = -1;
+        car.gear -= 1; car.shiftCooldown = 0.16; car.justShifted = -1;
       }
     }
 
-    // RPM calculation
+    // RPM & Power Unit Thermal Load (dirty air + ERS + high RPM heats PU!)
     const curGTop = car.gearTops[car.gear] || 95;
     const prevGTop = car.gear > 1 ? (car.gearTops[car.gear - 1] || 22) * 0.68 : 0;
     const rpmFrac = clamp((car.vx - prevGTop) / Math.max(8, curGTop - prevGTop), 0, 1.04);
     const targetRpm = dna.idle_rpm + rpmFrac * (dna.redline_rpm - dna.idle_rpm);
     car.rpm += (clamp(targetRpm, dna.idle_rpm, dna.redline_rpm * 1.03) - car.rpm) * Math.min(1, stepDt * 30);
 
-    // ERS MGU-K Deployment & Harvesting
     const hasErs = (dna.ers_power_kw || 0) > 0;
     const wantErs = Boolean(hasErs && input.ers && throttle > 0.35 && car.ersBattery > 2 && car.ersLapDeployed < (dna.ers_mj_lap || 4.0));
     car.ersActive = wantErs;
@@ -638,64 +683,118 @@
       car.ersLapDeployed += mjStep;
       car.ersBattery = Math.max(0, car.ersBattery - mjStep * 22.0);
     } else if (hasErs && brake > 0.15 && car.vx > 18) {
-      // MGU-K Braking Regen!
       car.ersBattery = Math.min(100, car.ersBattery + brake * stepDt * 9.5);
     } else if (hasErs && throttle < 0.2 && car.vx > 25) {
       car.ersBattery = Math.min(100, car.ersBattery + stepDt * 2.2);
     }
 
-    // Aerodynamics (Downforce & Drag)
-    const wingFactor = 0.65 + 0.35 * (car.frontWingHealth / 100);
-    let cl = dna.cl_base * wingFactor;
-    let cd = dna.cd_base;
-    if (car.drsOpen) {
-      cd *= (1 - (dna.drs_drag_cut || 0.24));
-      cl *= 0.86;
-    }
-    if (car.xModeActive) {
-      cd *= (1 - (dna.x_mode_drag_cut || 0.20));
-      cl *= 0.72;
-    }
+    // PU Temperature & Thermal Derate (>118 C cuts 7% power until cooled in clean air!)
+    const puHeatIn = (throttle * 14.5 + (car.ersActive ? 6.5 : 0) + (car.inDirtyAir ? 5.2 : 0) + (rpmFrac > 0.96 ? 4.5 : 0));
+    const puCool = (6.5 + clamp(car.vx / 40, 0, 2.2) * 5.0 + (e.wetness > 20 ? 2.5 : 0));
+    car.puTemp = clamp(car.puTemp + (puHeatIn - puCool) * 0.08 * stepDt, 82, 130);
+    car.puOverheat = car.puTemp > 118;
+    if (car.puOverheat) car.puWear = Math.max(40, car.puWear - stepDt * 0.45);
+    else car.puWear = Math.max(60, car.puWear - throttle * stepDt * 0.015);
+
+    // Aerodynamics (Relative Airspeed with Headwind + Wing/Floor Damage!)
+    const wingFactor = 0.62 + 0.38 * (car.frontWingHealth / 100);
+    const floorFactor = 0.68 + 0.32 * (car.floorHealth / 100);
+    let cl = dna.cl_base * wingFactor * floorFactor;
+    let cd = dna.cd_base * (1.0 + (100 - car.frontWingHealth) * 0.0012); // broken wing adds drag!
+    if (car.drsOpen) { cd *= (1 - (dna.drs_drag_cut || 0.24)); cl *= 0.86; }
+    if (car.xModeActive) { cd *= (1 - (dna.x_mode_drag_cut || 0.20)); cl *= 0.72; }
     if (car.inDirtyAir) cl *= 0.88;
     if (car.inSlipstream) cd *= 0.89;
 
-    const v2 = car.vx * car.vx;
-    const downforceN = 0.5 * AIR_RHO * cl * FRONTAL_AREA * v2;
-    const dragN = 0.5 * AIR_RHO * cd * FRONTAL_AREA * v2;
+    const vAir = Math.max(0, car.vx + car.headwindMps);
+    const vAir2 = vAir * vAir;
+    const downforceN = 0.5 * AIR_RHO * cl * FRONTAL_AREA * vAir2;
+    const dragN = 0.5 * AIR_RHO * cd * FRONTAL_AREA * vAir2;
     car.downforceKg = Math.round(downforceN / GRAVITY);
 
-    // Effective Tyre Compound Grip (Thermals + Wear + Wetness + Surface)
+    // Per-Corner 4-Wheel Tyre Thermals & Wear [FL, FR, RL, RR]
     const cDef = DEFAULT_COMPOUNDS[car.compound] || DEFAULT_COMPOUNDS.medium;
     const totalMass = dna.mass_kg + car.fuelKg;
     const totalFz = totalMass * GRAVITY + downforceN;
 
-    // Tyre temp evolution
-    const workHeat = (Math.abs(car.latG) * 3.8 + brake * 4.5 + throttle * 1.4) * clamp(car.vx / 45, 0, 1.3);
-    const coolRate = (e.wetness > 20 ? 3.4 : 1.6) * clamp(car.vx / 55, 0.2, 1.2);
-    const targetSurf = clamp(cDef.opt_temp - 14 + workHeat * 2.8 - coolRate * 1.6, 52, 138);
-    car.surfTemp += (targetSurf - car.surfTemp) * Math.min(1, stepDt * 0.45);
-    car.coreTemp += (car.surfTemp - car.coreTemp) * Math.min(1, stepDt * 0.14);
+    // Corner load asymmetry: turning right loads LEFT tyres (FL, RL); turning left loads RIGHT tyres (FR, RR)
+    const latLoadRight = clamp(-car.latG * 0.18, -0.45, 0.45); // >0 = left tyres loaded
+    const loadMult4 = [
+      1.0 + latLoadRight + brake * 0.35,   // FL
+      1.0 - latLoadRight + brake * 0.35,   // FR
+      1.0 + latLoadRight + throttle * 0.28,// RL
+      1.0 - latLoadRight + throttle * 0.28,// RR
+    ];
+    const spdNorm = clamp(car.vx / 55, 0, 1.35);
+    let surfSum = 0, coreSum = 0, lifeSum = 0;
+    for (let w = 0; w < 4; w++) {
+      const lm = Math.max(0.4, loadMult4[w]);
+      const lockHeat = (w < 2 && car.lockingFront) ? 26.0 : ((w >= 2 && car.wheelSpinRear) ? 22.0 : 0);
+      const workH = (Math.abs(car.latG) * 3.4 * lm + brake * (w < 2 ? 5.2 : 2.0) + throttle * (w >= 2 ? 2.4 : 0.6)) * spdNorm + lockHeat;
+      const coolH = (e.wetness > 20 ? 3.8 : 1.6) * clamp(car.vx / 55, 0.2, 1.25);
+      const tSurf = clamp(cDef.opt_temp - 14 + workH * 2.6 - coolH * 1.5, 50, 142);
+      car.tyreSurf4[w] += (tSurf - car.tyreSurf4[w]) * Math.min(1, stepDt * 0.48);
+      car.tyreCore4[w] += (car.tyreSurf4[w] - car.tyreCore4[w]) * Math.min(1, stepDt * 0.14);
+
+      const overheated = car.tyreCore4[w] > cDef.opt_temp + 14;
+      const wStep = cDef.wear_rate * (0.011 + Math.abs(car.latG) * 0.0044 * lm + (overheated ? 0.014 : 0) + (w < 2 && car.lockingFront ? 0.045 : 0)) * spdNorm * stepDt;
+      car.tyreLife4[w] = Math.max(4, car.tyreLife4[w] - wStep);
+      surfSum += car.tyreSurf4[w];
+      coreSum += car.tyreCore4[w];
+      lifeSum += car.tyreLife4[w];
+    }
+    car.surfTemp = surfSum * 0.25;
+    car.coreTemp = coreSum * 0.25;
+    car.tyreLife = lifeSum * 0.25;
     car.thermalCliff = car.coreTemp > cDef.opt_temp + 14 || car.tyreLife < 22;
 
+    // Flat-spot accumulation on front lockups + gravel dirt pickup
+    if (car.lockingFront && car.vx > 24) {
+      car.flatSpot = Math.min(1.0, car.flatSpot + stepDt * 0.22);
+    }
+    if (car.surface === "runoff") {
+      car.tyreDirty = Math.min(1.0, car.tyreDirty + stepDt * 0.85);
+    } else if (car.tyreDirty > 0 && car.vx > 15) {
+      // Scrub dirt off tyres over ~3 seconds back on asphalt
+      car.tyreDirty = Math.max(0, car.tyreDirty - stepDt * (0.28 + spdNorm * 0.16));
+    }
+
+    // Off-line marbles & Standing Water Puddles!
+    const distFromOpt = Math.abs(car.lat - (node.optLat || 0));
+    car.offLineMarbles = (car.surface === "asphalt" && distFromOpt > 3.8 && car.trackRubber > 0.45);
+    const offGrooveWet = (e.wetness >= 32) ? (1.0 + clamp((distFromOpt - 1.5) * 0.14, 0, 0.45)) : 1.0;
+    const localWetFrac = clamp((e.wetness / 100) * offGrooveWet, 0, 1.0);
+    car.inPuddle = Boolean(e.wetness >= 40 && node.puddleDepth > 0.55 && distFromOpt > 1.8 && car.surface === "asphalt");
+    car.aquaplane = car.inPuddle && car.vx > 32
+      ? clamp(((car.vx - 28) / 48) * (cDef.wet_grip < 0.6 ? 1.0 : 0.35), 0, 0.85)
+      : 0;
+
+    // Grip multipliers (Thermal + Wear + Rubber + Dirty Tyres + Marbles + Aquaplane + Surface)
     const tempDiff = Math.abs(car.coreTemp - cDef.opt_temp);
     const tempGripMult = clamp(1.0 - Math.max(0, tempDiff - 10) * 0.0085, 0.72, 1.0);
-    const wearGripMult = car.tyreLife > 30 ? (0.94 + (car.tyreLife / 100) * 0.06) : clamp(0.68 + (car.tyreLife / 30) * 0.26, 0.65, 0.94);
+    const wearGripMult = car.tyreLife > 30 ? (0.94 + (car.tyreLife / 100) * 0.06) : clamp(0.66 + (car.tyreLife / 30) * 0.28, 0.62, 0.94);
+    const weatherGrip = cDef.grip * (1 - localWetFrac) + cDef.wet_grip * localWetFrac;
+    const rubberBonus = 0.95 + car.trackRubber * 0.08;
+    const dirtPenalty = 1.0 - car.tyreDirty * 0.24;
+    const marblePenalty = car.offLineMarbles ? 0.94 : 1.0;
+    const aquaPenalty = 1.0 - car.aquaplane * 0.52;
 
-    // Wet grip interpolation
-    const wetFrac = clamp(e.wetness / 100, 0, 1);
-    const weatherGrip = cDef.grip * (1 - wetFrac) + cDef.wet_grip * wetFrac;
-
-    // Surface multiplier
     let surfGrip = 1.0;
     let rollDragN = 280;
     car.kerbIntensity = 0;
+    car.gravelIntensity = 0;
+    car.kerbBounceY *= Math.max(0, 1 - stepDt * 14);
     if (car.surface === "kerb") {
       surfGrip = 0.88;
-      rollDragN = 520;
+      rollDragN = 540;
       car.kerbIntensity = clamp(car.vx / 55, 0, 1);
+      // Heavy high-speed kerb riding slightly wears floor & kicks chassis heave!
+      car.kerbBounceY = Math.sin(car.wheelSpin * 3.1) * 0.022 * car.kerbIntensity;
+      if (car.vx > 50) car.floorHealth = Math.max(45, car.floorHealth - stepDt * 1.1);
     } else if (car.surface === "runoff") {
-      surfGrip = 0.52;
-      rollDragN = 2600 + car.vx * 85;
+      surfGrip = 0.50;
+      rollDragN = 2750 + car.vx * 92;
+      car.gravelIntensity = clamp(car.vx / 45, 0, 1);
       if (car.lap >= 1 && car.vx > 20) {
         if (!car.lapInvalid) {
           car.lapInvalid = true;
@@ -704,19 +803,16 @@
         }
       }
     }
+    if (car.inPuddle) rollDragN += car.aquaplane * 2200; // puddle water splash drag!
 
-    const muPeak = dna.tyre_mu_base * weatherGrip * tempGripMult * wearGripMult * surfGrip;
-
-    // Tyre Wear (scaled cleanly so 5-lap GP shows meaningful wear)
-    const wearStep = cDef.wear_rate * (0.012 + Math.abs(car.latG) * 0.0045 + (car.thermalCliff ? 0.015 : 0)) * clamp(car.vx / 60, 0, 1.4) * stepDt;
-    car.tyreLife = Math.max(5, car.tyreLife - wearStep);
+    const muPeak = dna.tyre_mu_base * weatherGrip * tempGripMult * wearGripMult * rubberBonus * dirtPenalty * marblePenalty * aquaPenalty * surfGrip;
     car.fuelKg = Math.max(1.5, car.fuelKg - throttle * 0.022 * stepDt);
 
-    // Drive Force & Braking Force
-    const powerW = (dna.max_power_kw + (car.ersActive ? dna.ers_power_kw : 0)) * 1000;
+    // Powertrain Drive Force (affected by PU overheat & wear!)
+    const puHealthMult = (car.puOverheat ? 0.93 : 1.0) * (0.94 + 0.06 * (car.puWear / 100));
+    const powerW = (dna.max_power_kw * puHealthMult + (car.ersActive ? dna.ers_power_kw : 0)) * 1000;
     const torqueBand = 0.76 + 0.24 * Math.sin(clamp(rpmFrac, 0.05, 1.0) * Math.PI);
     let driveForceN = throttle * (powerW * torqueBand) / Math.max(12.0, car.vx);
-    // Pit Speed Limiter (80 KPH = 22.22 m/s) or SC Delta
     if (car.pitLimiter && car.vx > 22.2) {
       driveForceN = 0;
       brake = Math.max(brake, clamp((car.vx - 22.2) * 0.35, 0, 0.8));
@@ -725,92 +821,74 @@
       driveForceN *= 0.15;
     }
 
-    // Weight transfer (front/rear normal loads)
+    // Weight transfer
     const fzFrontBase = totalFz * (0.45 * wingFactor + 0.03);
     const fzRearBase = totalFz - fzFrontBase;
     const transferN = clamp(car.longG * totalMass * 0.28, -totalFz * 0.16, totalFz * 0.16);
     const fzFront = clamp(fzFrontBase - transferN, totalFz * 0.25, totalFz * 0.70);
     const fzRear = clamp(fzRearBase + transferN, totalFz * 0.25, totalFz * 0.75);
 
-    // Traction Control (limits rear drive force to rear friction circle)
+    // Traction Control
     const maxRearTractionN = fzRear * muPeak * 0.98;
     car.wheelSpinRear = false;
     if (driveForceN > maxRearTractionN) {
-      if (a.tc === "full") {
-        driveForceN = maxRearTractionN * 0.96;
-      } else if (a.tc === "med") {
-        driveForceN = maxRearTractionN * 0.99;
-        car.wheelSpinRear = true;
-      } else {
-        car.wheelSpinRear = true;
-        driveForceN = maxRearTractionN * 0.86; // spinning tyres lose traction!
-      }
+      if (a.tc === "full") driveForceN = maxRearTractionN * 0.96;
+      else if (a.tc === "med") { driveForceN = maxRearTractionN * 0.99; car.wheelSpinRear = true; }
+      else { car.wheelSpinRear = true; driveForceN = maxRearTractionN * 0.86; }
     }
 
-    // Braking & ABS
-    const maxBrakeForceN = totalMass * dna.brake_max_g * GRAVITY;
+    // Carbon-Carbon Brake Temperature & Thermal Fade!
+    const brakeHeatIn = brake * clamp(car.vx / 25, 0, 3.2) * 165;
+    const brakeCool = (car.brakeTemp - 240) * (0.28 + clamp(car.vx / 55, 0, 1.4) * 0.55 + (e.wetness > 20 ? 0.35 : 0));
+    car.brakeTemp = clamp(car.brakeTemp + (brakeHeatIn - brakeCool) * stepDt, 240, 1180);
+    car.brakeFade = car.brakeTemp > 1000 ? clamp((car.brakeTemp - 1000) / 220, 0, 0.32) : (car.brakeTemp < 310 ? 0.08 : 0);
+
+    const flatSpotBrakePen = 1.0 - car.flatSpot * 0.12;
+    const maxBrakeForceN = totalMass * dna.brake_max_g * GRAVITY * (1.0 - car.brakeFade) * flatSpotBrakePen;
     let brakeForceN = brake * maxBrakeForceN;
     const maxGripBrakeN = totalFz * muPeak * 1.02;
     car.lockingFront = false;
     if (brakeForceN > maxGripBrakeN && car.vx > 14) {
-      if (a.abs) {
-        brakeForceN = maxGripBrakeN * 0.97;
-      } else {
-        car.lockingFront = true;
-        brakeForceN = maxGripBrakeN * 0.84; // locked wheels lose grip & smoke!
-      }
+      if (a.abs) brakeForceN = maxGripBrakeN * 0.97;
+      else { car.lockingFront = true; brakeForceN = maxGripBrakeN * 0.84; }
     }
-    if (car.vx <= 0.3 && brake > 0.05) {
-      brakeForceN = 0;
-      car.vx = 0;
-    }
+    if (car.vx <= 0.3 && brake > 0.05) { brakeForceN = 0; car.vx = 0; }
 
-    // Slope gravity component
     const slopeN = -totalMass * GRAVITY * Math.sin(node.slopePitch || 0);
-
-    // Longitudinal acceleration
     const netFx = driveForceN - (car.vx > 0.1 ? brakeForceN : 0) - dragN - rollDragN + slopeN;
     const ax = netFx / totalMass;
     car.vx = Math.max(0, car.vx + ax * stepDt);
     car.longG = clamp(ax / GRAVITY, -6.0, 2.8);
 
-    // Steering & Bicycle + Pacejka Lateral Dynamics
+    // Steering + Suspension Pull + Pacejka Lateral Dynamics + Crosswind Gust Force
     const speedNorm = clamp(car.vx / 80, 0, 1);
-    const maxSteerRad = 0.36 - speedNorm * 0.25; // speed-sensitive max wheel lock
-    const targetSteer = steerIn * maxSteerRad;
+    const maxSteerRad = 0.36 - speedNorm * 0.25;
+    const targetSteer = steerIn * maxSteerRad + car.suspPull;
     car.frontSteerRad += (targetSteer - car.frontSteerRad) * Math.min(1, stepDt * 22);
     car.steerWheelRad += (steerIn * 2.1 - car.steerWheelRad) * Math.min(1, stepDt * 18);
 
-    const lf = 1.65;
-    const lr = 1.75;
-    const Iz = totalMass * 1.55;
+    const lf = 1.65, lr = 1.75, Iz = totalMass * 1.55;
     const vSafe = Math.max(4.5, car.vx);
-
-    // Front & Rear slip angles (rad)
     const alphaF = Math.atan2(car.vy + lf * car.yawRate, vSafe) - car.frontSteerRad;
     const alphaR = Math.atan2(car.vy - lr * car.yawRate, vSafe);
 
-    // Combined-slip lateral grip reduction when braking/accelerating hard
-    const frontLatMult = car.lockingFront ? 0.55 : clamp(1.0 - brake * 0.18, 0.72, 1.0);
+    const frontLatMult = (car.lockingFront ? 0.55 : clamp(1.0 - brake * 0.18, 0.72, 1.0)) * (0.80 + 0.20 * wingFactor);
     const rearLatMult = car.wheelSpinRear ? (a.tc === "off" ? 0.58 : 0.82) : 1.0;
 
     const fyF = -pacejkaFy(alphaF, fzFront, muPeak * frontLatMult);
     const fyR = -pacejkaFy(alphaR, fzRear, muPeak * rearLatMult);
+    const crosswindForceN = car.crosswindMps * Math.abs(car.crosswindMps) * 1.15 * speedNorm;
+    const puddlePullN = car.aquaplane * Math.sin(car.prog * 90) * 1400;
 
-    const ay = (fyF + fyR) / totalMass - car.vx * car.yawRate;
+    const ay = (fyF + fyR + crosswindForceN + puddlePullN) / totalMass - car.vx * car.yawRate;
     let yawAcc = (lf * fyF - lr * fyR) / Iz;
-    // Gentle stability damper when assist is ON (prevents uncontrollable snap-spins on keyboard)
-    if (a.stability) {
-      yawAcc -= car.yawRate * (1.8 + speedNorm * 2.4);
-    }
+    if (a.stability) yawAcc -= car.yawRate * (1.8 + speedNorm * 2.4);
 
     if (car.vx < 1.2) {
-      car.vy = 0;
-      car.yawRate = 0;
+      car.vy = 0; car.yawRate = 0;
     } else {
       car.vy = clamp(car.vy + ay * stepDt, -18, 18);
       car.yawRate = clamp(car.yawRate + yawAcc * stepDt, -2.8, 2.8);
-      // High-speed lateral damping so car tracks cleanly out of corners
       car.vy *= Math.max(0, 1 - stepDt * (a.stability ? 2.2 : 0.7));
     }
 
@@ -818,15 +896,12 @@
     car.latG = clamp(((fyF + fyR) / totalMass) / GRAVITY, -5.8, 5.8);
     car.tyreScrub = clamp((Math.max(Math.abs(alphaF), Math.abs(alphaR)) - 0.09) * 5.2, 0, 1) * clamp(car.vx / 28, 0, 1);
 
-    // Integrate World Position (Three.js convention: forward = (sin yaw, cos yaw), right = (-cos yaw, sin yaw))
     const sinY = Math.sin(car.yaw);
     const cosY = Math.cos(car.yaw);
-    const worldVx = car.vx * sinY - car.vy * cosY;
-    const worldVz = car.vx * cosY + car.vy * sinY;
-    car.x += worldVx * stepDt;
-    car.z += worldVz * stepDt;
+    car.x += (car.vx * sinY - car.vy * cosY) * stepDt;
+    car.z += (car.vx * cosY + car.vy * sinY) * stepDt;
 
-    // Barrier Containment & Glancing Elastic Collision!
+    // Barrier Containment & Multi-Component Impact Damage!
     const postProj = track.project(car.x, car.z, car.trackIdx);
     if (Math.abs(postProj.lat) > BARRIER_HALF_WIDTH) {
       const sign = postProj.lat >= 0 ? 1 : -1;
@@ -837,11 +912,16 @@
       const trackYaw = Math.atan2(pNode.tx, pNode.tz);
       const impactAngle = Math.abs(wrapAngle(car.yaw - trackYaw));
       const normalSpd = car.vx * Math.sin(impactAngle);
-      car.impactStrength = clamp(normalSpd / 28, 0.12, 1.0);
-      if (normalSpd > 6.5) {
-        car.frontWingHealth = Math.max(20, car.frontWingHealth - normalSpd * 1.45);
+      car.impactStrength = clamp(normalSpd / 26, 0.14, 1.0);
+      car.impactSide = sign;
+      if (normalSpd > 5.5) {
+        car.frontWingHealth = Math.max(15, car.frontWingHealth - normalSpd * 1.55);
+        if (normalSpd > 11.5) {
+          car.suspHealth = Math.max(35, car.suspHealth - (normalSpd - 10) * 1.35);
+          car.suspPull = clamp(car.suspPull + sign * 0.008, -0.045, 0.045);
+          car.floorHealth = Math.max(40, car.floorHealth - (normalSpd - 10) * 0.9);
+        }
       }
-      // Deflect cleanly parallel to barrier & bleed speed
       car.vx *= clamp(1.0 - Math.sin(impactAngle) * 0.55, 0.35, 0.92);
       car.vy = -sign * Math.min(3.5, Math.abs(car.vy) * 0.35);
       car.yaw = wrapAngle(car.yaw + wrapAngle(trackYaw - car.yaw) * 0.55);
@@ -849,17 +929,21 @@
       car.lat = sign * (BARRIER_HALF_WIDTH - 0.15);
     }
 
-    // 4-DOF Chassis Pitch / Roll / Bottoming Sparks
-    const targetPitch = clamp(car.longG * 0.0095, -0.045, 0.045);
-    const targetRoll = clamp(-car.latG * 0.0115 + (node.bankRad || 0) * 0.65, -0.09, 0.09);
+    // 4-DOF Chassis Pitch / Roll / Heave / Bottoming Plank Sparks
+    const targetPitch = clamp(car.longG * 0.0095 + (node.slopePitch || 0) * 0.5, -0.06, 0.06);
+    const targetRoll = clamp(-car.latG * 0.0115 + (node.bankRad || 0) * 0.72, -0.10, 0.10);
     car.pitchRad += (targetPitch - car.pitchRad) * Math.min(1, stepDt * 12);
     car.rollRad += (targetRoll - car.rollRad) * Math.min(1, stepDt * 12);
     car.wheelSpin += (car.vx / 0.36) * stepDt;
     car.speedKph = car.vx * 3.6;
-    car.bottoming = (car.speedKph > 250 && !car.xModeActive && (car.kerbIntensity > 0.2 || Math.abs(node.curv) > 0.008))
-      ? clamp((car.speedKph - 245) / 90, 0.15, 1.0)
+
+    const bumpHeave = (node.bumpMm || 0) * 0.0012 * clamp(car.speedKph / 220, 0, 1.2);
+    car.heaveY = clamp(0.045 + car.kerbBounceY - bumpHeave, 0.022, 0.085);
+
+    car.bottoming = (car.speedKph > 235 && !car.xModeActive && (car.kerbIntensity > 0.15 || (node.bumpMm || 0) > 4.5 || Math.abs(node.curv) > 0.0075))
+      ? clamp((car.speedKph - 230) / 90, 0.18, 1.0)
       : 0;
-    car.brakeTemp += ((brake > 0.2 && car.speedKph > 90 ? 940 : 280) - car.brakeTemp) * Math.min(1, stepDt * (brake > 0.2 ? 3.5 : 0.9));
+    if (car.bottoming > 0.6) car.floorHealth = Math.max(50, car.floorHealth - stepDt * 0.35);
 
     // Record 10 Hz lap telemetry & ghost sample
     if (car.lap >= 1) {

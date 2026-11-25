@@ -21,6 +21,7 @@ body:has(.drive-shell) .main-content > .container { max-width: none; width: 100%
   font-size: 0.8rem;
 }
 .drive-canvas { width: 100%; height: 100%; display: block; }
+.drive-visor-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; display: block; }
 .hidden { display: none !important; }
 
 /* LIVE IN-CAR HUD */
@@ -96,9 +97,9 @@ body:has(.drive-shell) .main-content > .container { max-width: none; width: 100%
 
 .dh-bot-right { position: absolute; bottom: 12px; right: 12px; }
 .dh-telem-pod {
-  width: 266px; padding: 9px 11px; border-radius: 12px;
-  background: rgba(6, 10, 20, 0.9); border: 1px solid rgba(56, 189, 248, 0.32);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  width: 288px; padding: 9px 11px; border-radius: 12px;
+  background: rgba(6, 10, 20, 0.90); border: 1px solid rgba(56, 189, 248, 0.34);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.58);
 }
 .dh-rpm-bar { height: 7px; border-radius: 99px; background: rgba(148, 163, 184, 0.18); overflow: hidden; margin-bottom: 7px; }
 .dh-rpm-bar > span { display: block; height: 100%; width: 20%; background: linear-gradient(90deg, #22c55e, #facc15, #ef4444, #38bdf8); transition: width 0.04s linear; }
@@ -123,7 +124,24 @@ body:has(.drive-shell) .main-content > .container { max-width: none; width: 100%
 .dh-badge.is-ers { background: rgba(56, 189, 248, 0.26); color: #38bdf8; border-color: #38bdf8; }
 .dh-ers-track { height: 5px; border-radius: 99px; background: rgba(148, 163, 184, 0.18); overflow: hidden; margin: 7px 0 6px; }
 .dh-ers-track > span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #facc15, #38bdf8); }
-.dh-telem-foot { display: flex; justify-content: space-between; font-size: 0.62rem; color: #cbd5e1; font-weight: 700; }
+.dh-telem-foot { display: flex; justify-content: space-between; font-size: 0.60rem; color: #cbd5e1; font-weight: 700; }
+.dh-dmg-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 6px; margin-bottom: 5px; }
+.dh-tyres4 { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.dh-t4 {
+  text-align: center; padding: 2px 3px; border-radius: 4px; font-size: 0.58rem; font-weight: 900;
+  background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.55); color: #86efac;
+  font-family: monospace;
+}
+.dh-t4.is-cold { background: rgba(56, 189, 248, 0.18); border-color: rgba(56, 189, 248, 0.55); color: #7dd3fc; }
+.dh-t4.is-hot  { background: rgba(249, 115, 22, 0.24); border-color: rgba(249, 115, 22, 0.65); color: #fdba74; }
+.dh-t4.is-crit { background: rgba(239, 68, 68, 0.28); border-color: rgba(239, 68, 68, 0.75); color: #fca5a5; }
+.dh-comp-list { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; font-size: 0.58rem; font-weight: 800; color: #cbd5e1; }
+.dh-comp-list span { padding: 2px 4px; border-radius: 4px; background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.2); text-align: center; }
+.dh-comp-list span.is-warn { border-color: #f59e0b; color: #fde047; }
+.dh-comp-list span.is-bad  { border-color: #ef4444; color: #fca5a5; background: rgba(127, 29, 29, 0.45); }
+.dh-alerts-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.dh-al-chip { padding: 1px 6px; border-radius: 4px; font-size: 0.56rem; font-weight: 900; background: rgba(239, 68, 68, 0.28); border: 1px solid #ef4444; color: #fecaca; text-transform: uppercase; }
+.dh-al-chip.is-info { background: rgba(56, 189, 248, 0.22); border-color: #38bdf8; color: #bae6fd; }
 
 /* OVERLAYS (LAUNCHER & PAUSE/RESULTS) */
 .drive-overlay {

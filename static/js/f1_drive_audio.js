@@ -1,12 +1,12 @@
 /**
- * Apex POV (/drive) — Multi-Era RPM-Coupled Web Audio Driving Synthesizer.
+ * Apex POV (/drive) — Multi-Era RPM-Coupled Web Audio Driving & Elements Synthesizer.
  *
- * Synthesizes authentic live cockpit audio with zero external audio files:
- *   - Era-specific continuous engine voice (Hybrid V6 + MGU-K whine, 19,000 RPM V10 screamer,
- *     1980s Turbo V6, Cosworth DFV V8, 1950s Classic NA, 125cc 2-Stroke Kart)
- *   - Crisp upshift ignition-cut pop & downshift throttle blip
- *   - Slip-proportional tyre scrub/screech + low-frequency kerb rumble + 300 KPH wind rush
- *   - Barrier thud & FIA 5-red-lights countdown beeps
+ * Channels:
+ *   - Era-specific continuous engine voice (Hybrid V6 + MGU-K whine, 19k RPM V10, 80s Turbo, DFV V8, Classic NA, 2-Stroke Kart)
+ *   - Upshift ignition-cut pop & downshift throttle blip + DRS flap click
+ *   - Slip-proportional tyre scrub/screech + kerb bass rumble + 300 KPH wind rush
+ *   - Off-track gravel/runoff crunch + wet rain cockpit patter + flat-spot rhythmic thump
+ *   - Carbon-fiber impact crunch + sub-bass barrier thud + FIA 5-red-lights beeps
  */
 (function (global) {
   "use strict";
@@ -28,8 +28,11 @@
     let noiseBuf = null;
     let scrubSrc = null, scrubFilter = null, scrubGain = null;
     let windSrc = null, windFilter = null, windGain = null;
+    let gravelSrc = null, gravelFilter = null, gravelGain = null;
+    let rainSrc = null, rainFilter = null, rainGain = null;
     let kerbOsc = null, kerbGain = null;
     let activeProfile = ERA_ACOUSTICS.hybrid_v6;
+    let prevDrsOpen = false;
     let muted = false;
     let started = false;
 
@@ -84,7 +87,7 @@
         osc2.connect(g2); g2.connect(engFilter);
         oscSub.connect(gSub); gSub.connect(engFilter);
 
-        // Turbo / MGU-K electric whine
+        // Turbo / MGU-K whine
         oscWhine = ac.createOscillator();
         oscWhine.type = "sine";
         whineGain = ac.createGain();
@@ -92,50 +95,50 @@
         oscWhine.connect(whineGain);
         whineGain.connect(master);
 
-        // Tyre scrub & aerodynamic wind noise
+        // Shared noise buffer for Tyre Scrub, Wind, Gravel Crunch & Rain Patter
         noiseBuf = buildNoise(ac);
+
         scrubSrc = ac.createBufferSource();
-        scrubSrc.buffer = noiseBuf;
-        scrubSrc.loop = true;
+        scrubSrc.buffer = noiseBuf; scrubSrc.loop = true;
         scrubFilter = ac.createBiquadFilter();
-        scrubFilter.type = "bandpass";
-        scrubFilter.frequency.value = 1350;
-        scrubFilter.Q.value = 4.5;
-        scrubGain = ac.createGain();
-        scrubGain.gain.value = 0.0001;
-        scrubSrc.connect(scrubFilter);
-        scrubFilter.connect(scrubGain);
-        scrubGain.connect(master);
+        scrubFilter.type = "bandpass"; scrubFilter.frequency.value = 1350; scrubFilter.Q.value = 4.5;
+        scrubGain = ac.createGain(); scrubGain.gain.value = 0.0001;
+        scrubSrc.connect(scrubFilter); scrubFilter.connect(scrubGain); scrubGain.connect(master);
 
         windSrc = ac.createBufferSource();
-        windSrc.buffer = noiseBuf;
-        windSrc.loop = true;
+        windSrc.buffer = noiseBuf; windSrc.loop = true;
         windFilter = ac.createBiquadFilter();
-        windFilter.type = "bandpass";
-        windFilter.frequency.value = 460;
-        windFilter.Q.value = 0.8;
-        windGain = ac.createGain();
-        windGain.gain.value = 0.0001;
-        windSrc.connect(windFilter);
-        windFilter.connect(windGain);
-        windGain.connect(master);
+        windFilter.type = "bandpass"; windFilter.frequency.value = 460; windFilter.Q.value = 0.8;
+        windGain = ac.createGain(); windGain.gain.value = 0.0001;
+        windSrc.connect(windFilter); windFilter.connect(windGain); windGain.connect(master);
 
-        // Kerb bass rumble
+        gravelSrc = ac.createBufferSource();
+        gravelSrc.buffer = noiseBuf; gravelSrc.loop = true;
+        gravelFilter = ac.createBiquadFilter();
+        gravelFilter.type = "bandpass"; gravelFilter.frequency.value = 2600; gravelFilter.Q.value = 1.4;
+        gravelGain = ac.createGain(); gravelGain.gain.value = 0.0001;
+        gravelSrc.connect(gravelFilter); gravelFilter.connect(gravelGain); gravelGain.connect(master);
+
+        rainSrc = ac.createBufferSource();
+        rainSrc.buffer = noiseBuf; rainSrc.loop = true;
+        rainFilter = ac.createBiquadFilter();
+        rainFilter.type = "highpass"; rainFilter.frequency.value = 1900;
+        rainGain = ac.createGain(); rainGain.gain.value = 0.0001;
+        rainSrc.connect(rainFilter); rainFilter.connect(rainGain); rainGain.connect(master);
+
+        // Kerb & Flat-spot low-frequency rumble
         kerbOsc = ac.createOscillator();
-        kerbOsc.type = "triangle";
-        kerbOsc.frequency.value = 42;
-        kerbGain = ac.createGain();
-        kerbGain.gain.value = 0.0001;
-        kerbOsc.connect(kerbGain);
-        kerbGain.connect(master);
+        kerbOsc.type = "triangle"; kerbOsc.frequency.value = 42;
+        kerbGain = ac.createGain(); kerbGain.gain.value = 0.0001;
+        kerbOsc.connect(kerbGain); kerbGain.connect(master);
 
         osc1.start(); osc2.start(); oscSub.start(); oscWhine.start();
-        scrubSrc.start(); windSrc.start(); kerbOsc.start();
+        scrubSrc.start(); windSrc.start(); gravelSrc.start(); rainSrc.start(); kerbOsc.start();
         started = true;
       } catch (_) {}
     }
 
-    function update(car, throttle, paused) {
+    function update(car, throttle, paused, wetness) {
       if (!started || !ac) return;
       const now = ac.currentTime;
       if (paused || muted || !car) {
@@ -143,6 +146,8 @@
         whineGain.gain.setTargetAtTime(0.0001, now, 0.06);
         scrubGain.gain.setTargetAtTime(0.0001, now, 0.06);
         windGain.gain.setTargetAtTime(0.0001, now, 0.06);
+        gravelGain.gain.setTargetAtTime(0.0001, now, 0.04);
+        rainGain.gain.setTargetAtTime(0.0001, now, 0.08);
         kerbGain.gain.setTargetAtTime(0.0001, now, 0.04);
         return;
       }
@@ -168,25 +173,53 @@
 
       // Tyre scrub / lockup screech
       const scrub = Math.max(car.tyreScrub || 0, car.lockingFront ? 0.85 : 0);
-      scrubGain.gain.setTargetAtTime(scrub > 0.04 ? scrub * 0.14 : 0.0001, now, 0.03);
+      scrubGain.gain.setTargetAtTime(scrub > 0.04 ? scrub * 0.15 : 0.0001, now, 0.03);
 
-      // Aerodynamic wind rush
-      const kphFrac = Math.max(0, Math.min(1, (car.speedKph || 0) / 340));
-      windFilter.frequency.setTargetAtTime(300 + kphFrac * 900, now, 0.08);
-      windGain.gain.setTargetAtTime(kphFrac * kphFrac * 0.11, now, 0.08);
+      // Aerodynamic wind rush (includes headwind!)
+      const kphFrac = Math.max(0, Math.min(1.15, ((car.speedKph || 0) + (car.headwindMps || 0) * 3.6) / 340));
+      windFilter.frequency.setTargetAtTime(300 + kphFrac * 920, now, 0.08);
+      windGain.gain.setTargetAtTime(kphFrac * kphFrac * 0.12, now, 0.08);
 
-      // Kerb rumble
-      const kerb = car.kerbIntensity || 0;
+      // Gravel/runoff crunch & puddle splash
+      const grav = Math.max(car.gravelIntensity || 0, (car.aquaplane || 0) * 0.85);
+      gravelFilter.frequency.setTargetAtTime(car.inPuddle ? 1400 : 2700, now, 0.04);
+      gravelGain.gain.setTargetAtTime(grav > 0.04 ? grav * 0.19 : 0.0001, now, 0.03);
+
+      // Rain patter on cockpit/visor
+      const wet = Math.max(0, Math.min(1, Number(wetness || 0) / 100));
+      rainGain.gain.setTargetAtTime(wet > 0.18 ? wet * 0.065 : 0.0001, now, 0.15);
+
+      // Kerb rumble + flat-spot rhythmic thump
+      const flatThump = (car.flatSpot || 0) > 0.15 && (car.speedKph || 0) > 40
+        ? (0.5 + 0.5 * Math.sin((car.wheelSpin || 0))) * (car.flatSpot || 0) * 0.55
+        : 0;
+      const rumble = Math.max(car.kerbIntensity || 0, flatThump);
       kerbOsc.frequency.setTargetAtTime(34 + kphFrac * 38, now, 0.02);
-      kerbGain.gain.setTargetAtTime(kerb > 0.05 ? kerb * 0.22 : 0.0001, now, 0.02);
+      kerbGain.gain.setTargetAtTime(rumble > 0.05 ? rumble * 0.24 : 0.0001, now, 0.02);
 
-      // Shift cut / blip
-      if (car.justShifted !== 0) {
-        playShiftCue(car.justShifted > 0);
+      // DRS flap actuator click
+      const drsNow = Boolean(car.drsOpen);
+      if (drsNow !== prevDrsOpen) {
+        prevDrsOpen = drsNow;
+        playDrsClick(drsNow);
       }
-      if ((car.impactStrength || 0) > 0.15) {
-        playImpact(car.impactStrength);
-      }
+
+      if (car.justShifted !== 0) playShiftCue(car.justShifted > 0);
+      if ((car.impactStrength || 0) > 0.14) playImpact(car.impactStrength);
+    }
+
+    function playDrsClick(opening) {
+      if (!ac || muted) return;
+      const t = ac.currentTime;
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(opening ? 640 : 420, t);
+      o.frequency.exponentialRampToValueAtTime(opening ? 1020 : 280, t + 0.055);
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + 0.065);
     }
 
     function playShiftCue(isUp) {
@@ -206,15 +239,28 @@
     function playImpact(strength) {
       if (!ac || muted) return;
       const t = ac.currentTime;
+      // Sub-bass barrier thud
       const o = ac.createOscillator();
       const g = ac.createGain();
       o.type = "sine";
-      o.frequency.setValueAtTime(110, t);
-      o.frequency.exponentialRampToValueAtTime(32, t + 0.16);
-      g.gain.setValueAtTime(Math.min(0.45, strength * 0.4), t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.frequency.setValueAtTime(115, t);
+      o.frequency.exponentialRampToValueAtTime(28, t + 0.18);
+      g.gain.setValueAtTime(Math.min(0.45, strength * 0.42), t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
       o.connect(g); g.connect(master);
-      o.start(t); o.stop(t + 0.19);
+      o.start(t); o.stop(t + 0.22);
+      // Carbon-fiber crackle burst
+      if (noiseBuf && strength > 0.28) {
+        const src = ac.createBufferSource();
+        src.buffer = noiseBuf;
+        const flt = ac.createBiquadFilter();
+        flt.type = "bandpass"; flt.frequency.value = 1850; flt.Q.value = 1.6;
+        const ng = ac.createGain();
+        ng.gain.setValueAtTime(Math.min(0.28, strength * 0.28), t);
+        ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+        src.connect(flt); flt.connect(ng); ng.connect(master);
+        src.start(t, Math.random() * 1.2, 0.18);
+      }
     }
 
     function playStartBeep(isGo) {

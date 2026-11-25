@@ -94,4 +94,40 @@ for (let i = 0; i < 480; i++) {
 }
 assert.ok(carPit.speedKph <= 83, `Pit speed limiter should clamp near 80 KPH, got ${carPit.speedKph.toFixed(1)} KPH`);
 
-console.log("ALL 6 APEX POV 120 HZ PHYSICS SUITES PASSED!");
+// 7. Front Lockup Flat-Spot Accumulation (ABS Off) & Carbon Brake Heating + Pit Service Reset
+const carLock = P.createCarState(trackMonza, dna2026, { startProg: 0.02, startLap: 1 });
+carLock.vx = 82;
+carLock.gear = 7;
+for (let i = 0; i < 200; i++) {
+  P.stepPhysics(carLock, trackMonza, { throttle: 0, brake: 1, steer: 0 }, { abs: false, autoShift: true }, { wetness: 0 });
+}
+assert.ok(carLock.flatSpot > 0.05, `Hard unassisted braking should create flat-spot, got ${carLock.flatSpot}`);
+assert.ok(carLock.brakeTemp > 520, `Heavy braking should heat carbon brakes >520C, got ${carLock.brakeTemp.toFixed(0)}C`);
+carLock.pitTimerS = 0.05;
+for (let i = 0; i < 15; i++) {
+  P.stepPhysics(carLock, trackMonza, { throttle: 0, brake: 0, steer: 0 }, {}, {});
+}
+assert.equal(carLock.flatSpot, 0, "Pit service must clear flat-spots");
+assert.ok(carLock.tyreLife > 99.9, `Pit service must fit fresh tyres (>99.9%), got ${carLock.tyreLife}`);
+
+// 8. Per-Corner 4-Wheel Wear Asymmetry + Off-Track Gravel Dirt Pickup & Scrubbing
+const carGravel = P.createCarState(trackMonza, dna2026, { startProg: 0.05, startLap: 1, startLat: 11.2 });
+carGravel.vx = 38;
+for (let i = 0; i < 120; i++) {
+  P.stepPhysics(carGravel, trackMonza, { throttle: 0.5, brake: 0, steer: 0 }, { tc: "full", autoShift: true }, { wetness: 0 });
+}
+assert.ok(carGravel.tyreDirty > 0.25, `Driving on runoff/gravel should dirty tyres, got ${carGravel.tyreDirty.toFixed(2)}`);
+assert.equal(carGravel.tyreLife4.length, 4, "4-corner tyre wear array must exist");
+assert.ok(carGravel.tyreLife4.every((v) => v < 100), "All 4 tyres should accumulate wear");
+
+// 9. Hard Barrier Impact Multi-Component Damage (Front Wing + Suspension Pull + Floor)
+const carCrash = P.createCarState(trackMonaco, dna2026, { startProg: 0.06, startLap: 1, startLat: 14.2 });
+carCrash.vx = 68;
+carCrash.yaw += 0.45; // angled into right barrier
+for (let i = 0; i < 90; i++) {
+  P.stepPhysics(carCrash, trackMonaco, { throttle: 0.9, brake: 0, steer: 0.6 }, { stability: true, autoShift: true }, { wetness: 0 });
+}
+assert.ok(carCrash.frontWingHealth < 90, `Hard wall impact should damage front wing, got ${carCrash.frontWingHealth.toFixed(1)}%`);
+assert.ok(carCrash.suspHealth < 100 || Math.abs(carCrash.suspPull) > 0, "Severe impact should affect suspension health/alignment");
+
+console.log("ALL 9 APEX POV 120 HZ PHYSICS, DAMAGE & ELEMENTS SUITES PASSED!");

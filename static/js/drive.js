@@ -28,8 +28,15 @@
   }
 
   const canvasEl = document.getElementById("drive-canvas");
+  const visorEl = document.getElementById("drive-visor-fx");
+  const visorCtx = visorEl ? visorEl.getContext("2d") : null;
   const minimapEl = document.getElementById("dh-minimap");
   const minimapCtx = minimapEl ? minimapEl.getContext("2d") : null;
+
+  let impactFlash = 0;
+  const visorDrops = Array.from({ length: 48 }, () => ({
+    x: Math.random(), y: Math.random(), r: 1.8 + Math.random() * 2.8, vy: 0.15 + Math.random() * 0.4,
+  }));
 
   let world3d = null;
   let cockpit3d = null;
@@ -138,10 +145,12 @@
   function triggerPitStop() {
     if (!car || !running || paused || finished) return;
     const nextComp = wetness >= 55 ? "wet" : (wetness >= 24 ? "inter" : (car.compound === "soft" ? "medium" : "soft"));
+    const needWing = (car.frontWingHealth || 100) < 82;
+    const stopDur = needWing ? 5.8 : 2.6;
     car.compound = nextComp;
     car.inPit = true;
-    car.pitTimerS = 2.6;
-    showBanner(`BOXING — Fitting ${nextComp.toUpperCase()} tyres & repairing front wing (2.6s)`, 2800);
+    car.pitTimerS = stopDur;
+    showBanner(`BOXING — ${nextComp.toUpperCase()} tyres${needWing ? " + Front Wing Swap" : ""} (${stopDur.toFixed(1)}s)`, 3000);
   }
 
   async function launchSession(cfg, stageOverride) {
@@ -267,10 +276,12 @@
       while (accumDt >= FIXED && steps < 6) {
         window.F1DrivePhysics.stepPhysics(car, track, inp, assists, {
           wetness,
+          raceTimeS,
           carsAhead: aiCtrl.aiCars,
           holdOnGrid: stSeq.active,
           drsAllowed: (sessionCfg.mode === "timetrial" || car.lap >= 2),
         }, FIXED);
+        if (car.impactStrength > 0.16) impactFlash = Math.min(1.0, Math.max(impactFlash, car.impactStrength));
         accumDt -= FIXED;
         steps++;
       }
@@ -320,10 +331,10 @@
       standings = aiCtrl.buildStandings(car);
     }
 
-    if (audioCtrl) audioCtrl.update(car, inp.throttle, paused || finished);
+    if (audioCtrl) audioCtrl.update(car, inp.throttle, paused || finished, wetness);
     if (world3d && car) {
       world3d.updateRacingLine(car);
-      world3d.syncAiCars(aiCtrl ? aiCtrl.aiCars : [], ghostPose);
+      world3d.syncAiCars(aiCtrl ? aiCtrl.aiCars : [], ghostPose, wetness);
       world3d.updateWeather(car, wetness, rawDt);
       if (cockpit3d) cockpit3d.update(car, world3d.camera, rawDt, deltaS, proxLeft, proxRight);
       world3d.render();
@@ -331,6 +342,7 @@
     if (car) {
       updateHud(car, inp, standings, deltaS);
       drawMinimap(car, aiCtrl ? aiCtrl.aiCars : [], ghostPose);
+      drawVisorFX(car, wetness, rawDt);
     }
 
     rafId = requestAnimationFrame(loop);
@@ -404,10 +416,115 @@
     const pitEl = document.getElementById("dh-pit-tag");
     pitEl.className = `dh-badge${c.pitLimiter ? " is-ready" : ""}`;
 
-    document.getElementById("dh-tyre-stat").textContent = `${(c.compound || "s")[0].toUpperCase()} · ${Math.round(c.tyreLife)}% · ${Math.round(c.coreTemp)}°C`;
-    document.getElementById("dh-wing-stat").textContent = `WING ${Math.round(c.frontWingHealth)}%${c.penaltySec ? ` · +${c.penaltySec}s` : ""}`;
+    // 4-Corner Tyre Wear/Temp + Component Damage Schematic
+    const life4 = c.tyreLife4 || [c.tyreLife, c.tyreLife, c.tyreLife, c.tyreLife];
+    const core4 = c.tyreCore4 || [c.coreTemp, c.coreTemp, c.coreTemp, c.coreTemp];
+    const ids4 = [["dh-t-fl", "FL"], ["dh-t-fr", "FR"], ["dh-t-rl", "RL"], ["dh-t-rr", "RR"]];
+    ids4.forEach(([eid, lbl], idx) => {
+      const el = document.getElementById(eid);
+      if (!el) return;
+      const lf = Math.round(life4[idx]);
+      const tp = Math.round(core4[idx]);
+      el.textContent = `${lbl} ${lf}% ${tp}°`;
+      el.className = "dh-t4" + (lf < 26 || tp > 112 ? " is-crit" : (tp > 104 || lf < 45 ? " is-hot" : (tp < 78 ? " is-cold" : "")));
+    });
+
+    const setComp = (id, txt, val, warnLo, badLo, invert) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = txt;
+      const isBad = invert ? (val >= badLo) : (val <= badLo);
+      const isWarn = invert ? (val >= warnLo) : (val <= warnLo);
+      el.className = isBad ? "is-bad" : (isWarn ? "is-warn" : "");
+    };
+    setComp("dh-c-fw", `FW ${Math.round(c.frontWingHealth)}%`, c.frontWingHealth, 80, 55, false);
+    setComp("dh-c-flr", `FLR ${Math.round(c.floorHealth ?? 100)}%`, c.floorHealth ?? 100, 82, 62, false);
+    setComp("dh-c-susp", `SUS ${Math.round(c.suspHealth ?? 100)}%`, c.suspHealth ?? 100, 85, 65, false);
+    setComp("dh-c-pu", `PU ${Math.round(c.puTemp ?? 96)}°C`, c.puTemp ?? 96, 112, 118, true);
+
+    document.getElementById("dh-tyre-stat").textContent = `${(c.compound || "s")[0].toUpperCase()} · BRK ${Math.round(c.brakeTemp || 350)}°C${c.brakeFade > 0.12 ? " FADE!" : ""}`;
+    const envEl = document.getElementById("dh-env-stat");
+    if (envEl) envEl.textContent = `RUB ${Math.round((c.trackRubber || 0.35) * 100)}% · WND ${c.windKph || 10}`;
     document.getElementById("dh-bb-stat").textContent = `BB ${c.brakeBias}%`;
     document.getElementById("dh-weather-mini").textContent = wetness >= 45 ? `RAIN ${Math.round(wetness)}%` : (wetness >= 15 ? `DAMP ${Math.round(wetness)}%` : "DRY 0%");
+
+    const alRow = document.getElementById("dh-alerts-row");
+    if (alRow) {
+      const chips = [];
+      if (c.flatSpot > 0.18) chips.push(`<span class="dh-al-chip">FLAT-SPOT ${Math.round(c.flatSpot * 100)}%</span>`);
+      if (c.tyreDirty > 0.15) chips.push(`<span class="dh-al-chip">DIRTY TYRES</span>`);
+      if (c.inPuddle) chips.push(`<span class="dh-al-chip is-info">AQUAPLANE!</span>`);
+      if (c.puOverheat) chips.push(`<span class="dh-al-chip">PU DERATE</span>`);
+      if (Math.abs(c.suspPull || 0) > 0.006) chips.push(`<span class="dh-al-chip">STEER PULL</span>`);
+      if (c.penaltySec > 0) chips.push(`<span class="dh-al-chip">+${c.penaltySec}s PEN</span>`);
+      if (c.inSlipstream) chips.push(`<span class="dh-al-chip is-info">SLIPSTREAM</span>`);
+      alRow.innerHTML = chips.join("");
+    }
+  }
+
+  function drawVisorFX(c, wet, dt) {
+    if (!visorCtx || !visorEl) return;
+    const rect = visorEl.getBoundingClientRect();
+    const w = Math.max(320, Math.round(rect.width || window.innerWidth));
+    const h = Math.max(200, Math.round(rect.height || window.innerHeight));
+    if (visorEl.width !== w || visorEl.height !== h) { visorEl.width = w; visorEl.height = h; }
+    visorCtx.clearRect(0, 0, w, h);
+
+    // 1. High-Speed Peripheral Motion Lines (>285 KPH)
+    const kph = c.speedKph || 0;
+    if (kph > 285 && !paused) {
+      const alpha = Math.min(0.28, ((kph - 285) / 80) * 0.28);
+      visorCtx.strokeStyle = `rgba(226, 232, 240, ${alpha.toFixed(3)})`;
+      visorCtx.lineWidth = 1.3;
+      const cx = w * 0.5, cy = h * 0.48;
+      for (let i = 0; i < 18; i++) {
+        const ang = (i / 18) * Math.PI * 2 + (performance.now() * 0.002);
+        const r1 = Math.min(w, h) * (0.36 + (i % 3) * 0.04);
+        const r2 = Math.max(w, h) * 0.65;
+        visorCtx.beginPath();
+        visorCtx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        visorCtx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+        visorCtx.stroke();
+      }
+    }
+
+    // 2. Dynamic Visor Raindrops & Wind-Swept Streaks in Wet Weather
+    if ((wet || 0) >= 20) {
+      const wf = Math.min(1, wet / 100);
+      const count = Math.floor(visorDrops.length * wf);
+      const spdPush = 0.25 + (kph / 240) * 1.4;
+      visorCtx.strokeStyle = `rgba(186, 230, 253, ${(0.22 + wf * 0.28).toFixed(2)})`;
+      visorCtx.fillStyle = `rgba(224, 242, 254, ${(0.28 + wf * 0.26).toFixed(2)})`;
+      for (let i = 0; i < count; i++) {
+        const d = visorDrops[i];
+        d.y += d.vy * spdPush * (dt || 0.016);
+        d.x += (d.x - 0.5) * spdPush * 0.35 * (dt || 0.016);
+        if (d.y > 1.05 || d.x < -0.05 || d.x > 1.05) {
+          d.x = Math.random(); d.y = Math.random() * 0.4;
+        }
+        const px = d.x * w, py = d.y * h;
+        visorCtx.beginPath();
+        visorCtx.arc(px, py, d.r, 0, Math.PI * 2);
+        visorCtx.fill();
+        if (kph > 90) {
+          visorCtx.lineWidth = d.r * 0.65;
+          visorCtx.beginPath();
+          visorCtx.moveTo(px, py);
+          visorCtx.lineTo(px - (d.x - 0.5) * 14, py - 10 * spdPush);
+          visorCtx.stroke();
+        }
+      }
+    }
+
+    // 3. Red Impact / Heavy Damage Vignette Flash
+    if (impactFlash > 0.02) {
+      const g = visorCtx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.28, w * 0.5, h * 0.5, Math.max(w, h) * 0.65);
+      g.addColorStop(0, "rgba(239, 68, 68, 0)");
+      g.addColorStop(1, `rgba(220, 38, 38, ${(impactFlash * 0.55).toFixed(3)})`);
+      visorCtx.fillStyle = g;
+      visorCtx.fillRect(0, 0, w, h);
+      impactFlash = Math.max(0, impactFlash - (dt || 0.016) * 2.2);
+    }
   }
 
   function drawMinimap(c, aiCars, ghostPose) {
