@@ -570,3 +570,55 @@ def get_driver_dna_map(db_path: Path, driver_names: list[str] | None = None) -> 
     if not driver_names:
         return {k: dict(v) for k, v in cache.items()}
     return {_norm_key(n): get_driver_dna(db_path, n) for n in driver_names if n}
+
+
+def flavour_tags(driver_name: str, db_path: Path | None = None, max_tags: int = 2) -> list[str]:
+    """Map a driver's DNA attributes onto interview flavour tags (wet|street|overtake|tyre|mech).
+
+    Uses the DNA cache when a db_path is given, otherwise curated profiles, falling back to the
+    hash-synthesised DNA so generated drivers still get a flavour. Returns at most `max_tags`
+    (the strongest attributes first) so legendary all-rounders don't flavour every sentence.
+    """
+    scored_src: dict[str, Any] | None = None
+    try:
+        if db_path is not None:
+            scored_src = get_driver_dna(db_path, driver_name)
+        else:
+            dk = _norm_key(driver_name)
+            scored_src = CURATED_DRIVER_DNA.get(dk)
+            if not scored_src:
+                parts = dk.split()
+                scored_src = next((v for k, v in CURATED_DRIVER_DNA.items() if parts and k.endswith(" " + parts[-1])), None)
+            if not scored_src:
+                db = _dna_default_db()
+                if db is not None:
+                    scored_src = get_driver_dna(driver_name, ensure_dna_cache(db))
+    except Exception:
+        scored_src = None
+    if not scored_src:
+        return []
+    scored: list[tuple[float, str]] = [
+        (float(scored_src.get("wet_mastery") or 0), "wet"),
+        (float(scored_src.get("street_precision") or 0), "street"),
+        (max(float(scored_src.get("late_braking") or 0), float(scored_src.get("defense_ruthless") or 0) - 4), "overtake"),
+        (float(scored_src.get("tyre_preservation") or 0), "tyre"),
+        (float(scored_src.get("mech_sympathy") or 0), "mech"),
+    ]
+    scored = [s for s in scored if s[0] >= 80]
+    scored.sort(reverse=True)
+    return [tag for _, tag in scored[: max(0, int(max_tags))]]
+
+
+def _dna_default_db():
+    """Best-effort default f1db path so flavour_tags works without an explicit db_path."""
+    try:
+        from pathlib import Path as _P
+        for cand in (
+            _P(__file__).resolve().parent.parent / "data" / "f1.sqlite",
+            _P.home() / "Dev" / "projects" / "f1 sim" / "traf1" / "data" / "f1.sqlite",
+        ):
+            if cand.exists():
+                return cand
+    except Exception:
+        pass
+    return None

@@ -205,6 +205,46 @@ def api_ladder_reports(save_id: str, limit: int = 50):
     return JSONResponse({"ok": True, "count": len(reports), "reports": reports})
 
 
+@router.get("/api/ladder/{save_id}/debrief-quotes")
+def api_ladder_debrief_quotes(save_id: str, season: int = 0, round_num: int = 0):
+    """AI driver quotes + TP reaction for a stored ladder race debrief (Paddock Voices panel)."""
+    state = _load_or_404(save_id)
+    from ..ladder_lore import build_debrief_quotes
+
+    reports = ldb.list_race_reports(_base_dir(), save_id, limit=50)
+    report = None
+    if season or round_num:
+        for r in reports:
+            if (not season or int(r.get("season") or 0) == season) and (not round_num or int(r.get("round") or 0) == round_num):
+                report = r
+                break
+    if report is None and reports:
+        report = reports[0]
+    if report is None:
+        return JSONResponse({"ok": False, "message": "No race reports stored for this save yet."})
+
+    debrief = (report.get("report") or {}).get("debrief") or {}
+    tier = str(report.get("tier") or "f1")
+    # Player TP + team from the ladder state (team principal of the player's current team)
+    p = state.get("player") or {}
+    team_name = str(p.get("team") or "")
+    tp_name = ""
+    for t in ((state.get("tiers") or {}).get(tier) or {}).get("teams", []):
+        if str(t.get("name") or "").lower() == team_name.lower() or t.get("is_player"):
+            tp_name = str(t.get("principal") or "")
+            break
+    payload = build_debrief_quotes(
+        debrief,
+        tier=tier,
+        player_tp=tp_name,
+        player_team=team_name,
+        season=int(report.get("season") or 1),
+        round_num=int(report.get("round") or 1),
+    )
+    payload["report_id"] = report.get("report_id")
+    return JSONResponse(payload)
+
+
 @router.post("/api/ladder/{save_id}/facility/upgrade")
 async def api_ladder_facility(save_id: str, request: Request):
     state = _load_or_404(save_id)

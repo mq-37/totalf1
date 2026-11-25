@@ -556,6 +556,266 @@ RADIO_TROPES_PACK: dict[str, list[dict[str, str]]] = {
 }
 
 
+# Persona × situation radio bursts, shaped by tone (hot|steady|low = confidence/mood axis).
+# Composed by get_radio_line() so /sim, /ladder and the analytics modal share one voice model.
+RADIO_TONES = ("hot", "steady", "low")
+
+PERSONA_RADIO_PACK: dict[str, dict[str, list[str]]] = {
+    "iceman": {
+        "attack": {
+            "hot": ["Gap is zero. I'm through this lap.", "Understood. Attacking now. It's clean."],
+            "steady": ["Copy. I'll pick my moment.", "Save the battery. I'll get him at the stop."],
+            "low": ["He's too quick on the straight. Nothing to do.", "Copy. I'm doing what I can back here."],
+        },
+        "defend": {
+            "hot": ["He's not past. Leave it to me.", "Mirror discipline. I have this side."],
+            "steady": ["Copy. Holding the inside line.", "Understood. I'll make it wide into one."],
+            "low": ["I can't hold him on these tyres.", "Copy... he's just quicker. Understood."],
+        },
+        "box_call": {
+            "hot": ["Box confirmed. Best in-lap coming.", "Copy. Pit confirm. Pushing."],
+            "steady": ["Copy, box. Tyres are done anyway.", "Understood. In this lap."],
+            "low": ["Finally. These tyres were gone.", "Copy. Can't come soon enough."],
+        },
+        "tyre": {
+            "hot": ["Tyres are fine. Still attacking.", "No worries with deg. All good."],
+            "steady": ["Rears starting to go. Two more laps max.", "Deg is a bit high. Watching it."],
+            "low": ["Fronts are dead. Completely dead.", "No grip at all. What can I do?"],
+        },
+        "gap": {
+            "hot": ["Gap closing. Keep the info coming.", "Copy. I'm reeling him in."],
+            "steady": ["Copy the gap. Managing it.", "Understood. Same pace to the flag."],
+            "low": ["The gap just grows. Copy anyway.", "Copy. It's not improving though."],
+        },
+        "retire": {
+            "hot": ["Understood. Bad luck. We were strong today.", "Copy. Park it. We were quick."],
+            "steady": ["Copy that. Nothing I could do.", "Understood. Mechanical, then."],
+            "low": ["Copy. Terrible weekend all round.", "Understood. Just get me home."],
+        },
+        "praise": {
+            "hot": ["Good work today. Enjoy it briefly.", "Cheers. That's the car doing the talking."],
+            "steady": ["Thanks. Decent job all round.", "Copy. Solid day for everyone."],
+            "low": ["Thanks. We needed points, not praise.", "Copy. We go again next week."],
+        },
+    },
+    "fiery_racer": {
+        "attack": {
+            "hot": ["I'm ON him — get me the info and he's DONE!", "Copy that! This move is happening NOW!"],
+            "steady": ["Give me one clear lap and it's on!", "Copy! I'll bait him into the braking zone!"],
+            "low": ["I can't get close enough in the straights!", "Copy... he defends too well on these tyres!"],
+        },
+        "defend": {
+            "hot": ["He will NOT get past me — I promise you that!", "I live for these fights! Leave it to me!"],
+            "steady": ["I'll make his life hell into turn one!", "Copy! Aggressive line, clean as possible!"],
+            "low": ["I'm trying but the grip is GONE!", "He's just faster today... copy, holding on!"],
+        },
+        "box_call": {
+            "hot": ["BOX! Great call, my tyres were SCREAMING!", "Copy! Best in-lap of my LIFE coming up!"],
+            "steady": ["Copy, box! Give me fresh rubber and watch this!", "Understood! In-lap push now!"],
+            "low": ["FINALLY! I've been sliding for LAPS!", "Copy... takes too long, but okay!"],
+        },
+        "tyre": {
+            "hot": ["Tyres are BRILLIANT — I can attack forever!", "No deg worries, I'm treating them mean and they love it!"],
+            "steady": ["Rears are going, I'm nursing them!", "Deg is high but manageable — copy!"],
+            "low": ["ZERO grip! These tyres are absolutely finished!", "I'm a passenger out here! It's hopeless!"],
+        },
+        "gap": {
+            "hot": ["He's RIGHT THERE! I can smell him!", "Closing fast! Keep the numbers coming!"],
+            "steady": ["Copy the gap! I'll chip away at it!", "Understood — steady pursuit mode!"],
+            "low": ["The gap gets BIGGER every lap!", "Copy... I have nothing left to close with!"],
+        },
+        "retire": {
+            "hot": ["NO WAY! We were flying! This is CRUEL!", "Copy... I'm devastated, we had a result today!"],
+            "steady": ["Understood. Park it safely. What a shame.", "Copy that. We were in the fight too!"],
+            "low": ["Copy. Honestly... maybe it's just not our day.", "Understood. One more chapter in a bad weekend."],
+        },
+        "praise": {
+            "hot": ["WHAT A TEAM! I'm taking you all to the podium with me!", "YES! That's how we do it! Love you guys!"],
+            "steady": ["Great job everyone! Great job!", "Copy! Team effort all round!"],
+            "low": ["Thanks guys... you deserved better today.", "Copy. We go again. Heads up."],
+        },
+    },
+    "perfectionist": {
+        "attack": {
+            "hot": ["Deploying now — this move is modelled, not hoped for.", "Copy. Pass executes on lap exit of the final corner."],
+            "steady": ["Copy. Battery window opens in two laps.", "Understood. I'll set him up through the entry phase."],
+            "low": ["Delta says his exit speed is too strong. Negative.", "Copy... the numbers don't support an attack."],
+        },
+        "defend": {
+            "hot": ["My entry line is faster. He won't convert.", "Copy. I have the apex reference — he doesn't."],
+            "steady": ["Copy. Standard defence protocol.", "Understood. Mirror discipline, inside line."],
+            "low": ["He out-performs me in every phase. Copy.", "Copy... defending at this delta isn't realistic."],
+        },
+        "box_call": {
+            "hot": ["Confirmed. In-lap target: minus two tenths.", "Copy. Perfect timing against the model."],
+            "steady": ["Copy, box. Tyres within projection.", "Understood. Executing the planned window."],
+            "low": ["Copy. The earlier window was better, but confirmed.", "Understood... we lost the margin anyway."],
+        },
+        "tyre": {
+            "hot": ["Deg at 4% — I can extend this stint indefinitely.", "Temps ideal, wear minimal. No concerns."],
+            "steady": ["Deg tracking slightly over model. Adjusting.", "Copy. Rear wear is the limiting factor."],
+            "low": ["Deg is 40% above projection. Something's wrong.", "Copy — I have no rear end. The model failed."],
+        },
+        "gap": {
+            "hot": ["Delta improving every lap. Continuing.", "Copy. Gap converging as projected."],
+            "steady": ["Copy the gap. Holding target pace.", "Understood. Consistent, not spectacular."],
+            "low": ["Delta diverging. The pace difference is structural.", "Copy... I can't close what the car can't."],
+        },
+        "retire": {
+            "hot": ["Copy. That's a shame — the data was strong.", "Understood. We were on target today."],
+            "steady": ["Copy. Log it for analysis.", "Understood. Park it with minimal further damage."],
+            "low": ["Copy. As expected from lap three, honestly.", "Understood. The failure mode was already visible."],
+        },
+        "praise": {
+            "hot": ["Clean sheet. Every target met. Well done all.", "Copy. That's the preparation paying out."],
+            "steady": ["Copy. Decent execution all round.", "Thanks. Refinements identified for next round."],
+            "low": ["Copy. We'll find the root causes tonight.", "Copy. The debrief list is already long."],
+        },
+    },
+    "rookie_hungry": {
+        "attack": {
+            "hot": ["He's MINE — I've watched him my whole life!", "Copy! Attack mode on — here we go!!"],
+            "steady": ["Copy! Show me the gap and I'll try!", "Understood — going for it, nervous but going!"],
+            "low": ["I'm trying, but he's so much quicker!", "Copy... I don't want to wreck it trying!"],
+        },
+        "defend": {
+            "hot": ["Nobody's coming past me today!", "Copy! I'll be braver than he is!"],
+            "steady": ["Copy! Holding the racing line!", "Understood — I'll make it as hard as I can!"],
+            "low": ["He gets past me every lap, copy!", "Copy... I'm doing my best back here!"],
+        },
+        "box_call": {
+            "hot": ["BOX! Copy! This is my first stop, exciting!", "Copy! In-lap push — just like practice!"],
+            "steady": ["Copy, box! Fresh tyres, yes!", "Understood. Pit confirm pressed."],
+            "low": ["Copy. Finally something changes.", "Copy box... these tyres were killing me."],
+        },
+        "tyre": {
+            "hot": ["Tyres feel great! Still learning the limits!", "Copy — managing like you taught me!"],
+            "steady": ["Rears are warming up, copy!", "Copy, deg is coming in. Adjusting!"],
+            "low": ["I have no grip, no idea what to do!", "Copy... I slid everywhere that lap, sorry!"],
+        },
+        "gap": {
+            "hot": ["I'm CLOSING on him! This is unreal!", "Copy! He's right there in my windscreen!"],
+            "steady": ["Copy the gap. I'll keep it steady.", "Understood. Trying to match his laps!"],
+            "low": ["The gap is huge, copy.", "Copy... he's disappearing ahead of me."],
+        },
+        "retire": {
+            "hot": ["NO! We were doing so WELL!", "Copy... I'm so sorry, team!"],
+            "steady": ["Understood. Pulling off safely.", "Copy that. Shame, I was learning so much."],
+            "low": ["Copy. Worst day of my season.", "Understood... thanks for the help anyway."],
+        },
+        "praise": {
+            "hot": ["THANK YOU TEAM! I'll remember this forever!", "Copy! Best day of my racing life!"],
+            "steady": ["Thanks everyone! Great calls today!", "Copy! We did it together!"],
+            "low": ["Thanks for sticking with me, guys.", "Copy... next weekend I'll be better, promise."],
+        },
+    },
+    "veteran_statesman": {
+        "attack": {
+            "hot": ["Copy. He'll tire before I do — watch lap four.", "Understood. My move is already planned."],
+            "steady": ["Copy. Patience first, then the pass.", "Understood. I'll pick the moment, not the lap."],
+            "low": ["Copy, but the pace delta says otherwise.", "Understood... I'll try the old tricks, for what they're worth."],
+        },
+        "defend": {
+            "hot": ["I've defended this move a hundred times. Leave it.", "Copy. He'll make the error, not me."],
+            "steady": ["Copy. Standard veteran protocol.", "Understood. I'll show him the nose, not the door."],
+            "low": ["Copy... this one's beyond defending, honestly.", "Understood. I'll make it look dignified, at least."],
+        },
+        "box_call": {
+            "hot": ["Confirmed. That's the call I was hoping for.", "Copy. Perfect window. Pushing."],
+            "steady": ["Copy, box. Sensible timing.", "Understood. In-lap managed, no heroics."],
+            "low": ["Copy. Whatever helps at this point.", "Understood. These tyres stopped talking two laps ago."],
+        },
+        "tyre": {
+            "hot": ["Tyres are behaving beautifully. All good here.", "Copy. I've been kind to them and they know it."],
+            "steady": ["Deg is real but manageable. Copy.", "Copy. I'll shorten my phases a little."],
+            "low": ["They're gone, son. Like everything else today.", "Copy. No rear axle, no answers."],
+        },
+        "gap": {
+            "hot": ["Copy. He'll crack before the stint ends.", "Understood. The gap is closing on experience alone."],
+            "steady": ["Copy the gap. Nothing changes my approach.", "Understood. I'll keep my rhythm regardless."],
+            "low": ["Copy. It's drifting away, as these things do.", "Understood. Some days the young legs just win."],
+        },
+        "retire": {
+            "hot": ["Copy. Cruel — we deserved that result.", "Understood. Park it. We were racing well."],
+            "steady": ["Copy. Mechanicals happen. Well handled by all.", "Understood. Bring it home carefully."],
+            "low": ["Copy. Story of the season, isn't it.", "Understood. At least the decision was made for me."],
+        },
+        "praise": {
+            "hot": ["Copy. A professional's afternoon. Well done all.", "Thank you. That's how it's done after all these years."],
+            "steady": ["Copy. Solid work from everyone.", "Thanks. Same again next round, then."],
+            "low": ["Copy. We move on. That's the whole craft.", "Thanks anyway, fellas. Onwards."],
+        },
+    },
+    "team_player": {
+        "attack": {
+            "hot": ["Copy! Give me the info and we'll take the place together!", "Attack mode on! This is for the team!"],
+            "steady": ["Copy. I'll follow your timing exactly.", "Understood. Setting up the pass as discussed."],
+            "low": ["Copy... I'll try, but the pace isn't there.", "Understood. Doing what I can with what I have."],
+        },
+        "defend": {
+            "hot": ["I'll defend hard but clean — copy that!", "Copy! Nobody gets past our car today!"],
+            "steady": ["Copy. Holding position as planned.", "Understood. Protecting the team's result."],
+            "low": ["Copy... he's quicker, I'll do my best.", "Understood. I won't do anything risky for us."],
+        },
+        "box_call": {
+            "hot": ["Box confirmed! Great call from the wall!", "Copy! Trusting you completely — pushing!"],
+            "steady": ["Copy, box. Executing the plan.", "Understood. In-lap as agreed."],
+            "low": ["Copy box. Hopefully it helps us out.", "Understood. We needed that a lap ago."],
+        },
+        "tyre": {
+            "hot": ["Tyres are good! The prep work paid off!", "Copy — deg is well under control!"],
+            "steady": ["Copy, rears are fading a bit. Managing.", "Understood. I'll lift and coast as agreed."],
+            "low": ["Copy... the tyres won't switch on at all.", "Copy. We struggled with this all weekend."],
+        },
+        "gap": {
+            "hot": ["Closing on him! Keep the calls coming!", "Copy! We're gaining — great job on the numbers!"],
+            "steady": ["Copy the gap. Holding our plan.", "Understood. Consistent laps, that's the play."],
+            "low": ["Copy... the gap is only growing.", "Understood. We can't match that pace today."],
+        },
+        "retire": {
+            "hot": ["Copy... that's heartbreaking for the whole crew!", "Understood. We were so close to the points!"],
+            "steady": ["Copy. Park it safely. Thanks for the work.", "Understood. Let's analyse and come back."],
+            "low": ["Copy. Rough day for all of us.", "Understood. Thanks for trying everything."],
+        },
+        "praise": {
+            "hot": ["This one's for EVERYONE — factory to pit wall!", "Copy! What a team effort, I'm so proud!"],
+            "steady": ["Copy! Great work all round today!", "Thanks team — solid result together!"],
+            "low": ["Thanks guys. We stick together through this.", "Copy. We'll review and bounce back as one."],
+        },
+    },
+}
+
+
+def _radio_tone(mood: str = "steady", conf: float = 60.0) -> str:
+    if conf >= 78 and mood in ("elated", "confident"):
+        return "hot"
+    if conf < 46 or mood in ("shaken",):
+        return "low"
+    if mood in ("frustrated",) and conf < 60:
+        return "low"
+    return "steady"
+
+
+def get_radio_line(
+    persona: str,
+    situation: str,
+    *,
+    mood: str = "steady",
+    conf: float = 60.0,
+    seed: str = "",
+) -> str | None:
+    """Persona × situation radio burst, tone-shaped by mood + confidence (deterministic via seed)."""
+    pack = PERSONA_RADIO_PACK.get(persona) or PERSONA_RADIO_PACK.get("team_player") or {}
+    tones = pack.get(situation) or {}
+    if not isinstance(tones, dict):
+        return None
+    tone = _radio_tone(mood, conf)
+    lines = tones.get(tone) or tones.get("steady") or []
+    if not lines:
+        return None
+    return _pick(lines, f"{persona}|{situation}|{tone}|{seed}")
+
+
 def get_driver_voice_line(
     driver_name: str,
     situation: str,
@@ -587,6 +847,7 @@ def get_voice_pack_payload() -> dict[str, Any]:
     return {
         "drivers": DRIVER_VOICE_PROFILES,
         "tropes": RADIO_TROPES_PACK,
+        "personaRadio": PERSONA_RADIO_PACK,
         "banterModes": [
             {"id": "strict", "label": "Strict Broadcast (Serious)"},
             {"id": "authentic", "label": "Authentic F1 Paddock (Default)"},

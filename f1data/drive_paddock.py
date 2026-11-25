@@ -601,6 +601,40 @@ def execute_commitment(state: dict[str, Any], commitment_id: str) -> tuple[bool,
     return True, f"Completed {tpl['title']}! {tpl['effects_text']}", {"buff": tpl.get("buff")}
 
 
+# Hand-written paddock-lore blurbs: the story of each place, in the paddock's own voice.
+# Keyed by circuit-id tokens so /drive's Lore Vault gets character text next to the F1DB stats.
+CIRCUIT_LORE_COPY: dict[str, str] = {
+    "monaco": "Since 1929 the streets of Monte Carlo have been the sport's chessboard. Overtaking here is nearly mythology — you qualify ahead or you suffer. The harbour yachts, the Tabac kerbs, the tunnel at 300 km/h followed by the tightest chicane on the calendar: one mistake is a season's work undone.",
+    "monza": "The Temple of Speed. Monza is flat-out heritage — the old banking still stands above the trees where 1955 heroes ran at full throttle. Slipstream, chicanery at the first chicane, and the tifosi only forgive one result: red on the top step.",
+    "spa": "Spa-Francorchamps wraps 7 kilometres of Ardennes forest around the greatest corner in motorsport — Eau Rouge, taken flat if you're brave and cremated if you're not. Weather is a micro-climate: it can rain at La Source and be dry at the bus stop.",
+    "silverstone": "The birthplace of the World Championship, 1950. Maggotts-Becketts is the finest sequence of corners ever committed to a racing circuit — a full-throttle slalom that judges commitment better than any wind tunnel. The crowd knows its history and its Hailwoods and its Hamiltons.",
+    "suzuka": "The figure-of-eight. Suzuka is the driver's championship: the 130R flat-left, the Degner curves, and the S-curves that punish hesitation in tenths of a second. A Honda homecoming, and rain from the Pacific is never more than an hour away.",
+    "interlagos": "Autódromo José Carlos Pace — bumpy, tight, and tilted like an amphitheatre. Juncao's long left catches the brave out at the exit. Brazil earned its legends here: the cries for Senna still live in the grandstands, and the weather changes its mind by the lap.",
+    "zandvoort": "Dune-lined and old-school, rebuilt with banked corners that let modern cars attack Arie Luyendyk in a way Max Verstappen's crowd adores. The North Sea wind changes the car between laps — setup wisdom here is to trust the driver, not the wind tunnel.",
+    "singapore": "Marina Bay invented the night race — 23 corners of humidity and precision under 1600 lights. The wall at turn 18 claimed champions. Two hours of cumulative fatigue makes it the physical championship of the calendar.",
+    "baku": "Baku is a 2.2 km flat-out blast down the old Silk Road followed by the narrowest corner on the calendar around the old city wall. Eight years of chaos: magnetic drain covers, red-flag reversals, and winners nobody's model predicted. Expect the unexpected — that's the local rule.",
+    "vegas": "The Strip at midnight — 300+ km/h past the fountains and the Sphere. The coldest race on the calendar, the longest lap, and grip that keeps arriving as the night cools. A brand-new cathedral built for spectacle, and the racing has earned it.",
+    "imola": "Imola carries weight no brochure mentions. Tamburello's memorial stands quiet outside turn one; Villeneuve's kerbs, the Autodromo's over-under, and the riverside parkland make it a driver favourite that raced its legends and its tragedies.",
+    "hungaroring": "The Hungaroring is 'Monaco without the walls' — slow, twisty, and hotter than the paddock suggests. Overtaking comes only through strategy or someone else's mistake. The first race behind the Iron Curtain, 1986, and the paprika-fried crowds remain its soul.",
+    "miami": "The Miami International Autodrome wraps a Hard Rock Stadium in a fake marina and real Florida heat. Five years old and already famous: the long straight into turn one produces real racing, and the bumpiest kerbs in America produce real chaos.",
+    "melbourne": "Albert Park is racing in a public park — the roads close on Thursday and the world championship races on Sunday. The lake provides the backdrop, the kerbs provide the sparks, and the quick flowing lap makes it a perennial driver favourite despite the sand that blows onto the surface overnight.",
+    "bahrain": "Floodlights in the desert. Bahrain's end-of-straight braking zones into slow traction corners make tyre management the whole story, and the desert wind re-sands the racing line between sessions. It launched the night-racing era in 2014 with a floodlit duel under Gulf stars.",
+    "montreal": "The Île Notre-Dame circuit is a fast rollercoaster around the Olympic rowing basin — chicanes, walls, and the Champions' Wall that has ended races and egos alike. Part street circuit, part power park, wholly unforgiving; the wall of heroes keeps its name for a reason.",
+    "mexico_city": "2,285 metres above the sea. Mexico City's thin air strips aerodynamic downforce and engine power alike, making the low-drag setup a gamble and braking into turn one a spectacle. The Foro Sol baseball stadium section, with the crowd roaring through the inner apse, is unique in all of motorsport.",
+}
+
+
+def _circuit_lore_blurb(circuit_id: str, circuit_name: str) -> str:
+    low_id = str(circuit_id or "").lower()
+    low_name = str(circuit_name or "").lower()
+    for token, text in CIRCUIT_LORE_COPY.items():
+        if not text:
+            continue
+        if token in low_id or token in low_name:
+            return text
+    return ""
+
+
 def _query_f1db_circuit_lore(base_dir: Path, circuit_id: str, circuit_name: str) -> dict[str, Any]:
     lore: dict[str, Any] = {"winners": [], "races_held": 0, "first_year": None, "last_year": None}
     db_path = Path(base_dir) / "data" / "f1db.sqlite"
@@ -658,7 +692,7 @@ def _query_fia_precedent_spotlight(base_dir: Path) -> list[dict[str, str]]:
         con = sqlite3.connect(str(db_path), timeout=5.0)
         con.row_factory = sqlite3.Row
         rows = con.execute(
-            "SELECT season, gp_name, doc_title, category FROM fia_documents WHERE doc_title IS NOT NULL ORDER BY id DESC LIMIT 4"
+            "SELECT season, gp_name, doc_title, category FROM fia_documents WHERE doc_title IS NOT NULL ORDER BY id DESC LIMIT 6"
         ).fetchall()
         con.close()
         return [
@@ -854,6 +888,7 @@ def build_paddock_payload(
                 "aero": cir.get("aero") or "MED",
                 "corners": (cir.get("corners") or [])[:8],
                 "f1db": f1db_lore,
+                "blurb": _circuit_lore_blurb(cir.get("id", eff_circuit), cir.get("name", "")),
             },
             "era": {
                 "key": eff_era,

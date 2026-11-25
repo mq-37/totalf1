@@ -117,9 +117,9 @@ class TestLiveryRegistry(unittest.TestCase):
         self.assertEqual(s81["style"], "classic")
 
     def test_sauber_era_resolution_red_petronas_to_kick_green(self):
-        """Sauber eras: 1994-2000 red/white Petronas, 2001-05 blue/teal Red Bull, 2006-09 BMW,
-        2010-18 graphite, 2024-25 Kick neon green."""
-        red99 = livery_registry.resolve_team_livery("Sauber Petronas", 1999)
+        """Sauber eras: 1993 C12 carbon black, 1995-2005 blue/teal Red Bull Petronas, 2006-09 BMW,
+        2010-12 white/graphite, 2019-23 Alfa Romeo, 2024-25 Stake Kick Sauber neon green."""
+        rb99 = livery_registry.resolve_team_livery("Sauber Petronas", 1999)
         c12_93 = livery_registry.resolve_team_livery("Sauber", 1993)
         rb01 = livery_registry.resolve_team_livery("Sauber Petronas", 2001)
         rb04 = livery_registry.resolve_team_livery("Sauber Petronas", 2004)
@@ -130,8 +130,8 @@ class TestLiveryRegistry(unittest.TestCase):
         kick24 = livery_registry.resolve_team_livery("Kick Sauber Ferrari", 2024)
         self.assertEqual(c12_93["style"], "carbon_stealth")
         self.assertEqual(c12_93["palette"]["main"].upper(), "#0C0D0F")
-        self.assertEqual(red99["style"], "ferrari_white_deck")
-        self.assertEqual(red99["palette"]["main"].upper(), "#C8102E")
+        self.assertEqual(rb99["style"], "sauber_petronas")
+        self.assertEqual(rb99["palette"]["main"].upper(), "#1530B8")
         self.assertEqual(rb01["style"], "sauber_petronas")
         self.assertEqual(rb01["palette"]["main"].upper(), "#1530B8")
         self.assertEqual(rb01["palette"]["secondary"].upper(), "#3EC6C0")
@@ -144,8 +144,8 @@ class TestLiveryRegistry(unittest.TestCase):
         self.assertEqual(fer10["palette"]["main"].upper(), "#F5F7FA")
         self.assertEqual(fer12["style"], "two-tone")
         self.assertEqual(fer12["palette"]["main"].upper(), "#1A2237")
-        self.assertEqual(kick24["style"], "carbon_stealth")
-        self.assertEqual(kick24["palette"]["secondary"].upper(), "#3BFF9E")
+        self.assertEqual(kick24["style"], "sauber_kick")
+        self.assertEqual(kick24["palette"]["main"].upper(), "#00E701")
         # Engine-suffixed team names must resolve to the constructor, NOT the PU supplier!
         self.assertEqual(livery_registry.resolve_team_livery("McLaren Mercedes", 2026)["style"], "mclaren_papaya")
         self.assertEqual(livery_registry.resolve_team_livery("Aston Martin Aramco Mercedes", 2026)["style"], "aston_wings")
@@ -154,6 +154,43 @@ class TestLiveryRegistry(unittest.TestCase):
         self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2024)["style"], "haas_carbon")
         self.assertEqual(livery_registry.resolve_team_livery("Haas Ferrari", 2019)["style"], "lotus_jps")
         self.assertEqual(livery_registry.resolve_team_livery("Brawn Mercedes", 2009)["style"], "brawn_neon")
+
+    def test_complete_1988_to_2025_coverage_and_iconic_liveries(self):
+        """Every single (team, year) in data/f1.sqlite across 1988–2025 resolves to a curated family (zero standard fallbacks)."""
+        import sqlite3
+        from pathlib import Path
+        db_path = Path(__file__).resolve().parent.parent / "data" / "f1.sqlite"
+        con = sqlite3.connect(db_path)
+        pairs = set()
+        for tbl in ("team_standings", "drivers_standings"):
+            for row in con.execute(f"SELECT DISTINCT team, year FROM {tbl} WHERE year BETWEEN 1988 AND 2025 AND team IS NOT NULL AND team != ''"):
+                pairs.add((str(row[0]), int(row[1])))
+        con.close()
+        self.assertGreater(len(pairs), 350)
+        fallbacks = []
+        for team, yr in sorted(pairs):
+            spec = livery_registry.resolve_team_livery(team, yr)
+            if spec.get("motif") == "standard":
+                fallbacks.append((yr, team))
+        self.assertEqual(fallbacks, [], f"Found unresolved standard fallbacks in 1988–2025: {fallbacks[:10]}")
+
+        # Spot-check key iconic historical liveries across 1988–2025
+        self.assertEqual(livery_registry.resolve_team_livery("March Judd", 1988)["palette"]["main"].upper(), "#24B4B8")
+        self.assertEqual(livery_registry.resolve_team_livery("Jordan Ford", 1991)["palette"]["main"].upper(), "#009E49")
+        self.assertEqual(livery_registry.resolve_team_livery("Sauber", 1993)["palette"]["main"].upper(), "#0C0D0F")
+        self.assertEqual(livery_registry.resolve_team_livery("Arrows Supertec", 2000)["palette"]["main"].upper(), "#FF6B00")
+        self.assertEqual(livery_registry.resolve_team_livery("BAR Honda", 2004)["palette"]["main"].upper(), "#F8FAFC")
+        self.assertEqual(livery_registry.resolve_team_livery("Toyota", 2004)["palette"]["main"].upper(), "#F8FAFC")
+        self.assertEqual(livery_registry.resolve_team_livery("Sauber BMW", 2008)["palette"]["main"].upper(), "#F5F7FA")
+        self.assertEqual(livery_registry.resolve_team_livery("Force India Mercedes", 2009)["palette"]["secondary"].upper(), "#FF6B00")
+        self.assertEqual(livery_registry.resolve_team_livery("Red Bull Racing Renault", 2013)["palette"]["secondary"].upper(), "#5B238C")
+        self.assertEqual(livery_registry.resolve_team_livery("MRT Mercedes", 2016)["palette"]["main"].upper(), "#0095E8")
+        self.assertEqual(livery_registry.resolve_team_livery("Toro Rosso", 2017)["palette"]["main"].upper(), "#0040B8")
+        self.assertEqual(livery_registry.resolve_team_livery("Racing Point BWT Mercedes", 2020)["style"], "bwt_pink")
+        self.assertEqual(livery_registry.resolve_team_livery("Alfa Romeo Racing Ferrari", 2021)["style"], "alfa_romeo")
+        self.assertEqual(livery_registry.resolve_team_livery("Kick Sauber Ferrari", 2024)["style"], "sauber_kick")
+        self.assertEqual(livery_registry.resolve_team_livery("RB Honda RBPT", 2024)["style"], "vcarb_2024")
+        self.assertEqual(livery_registry.resolve_team_livery("Ferrari", 2024)["style"], "ferrari_2024")
 
 
 class TestRegulationArchitect(unittest.TestCase):

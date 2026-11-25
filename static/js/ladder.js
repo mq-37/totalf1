@@ -173,12 +173,53 @@
           ${debrief.world_headlines.slice(0, 5).map((h) => `<p>• ${esc(h)}</p>`).join("")}
         </div>
       ` : ""}
+      <div class="ld-item" id="debrief-voices">
+        <div class="ld-item-top"><strong>Paddock Voices</strong><span class="ld-tag">AI MEDIA PEN</span></div>
+        <p style="color:#94a3b8"><i class="fas fa-microphone-alt"></i> Quotes are being composed from the race radio…</p>
+      </div>
     `;
     if (contBtn) {
       contBtn.textContent = seasonComplete ? "Open Promotion & Career Fork →" : "Continue to Next Round →";
       contBtn.dataset.seasonComplete = seasonComplete ? "1" : "0";
     }
     modal.classList.remove("hidden");
+    loadDebriefVoices(debrief);
+  }
+
+  // Fetch + render AI driver quotes & TP reaction (Paddock Voices) for this debrief.
+  async function loadDebriefVoices(debrief) {
+    const box = document.getElementById("debrief-voices");
+    if (!box) return;
+    let payload = null;
+    try {
+      const res = await fetch(`/api/ladder/${encodeURIComponent(currentSaveId)}/debrief-quotes?season=${encodeURIComponent(currentView?.state?.season || 0)}&round_num=${encodeURIComponent(debrief.round || 0)}`);
+      payload = await res.json();
+    } catch (e) { payload = null; }
+    if (!box) return; // modal may have been closed mid-fetch
+    if (!payload || !payload.ok || !payload.quotes?.length) {
+      box.innerHTML = `
+        <div class="ld-item-top"><strong>Paddock Voices</strong><span class="ld-tag">AI MEDIA PEN</span></div>
+        <p style="color:#94a3b8">The media pen had a quiet afternoon — no quotes for this round.</p>`;
+      return;
+    }
+    const moodColor = { elated: "#4ade80", confident: "#38bdf8", mixed: "#94a3b8", frustrated: "#fbbf24", shaken: "#f87171" };
+    const quoteHtml = payload.quotes.map((q) => `
+      <p style="margin-bottom:8px">
+        <b>${esc(q.name)}</b> <span style="color:${moodColor[q.mood] || "#94a3b8"}">· ${esc(String(q.mood || "").toUpperCase())} · ${esc(String(q.conf_band || "").toUpperCase())}</span>
+        ${q.finish_pos ? `· P${q.finish_pos}` : ""}
+        <br>“${esc(q.quote)}”${q.radio ? `<br><span style="color:#64748b;font-style:italic">📻 “${esc(q.radio)}”</span>` : ""}
+      </p>
+    `).join("");
+    const tp = payload.tp_reaction || {};
+    const tpHtml = tp.quote ? `
+      <div style="border-top:1px solid #1e293b;margin-top:8px;padding-top:8px">
+        <p><b>${esc(tp.name || "Team Principal")}</b> <span style="color:${moodColor[tp.mood] || "#94a3b8"}">· TP REACTION</span>
+        <br>“${esc(tp.quote)}”${tp.radio ? `<br><span style="color:#64748b;font-style:italic">📻 “${esc(tp.radio)}”</span>` : ""}</p>
+      </div>` : "";
+    box.innerHTML = `
+      <div class="ld-item-top"><strong>Paddock Voices</strong><span class="ld-tag">AI MEDIA PEN · ${esc(String(payload.circuit || ""))}</span></div>
+      ${quoteHtml}${tpHtml}
+    `;
   }
 
   function renderAll() {

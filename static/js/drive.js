@@ -1083,6 +1083,7 @@
             <div class="dl-rec-row"><span>F1DB Heritage</span><b>${f1db.races_held || "Historic"} GPs ${f1db.first_year ? `(${f1db.first_year}–${f1db.last_year})` : ""}</b></div>
             ${(f1db.winners || []).length ? `<div style="font-size:0.7rem;color:#cbd5e1"><b>Most Wins:</b> ${f1db.winners.map((w) => `${esc(w.driver)} (${w.wins})`).join(" · ")}</div>` : ""}
             ${(cir.corners || []).length ? `<div style="font-size:0.68rem;color:#94a3b8"><b>Iconic Corners:</b> ${cir.corners.map((cn) => esc(cn)).join(" · ")}</div>` : ""}
+            ${cir.blurb ? `<div style="font-size:0.7rem;color:#e2e8f0;margin-top:6px;line-height:1.45;border-top:1px solid #1e293b;padding-top:6px"><b style="color:#facc15">Paddock Lore:</b> ${esc(cir.blurb)}</div>` : ""}
           </div>
           <div class="dp-lore-box">
             <h4><i class="fas fa-cogs"></i> Era Technical DNA · ${esc(era.label)}</h4>

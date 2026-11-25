@@ -1167,11 +1167,24 @@
     const sel = list[state.selectedInterviewIdx] || list[0];
     const moodColors = { elated: "#22c55e", confident: "#38bdf8", mixed: "#cbd5e1", frustrated: "#f59e0b", shaken: "#ef4444" };
 
+    // Depth extras: confidence band + parting quote + persona radio sign-off (all AI-composed).
+    const bandChips = `
+      <span class="ras-r-chip">CONFIDENCE: ${Number(sel.endConf || 0)}/100 (${esc(String(sel.confBand || "").toUpperCase())})</span>
+      ${sel.mood ? `<span class="ras-r-chip">MOOD: ${esc(String(sel.mood).toUpperCase())}</span>` : ""}
+    `;
     const drvRadioQuotes = (sel.driverRadio || []).length
       ? `
         <div class="eng-int-radios">
           <span class="ras-r-lbl"><i class="fas fa-headset"></i> RECORDED IN-RACE RADIO HIGHLIGHTS:</span>
           ${sel.driverRadio.slice(0, 4).map((rm) => `<div class="eng-int-rquote"><b>L${rm.lap}</b> "${esc(rm.text)}"</div>`).join("")}
+        </div>
+      `
+      : "";
+    const partingHtml = sel.partingQuote
+      ? `
+        <div class="eng-int-radios">
+          <span class="ras-r-lbl"><i class="fas fa-microphone-alt"></i> PARTING QUOTE AT THE MEDIA PEN FENCE:</span>
+          <div class="eng-int-rquote">"${esc(sel.partingQuote)}"</div>
         </div>
       `
       : "";
@@ -1209,6 +1222,7 @@
             <div class="ras-reasons">
               <span class="ras-r-lbl"><i class="fas fa-brain"></i> GROUNDED RACE FACTS &amp; PERSPECTIVE:</span>
               ${(sel.perspectiveReasons || []).map((t) => `<span class="ras-r-chip">${esc(t)}</span>`).join("")}
+              ${bandChips}
             </div>
             ${drvRadioQuotes}
             <div class="ras-qas">
@@ -1220,6 +1234,7 @@
                 </div>
               `).join("")}
             </div>
+            ${partingHtml}
           </div>
         </div>
       </div>

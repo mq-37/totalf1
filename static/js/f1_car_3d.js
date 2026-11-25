@@ -1225,6 +1225,13 @@
     var williams26Kit = { visible: false };
     var williamsRearWingDecal = { visible: false };
     var alpineKit = { visible: false };
+    var sauberKickKit = { visible: false };
+    var sauberKickRearWingDecal = { visible: false };
+    var alfaRomeoKit = { visible: false };
+    var vcarb24Kit = { visible: false };
+    var vcarb24RearWingDecal = { visible: false };
+    var ferrari24Kit = { visible: false };
+    var bwtPinkKit = { visible: false };
 
     function addMesh(geo, mat, pos, rot, shadow) {
       var m = new THREE.Mesh(geo, mat);
@@ -2556,6 +2563,65 @@
     alpineKit = alpGrp;
     root.add(alpGrp);
 
+    /* --- L. 2024–2025 Stake F1 Team Kick Sauber C44 / C45 Kit --- */
+    var skGrp = new THREE.Group();
+    addSidepodDecal(skGrp, decalMat(makeWordmarkTexture('Stake', '#FFFFFF', { size: 102, skew: -0.16 })), [0.34, 0.08, -0.18, -0.48, -0.78], 0.102, 0.50);
+    addEngineDecal(skGrp, decalMat(makeWordmarkTexture('KICK', '#00E701', { size: 108 })), [-0.52, -0.78, -1.06, -1.34], 0.66, 0.92, 0.08);
+    skGrp.visible = false;
+    sauberKickKit = skGrp;
+    root.add(skGrp);
+    sauberKickRearWingDecal = addDrsDecal(decalMat(makeWordmarkTexture('Stake', '#FFFFFF', { size: 88, skew: -0.14 })), 0.84, 0.145);
+
+    /* --- M. 2019–2023 Alfa Romeo C38–C43 Kit --- */
+    var alfaGrp = new THREE.Group();
+    addSidepodDecal(alfaGrp, decalMat(makeWordmarkTexture('Alfa Romeo', '#FFFFFF', { size: 78, skew: -0.12 })), [0.36, 0.10, -0.18, -0.48, -0.80], 0.092, 0.50);
+    alfaGrp.visible = false;
+    alfaRomeoKit = alfaGrp;
+    root.add(alfaGrp);
+
+    /* --- N. 2024 Visa Cash App RB VCARB 01 Kit (Metallic Royal Blue, White & Red Halo) --- */
+    var vc24Grp = new THREE.Group();
+    addSidepodDecal(vc24Grp, decalMat(makeWordmarkTexture('VISA', '#FFFFFF', { size: 112, skew: -0.18 })), [0.36, 0.10, -0.18, -0.48, -0.78], 0.102, 0.50);
+    addEngineDecal(vc24Grp, decalMat(makeWordmarkTexture('VISA RB', '#E6ECF5', { size: 80, skew: -0.14 })), [-0.52, -0.78, -1.06, -1.36], 0.68, 0.92, 0.08);
+    /* Crisp White shoulder stripe framing cockpit to rear engine cover */
+    [-1, 1].forEach(function (side) {
+      var wBelt = [0.50, 0.24, -0.12, -0.62, -1.10].map(function (z) {
+        var p = interpSpec(podSpecRef, z);
+        var yLine = p[4] - 0.022;
+        var xSurf = superSurfaceX(p[1], p[2], p[3], p[4], 2.5, 2.2, yLine);
+        return superRing(z, side * (xSurf + 0.003), 0.015, yLine - 0.015, yLine + 0.017, 2.0, 2.0, 10);
+      });
+      vc24Grp.add(new THREE.Mesh(buildLoft(wBelt, true, true), mats.helmet));
+    });
+    vc24Grp.visible = false;
+    vcarb24Kit = vc24Grp;
+    root.add(vc24Grp);
+    vcarb24RearWingDecal = addDrsDecal(decalMat(makeWordmarkTexture('Cash App', '#00D632', { size: 78 })), 0.84, 0.145);
+
+    /* --- O. 2024 Scuderia Ferrari SF-24 Kit (Full Matte Rosso + Yellow/White Twin Pinstripes + Shell) --- */
+    var f24Grp = new THREE.Group();
+    addSidepodDecal(f24Grp, decalMat(makeFerrariSidepodTexture()), [0.34, 0.08, -0.20, -0.50, -0.82], 0.105, 0.50);
+    /* Signature SF-24 yellow & white shoulder pinstripes hugging red sidepods */
+    [-1, 1].forEach(function (side) {
+      var yPin = [0.50, 0.24, -0.12, -0.62, -1.10].map(function (z) {
+        var p = interpSpec(podSpecRef, z);
+        var yLine = p[4] - 0.020;
+        var xSurf = superSurfaceX(p[1], p[2], p[3], p[4], 2.5, 2.2, yLine);
+        return superRing(z, side * (xSurf + 0.003), 0.011, yLine - 0.011, yLine + 0.012, 2.0, 2.0, 10);
+      });
+      f24Grp.add(new THREE.Mesh(buildLoft(yPin, true, true), mats.sidepodSwoosh));
+    });
+    f24Grp.visible = false;
+    ferrari24Kit = f24Grp;
+    root.add(f24Grp);
+
+    /* --- P. 2017–2020 BWT Pink Kit (Racing Point / Force India) --- */
+    var bwtGrp = new THREE.Group();
+    addSidepodDecal(bwtGrp, decalMat(makeWordmarkTexture('BWT', '#0052B4', { size: 118, skew: -0.16, stroke: '#FFFFFF', strokeW: 12 })), [0.34, 0.08, -0.18, -0.48, -0.78], 0.105, 0.50);
+    bwtGrp.visible = false;
+    bwtPinkKit = bwtGrp;
+    root.add(bwtGrp);
+
     /* Lower beam wing above diffuser */
     addMesh(buildWingElement({
       halfSpan: 0.46, zCenter: -2.34, zTip: -2.36, yCenter: 0.36, yTip: 0.38,
@@ -2718,6 +2784,13 @@
       williams26Kit.visible = false;
       williamsRearWingDecal.visible = false;
       alpineKit.visible = false;
+      sauberKickKit.visible = false;
+      sauberKickRearWingDecal.visible = false;
+      alfaRomeoKit.visible = false;
+      vcarb24Kit.visible = false;
+      vcarb24RearWingDecal.visible = false;
+      ferrari24Kit.visible = false;
+      bwtPinkKit.visible = false;
       mats.wheelCover.color.setHex(0x15181f);
       ['bodyMain', 'sidepodBody', 'sidepodLower', 'airboxBody', 'sharkFin',
        'frontWing1', 'frontWing2', 'frontWing3', 'frontEndplate',
@@ -2771,7 +2844,9 @@
         mats.sidepodLower.map = carbonTex;
         mats.sidepodSwoosh.color.copy(cSec);
         mats.noseTip.color.copy(cAcc);
-        mats.airboxBody.color.copy(cMain);
+        /* Preserve iconic Yellow Airbox & Yellow Nose Stripe on pre-2020s (2005–2021) Red Bull cars! */
+        mats.airboxBody.color.copy(era === '2020s' ? cMain : cAcc);
+        mats.noseStripe.color.copy(era === '2020s' ? cSec : cAcc);
         mats.airboxRim.color.copy(cAcc);
         mats.sharkFin.color.copy(cMain);
         mats.sharkFinEdge.color.copy(cSec);
@@ -2807,7 +2882,9 @@
         mats.sidepodLower.map = carbonTex;
         mats.sidepodSwoosh.color.copy(cSec);
         mats.noseTip.color.copy(cAcc);
-        mats.airboxBody.color.copy(cMain);
+        /* Preserve iconic Yellow Airbox & Yellow Nose Stripe on pre-2020s (2005–2021) Red Bull cars! */
+        mats.airboxBody.color.copy(era === '2020s' ? cMain : cAcc);
+        mats.noseStripe.color.copy(era === '2020s' ? cSec : cAcc);
         mats.airboxRim.color.copy(cAcc);
         mats.sharkFin.color.copy(cMain);
         mats.sharkFinEdge.color.copy(cSec);
@@ -2866,6 +2943,160 @@
         mats.rearEndplate.map = carbonTex;
         mats.rearEndplateCap.color.copy(cDet);
         mats.rimAccent.color.copy(cDet);
+      } else if (st === 'ferrari_2024') {
+        /* Authentic 2024 Scuderia Ferrari SF-24: Full Matte Rosso Corsa nose, tub, halo, sidepods & RED engine cover +
+           signature Yellow & White twin pinstripes + Shell scallop + Carbon Black wings with HP decals! */
+        noseStripeMesh.visible = false;
+        sidepodSwooshMeshes.forEach(function (m) { m.visible = false; });
+        sidepodLipMeshes.forEach(function (m) { m.visible = false; });
+        pinstripeMesh.visible = true;
+        ferrari24Kit.visible = true;
+        ferrariRearWingDecal.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.mirrorCap.color.copy(cMain);
+        mats.mirrorAccent.color.copy(cSec);
+        mats.frontWing1.color.copy(cDet);
+        mats.frontWing1.map = carbonTex;
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cMain);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cSec);
+        mats.rearWingMain.color.copy(cDet);
+        mats.rearWingMain.map = carbonTex;
+        mats.rearWingFlap.color.copy(cDet);
+        mats.rearWingFlap.map = carbonTex;
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cSec);
+        mats.rimAccent.color.copy(cDet);
+      } else if (st === 'vcarb_2024') {
+        /* Authentic 2024 Visa Cash App RB VCARB 01: Metallic Royal Blue chassis, White shoulder flash,
+           Red Halo, white VISA sidepods & Carbon Black wings! */
+        noseStripeMesh.visible = false;
+        sidepodSwooshMeshes.forEach(function (m) { m.visible = false; });
+        sidepodLipMeshes.forEach(function (m) { m.visible = false; });
+        vcarb24Kit.visible = true;
+        vcarb24RearWingDecal.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cAcc);
+        mats.mirrorCap.color.copy(cSec);
+        mats.mirrorAccent.color.copy(cAcc);
+        mats.frontWing1.color.copy(cDet);
+        mats.frontWing1.map = carbonTex;
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cDet);
+        mats.frontEndplate.map = carbonTex;
+        mats.frontDiveplane.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cDet);
+        mats.rearWingMain.map = carbonTex;
+        mats.rearWingFlap.color.copy(cDet);
+        mats.rearWingFlap.map = carbonTex;
+        mats.rearEndplate.color.copy(cDet);
+        mats.rearEndplateCap.color.copy(cSec);
+        mats.rimAccent.color.copy(cAcc);
+      } else if (st === 'sauber_kick') {
+        /* Authentic 2024–2025 Stake F1 Team Kick Sauber C44 / C45: Electric Neon Acid Green nose, upper cover & wings +
+           Exposed Woven Carbon Black sidepods (white Stake) + Neon Green aero rim/wheel accents! */
+        noseStripeMesh.visible = false;
+        sidepodSwooshMeshes.forEach(function (m) { m.visible = false; });
+        sidepodLipMeshes.forEach(function (m) { m.visible = false; });
+        sauberKickKit.visible = true;
+        sauberKickRearWingDecal.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodBody.map = carbonTex;
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodLower.map = carbonTex;
+        mats.sidepodSwoosh.color.copy(cMain);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxBody.map = carbonTex;
+        mats.airboxRim.color.copy(cMain);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cSec);
+        mats.mirrorCap.color.copy(cMain);
+        mats.mirrorAccent.color.copy(cSec);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing1.map = carbonTex;
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cMain);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cSec);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearWingFlap.map = carbonTex;
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cSec);
+        mats.rimAccent.color.copy(cMain);
+      } else if (st === 'alfa_romeo') {
+        /* Authentic 2019–2023 Alfa Romeo C38–C43: Clean Pearl White & Deep Metallic Alfa Burgundy / Carbon Split! */
+        noseStripeMesh.visible = false;
+        sidepodSwooshMeshes.forEach(function (m) { m.visible = false; });
+        sidepodLipMeshes.forEach(function (m) { m.visible = false; });
+        alfaRomeoKit.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cSec);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cSec);
+        mats.mirrorCap.color.copy(cSec);
+        mats.mirrorAccent.color.copy(cMain);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cSec);
+        mats.frontDiveplane.color.copy(cMain);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cMain);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cMain);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'bwt_pink') {
+        /* Iconic 2017–2020 BWT Force India / Racing Point ('The Pink Mercedes'): Full BWT Pink + White/Blue accents! */
+        noseStripeMesh.visible = false;
+        bwtPinkKit.visible = true;
+        mats.bodyMain.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cSec);
+        mats.sidepodSwoosh.color.copy(cAcc);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.mirrorCap.color.copy(cSec);
+        mats.mirrorAccent.color.copy(cAcc);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cMain);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cAcc);
+        mats.rearWingMain.color.copy(cMain);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cMain);
       } else if (st === 'merc_arrow') {
         /* Authentic 2026 Mercedes-AMG Petronas W17 (plus 2024-25 INEOS variant via cPop):
            Gloss Obsidian Black bodywork + Silver Arrow top nose & 4 slanted AMG silver flank slashes +
@@ -3864,8 +4095,8 @@
     ERAS: CAR_ERAS,
     LIVERY_STYLES: [
       'modern', 'two-tone', 'racing-stripe', 'chevron', 'classic',
-      'redbull', 'vcarb_2026', 'ferrari_hp', 'merc_arrow', 'williams_2026', 'williams_duracell', 'audi_slash', 'cadillac_split',
-      'mclaren_papaya', 'mclaren_marlboro', 'aston_wings', 'alpine_bwt', 'lotus_jps', 'lotus_gold_leaf',
+      'redbull', 'vcarb_2026', 'vcarb_2024', 'ferrari_hp', 'ferrari_2024', 'merc_arrow', 'williams_2026', 'williams_duracell', 'audi_slash', 'cadillac_split',
+      'mclaren_papaya', 'mclaren_marlboro', 'aston_wings', 'alpine_bwt', 'sauber_kick', 'alfa_romeo', 'bwt_pink', 'lotus_jps', 'lotus_gold_leaf',
       'ferrari_white_deck', 'sauber_petronas',
       'gulf_heritage', 'martini_tri', 'renault_mildseven', 'brawn_neon', 'haas_tgr', 'haas_carbon',
       'jordan_hornet', 'carbon_stealth'
