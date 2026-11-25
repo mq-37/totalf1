@@ -3,6 +3,7 @@ Updated: 2026-11-25 · Branch: master (clean @ f2357b0)
 
 ## Current state
 Per-year livery system fully committed: registry resolves every DB team-year 1950–2026, era splits landed (Gold Leaf Lotus 49B, Ferrari 126C2 white deck, Sauber per-era incl. team-keyed BMW branch). 12/12 livery tests pass, JS syntax clean. Live instance on :8001 restarted with new code; temp audit instance on :8017 (safe to kill).
+Remote: `origin` = https://github.com/mq-37/totalf1.git (private, mq-37's account — NOT the MartinQuinnSOI stored account). Push creds for mq-37 live in `~/.git-credentials`; token is burnable — if revoked, replace that line on next push.
 
 ## Last session
 Committed the previous session's pending livery audit (e099e53: 1950–2026 registry, 313 renders, vendored audit skill), then executed the era-splits audit (f2357b0): new styles `lotus_gold_leaf`, `ferrari_white_deck` (+ era-scoped `deckPanelMesh` white deck on 1970s/1980s chassis), `sauber_petronas`, new `_resolve_sauber`/`_resolve_sauber_bmw` resolvers, era PNGs + manifest, comparison sheet + report in `docs/audit/`. Verified live in UI screenshots (`/teams/1968`, `/teams/1982`, `/teams/2001` all era-correct).
