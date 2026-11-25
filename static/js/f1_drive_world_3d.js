@@ -358,57 +358,97 @@
     return { points, emit, step };
   }
 
-  function makeAiCarMesh(colorHex, isGhost) {
+  function makeAiCarMesh(aiCarOrColor, isGhost, eraYear) {
     const THREE = global.THREE;
+    const carObj = (aiCarOrColor && typeof aiCarOrColor === "object") ? aiCarOrColor : { color: aiCarOrColor || "#38bdf8" };
+    const colorHex = carObj.color || "#38bdf8";
+
+    // Use the real museum-grade sculpted F1Car3D model with authentic team livery & era chassis!
+    if (global.F1Car3D && global.F1Car3D.createCar) {
+      try {
+        const pal = carObj.palette || {
+          main: isGhost ? "#22d3ee" : colorHex,
+          secondary: isGhost ? "#0e7490" : "#111622",
+          accent: isGhost ? "#67e8f9" : "#f8fafc",
+          pop: isGhost ? "#a5f3fc" : "#facc15",
+          detail: "#1e293b",
+        };
+        const style = isGhost ? "modern" : (carObj.livery_style || "modern");
+        const yr = carObj.era_year || eraYear || 2026;
+        const grp = global.F1Car3D.createCar(pal, style, yr);
+        if (grp) {
+          if (!isGhost && grp.userData && grp.userData.setPalette) {
+            grp.userData.setPalette(pal, style, carObj.livery_finish || null);
+          }
+          grp.scale.setScalar(1.06);
+          if (isGhost) {
+            const holoMat = new THREE.MeshBasicMaterial({
+              color: 0x22d3ee,
+              transparent: true,
+              opacity: 0.34,
+              depthWrite: false,
+            });
+            grp.traverse((obj) => {
+              if (obj.isMesh) {
+                obj.material = holoMat;
+                obj.castShadow = false;
+                obj.receiveShadow = false;
+              }
+            });
+            grp.userData.isF1Car3D = true;
+            return grp;
+          }
+
+          // Attach dynamic glowing brake rotors, Pirelli sidewall compound rings & rear rain light
+          const brakeMat = new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.0 });
+          const rotorGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.05, 12);
+          [[-0.78, 0.34, 1.54], [0.78, 0.34, 1.54], [-0.82, 0.34, -1.42], [0.82, 0.34, -1.42]].forEach(([bx, by, bz]) => {
+            const bm = new THREE.Mesh(rotorGeo, brakeMat);
+            bm.rotation.z = Math.PI * 0.5;
+            bm.position.set(bx, by, bz);
+            grp.add(bm);
+          });
+          const ringMat = new THREE.MeshBasicMaterial({ color: COMPOUND_HEX.soft });
+          const ringGeo = new THREE.TorusGeometry(0.255, 0.022, 5, 16);
+          [[-0.95, 0.34, 1.54], [0.95, 0.34, 1.54], [-0.98, 0.34, -1.42], [0.98, 0.34, -1.42]].forEach(([rx, ry, rz]) => {
+            const rm = new THREE.Mesh(ringGeo, ringMat);
+            rm.rotation.y = Math.PI * 0.5;
+            rm.position.set(rx, ry, rz);
+            grp.add(rm);
+          });
+          const rainLight = new THREE.Mesh(
+            new THREE.BoxGeometry(0.11, 0.14, 0.05),
+            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+          );
+          rainLight.position.set(0, 0.38, -2.32);
+          grp.add(rainLight);
+
+          grp.userData.brakeMat = brakeMat;
+          grp.userData.ringMat = ringMat;
+          grp.userData.rainLight = rainLight;
+          grp.userData.isF1Car3D = true;
+          return grp;
+        }
+      } catch (_) {}
+    }
+
+    // Fallback compact chassis if F1Car3D unavailable
     const g = new THREE.Group();
     const mat = isGhost
       ? new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.42 })
-      : new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex || "#38bdf8"), roughness: 0.26, metalness: 0.42 });
+      : new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex), roughness: 0.26, metalness: 0.42 });
     const dark = isGhost
       ? new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.30 })
       : new THREE.MeshStandardMaterial({ color: 0x151922, roughness: 0.52, metalness: 0.30 });
-
-    // Sculpted monocoque + tapered sidepods
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.42, 3.85), mat);
     body.position.set(0, 0.38, 0.08); g.add(body);
-    const sidepods = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.34, 1.95), mat);
-    sidepods.position.set(0, 0.34, -0.25); g.add(sidepods);
     const nose = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 1.55), mat);
     nose.position.set(0, 0.29, 2.38); g.add(nose);
     const fw = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.07, 0.42), dark);
     fw.position.set(0, 0.14, 2.96); g.add(fw);
-    const rwMain = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.12, 0.30), dark);
-    rwMain.position.set(0, 0.84, -1.85); g.add(rwMain);
     const rwFlap = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.14, 0.20), mat);
     rwFlap.position.set(0, 0.96, -1.88); g.add(rwFlap);
-    const airbox = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.44, 1.18), mat);
-    airbox.position.set(0, 0.72, -0.35); g.add(airbox);
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.036, 6, 14, Math.PI), dark);
-    halo.rotation.x = Math.PI * 0.5; halo.position.set(0, 0.72, 0.36); g.add(halo);
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2, metalness: 0.3 }));
-    helmet.position.set(0, 0.68, 0.22); g.add(helmet);
-    const rainLight = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.06), new THREE.MeshBasicMaterial({ color: isGhost ? 0x22d3ee : 0xef4444 }));
-    rainLight.position.set(0, 0.36, -2.02); g.add(rainLight);
-
-    const wGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.32, 12);
-    const ringMat = new THREE.MeshBasicMaterial({ color: COMPOUND_HEX.soft });
-    const ringGeo = new THREE.TorusGeometry(0.24, 0.024, 5, 14);
-    const wheels = [];
-    [[-0.88, 1.55], [0.88, 1.55], [-0.92, -1.45], [0.92, -1.45]].forEach(([wx, wz]) => {
-      const wg = new THREE.Group();
-      wg.position.set(wx, 0.34, wz);
-      const wm = new THREE.Mesh(wGeo, dark); wm.rotation.z = Math.PI * 0.5; wg.add(wm);
-      if (!isGhost) {
-        const rm = new THREE.Mesh(ringGeo, ringMat); rm.rotation.y = Math.PI * 0.5;
-        rm.position.x = wx > 0 ? 0.165 : -0.165; wg.add(rm);
-      }
-      g.add(wg);
-      wheels.push(wg);
-    });
     g.userData.rearWing = rwFlap;
-    g.userData.rainLight = rainLight;
-    g.userData.ringMat = ringMat;
-    g.userData.wheels = wheels;
     return g;
   }
 
@@ -459,6 +499,12 @@
     }
 
     function clearWorld() {
+      aiMeshes.forEach((mesh) => {
+        if (global.F1Car3D && global.F1Car3D.disposeObject) global.F1Car3D.disposeObject(mesh);
+      });
+      if (ghostMesh && global.F1Car3D && global.F1Car3D.disposeObject) {
+        global.F1Car3D.disposeObject(ghostMesh);
+      }
       if (worldGroup) { scene.remove(worldGroup); worldGroup = null; }
       if (envRT) { envRT.dispose(); envRT = null; scene.environment = null; }
       aiMeshes.clear();
@@ -783,28 +829,63 @@
       }
     }
 
-    function syncAiCars(aiCars, ghostPose, wetness) {
+    function syncAiCars(aiCars, ghostPose, wetness, playerCar, eraYear) {
       if (!worldGroup) return;
       const activeIds = new Set();
       const wetOn = (wetness || 0) >= 22;
       const rainBlink = Math.floor(worldElapsed * 6) % 2 === 0;
-      for (let i = 0; i < (aiCars || []).length; i++) {
-        const a = aiCars[i];
+      const list = aiCars || [];
+
+      // Identify the 6 nearest AI cars to player for crisp dynamic shadow casting (keeps 60 FPS locked!)
+      const shadowIds = new Set();
+      if (playerCar && list.length) {
+        const dists = list.map((a) => ({
+          id: a.driver_id,
+          d2: (a.x - playerCar.x) * (a.x - playerCar.x) + (a.z - playerCar.z) * (a.z - playerCar.z),
+        }));
+        dists.sort((x, y) => x.d2 - y.d2);
+        for (let si = 0; si < Math.min(6, dists.length); si++) shadowIds.add(dists[si].id);
+      }
+
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
         activeIds.add(a.driver_id);
         let mesh = aiMeshes.get(a.driver_id);
         if (!mesh) {
-          mesh = makeAiCarMesh(a.color, false);
+          mesh = makeAiCarMesh(a, false, eraYear || a.era_year || 2026);
           worldGroup.add(mesh);
           aiMeshes.set(a.driver_id, mesh);
         }
         mesh.visible = !a.dnf;
         mesh.position.set(a.x, a.y + 0.04, a.z);
         mesh.rotation.y = a.yaw;
+
+        const wantShadow = shadowIds.has(a.driver_id);
+        if (mesh.userData._castShadow !== wantShadow) {
+          mesh.userData._castShadow = wantShadow;
+          mesh.traverse((o) => { if (o.isMesh) o.castShadow = wantShadow; });
+        }
+
         if (mesh.userData.rearWing) mesh.userData.rearWing.rotation.x = a.drsOpen ? 0.35 : 0.0;
+        if (mesh.userData.frontFlap) mesh.userData.frontFlap.rotation.x = a.xModeActive ? 0.26 : 0.0;
         if (mesh.userData.ringMat) mesh.userData.ringMat.color.setHex(COMPOUND_HEX[a.compound] || COMPOUND_HEX.soft);
-        if (mesh.userData.rainLight) mesh.userData.rainLight.visible = !wetOn || rainBlink;
+        if (mesh.userData.rainLight) mesh.userData.rainLight.visible = wetOn ? rainBlink : false;
+        if (mesh.userData.brakeMat) {
+          const bh = Math.max(0, Math.min(1, Number(a.brakeHeat || 0)));
+          if (bh > 0.08) {
+            mesh.userData.brakeMat.color.setRGB(1.0, 0.12 + bh * 0.54, Math.max(0, (bh - 0.6) * 0.4));
+            mesh.userData.brakeMat.opacity = Math.min(0.95, bh * 1.1);
+          } else {
+            mesh.userData.brakeMat.opacity = 0.0;
+          }
+        }
         if (mesh.userData.wheels) {
-          for (let w = 0; w < mesh.userData.wheels.length; w++) mesh.userData.wheels[w].rotation.x += (a.vx || 40) * 0.045;
+          const wSpin = a.wheelSpin != null ? a.wheelSpin : (worldElapsed * (a.vx || 0) * 2.8);
+          for (let w = 0; w < mesh.userData.wheels.length; w++) {
+            const wg = mesh.userData.wheels[w];
+            wg.rotation.x = wSpin;
+            if (wg.userData && wg.userData.isFront) wg.rotation.y = a.steerAngle || 0;
+          }
         }
         // Rooster-tail wet rain spray behind AI cars!
         if (wetOn && sprayPool && !a.dnf && a.vx > 25 && Math.random() < 0.45) {
@@ -821,11 +902,15 @@
         }
       }
       for (const [id, mesh] of aiMeshes.entries()) {
-        if (!activeIds.has(id)) { worldGroup.remove(mesh); aiMeshes.delete(id); }
+        if (!activeIds.has(id)) {
+          if (global.F1Car3D && global.F1Car3D.disposeObject) global.F1Car3D.disposeObject(mesh);
+          worldGroup.remove(mesh);
+          aiMeshes.delete(id);
+        }
       }
 
       if (ghostPose) {
-        if (!ghostMesh) { ghostMesh = makeAiCarMesh("#22d3ee", true); worldGroup.add(ghostMesh); }
+        if (!ghostMesh) { ghostMesh = makeAiCarMesh("#22d3ee", true, eraYear || 2026); worldGroup.add(ghostMesh); }
         ghostMesh.visible = true;
         ghostMesh.position.set(ghostPose.x, ghostPose.y + 0.05, ghostPose.z);
         ghostMesh.rotation.y = ghostPose.yaw;

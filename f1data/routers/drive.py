@@ -70,6 +70,7 @@ def api_drive_config(
     mode: str = Query("timetrial"),
     weather: str = Query("dry"),
     laps: Optional[int] = Query(None),
+    ai_difficulty: int = Query(78),
     source: Optional[str] = Query(None),
     ref_id: Optional[str] = Query(None),
 ):
@@ -85,6 +86,7 @@ def api_drive_config(
         mode=mode,
         weather_mode=weather,
         laps=laps,
+        ai_difficulty=ai_difficulty,
         source=source,
         ref_id=ref_id,
     )

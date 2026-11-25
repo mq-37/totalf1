@@ -94,11 +94,11 @@
     document.querySelectorAll(".dl-preset").forEach((b) => b.classList.toggle("active", b.dataset.preset === preset));
     const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     if (preset === "rookie") {
-      setV("as-tc", "full"); setV("as-abs", "1"); setV("as-gear", "1"); setV("as-brk", "1"); setV("as-line", "full");
+      setV("as-tc", "full"); setV("as-abs", "1"); setV("as-gear", "1"); setV("as-brk", "1"); setV("as-line", "full"); setV("as-ai-diff", "60");
     } else if (preset === "pro") {
-      setV("as-tc", "off"); setV("as-abs", "0"); setV("as-gear", "0"); setV("as-brk", "0"); setV("as-line", "corners");
+      setV("as-tc", "off"); setV("as-abs", "0"); setV("as-gear", "0"); setV("as-brk", "0"); setV("as-line", "corners"); setV("as-ai-diff", "90");
     } else {
-      setV("as-tc", "med"); setV("as-abs", "1"); setV("as-gear", "1"); setV("as-brk", "0"); setV("as-line", "full");
+      setV("as-tc", "med"); setV("as-abs", "1"); setV("as-gear", "1"); setV("as-brk", "0"); setV("as-line", "full"); setV("as-ai-diff", "78");
     }
     readAssistsFromUI();
   }
@@ -185,9 +185,11 @@
 
     const pDrv = runCfg.player_driver || { color: "#ff8000", grid_pos: 1 };
     const startGridPos = effectiveMode === "timetrial" ? 1 : Number(pDrv.grid_pos || 10);
-    const startDistBack = effectiveMode === "timetrial" ? 45 : (10 + (startGridPos - 1) * 7.8);
+    const slotBase = (window.F1DriveAI && window.F1DriveAI.GRID_BASE_OFFSET_M) || 12.0;
+    const slotStep = (window.F1DriveAI && window.F1DriveAI.GRID_SLOT_STEP_M) || 9.2;
+    const startDistBack = effectiveMode === "timetrial" ? 45 : (slotBase + (startGridPos - 1) * slotStep);
     const startProg = (((1 - startDistBack / Math.max(1000, track.totalLen)) % 1) + 1) % 1;
-    const startLat = effectiveMode === "timetrial" ? 0 : ((startGridPos % 2 === 1) ? -2.4 : 2.4);
+    const startLat = effectiveMode === "timetrial" ? 0 : ((startGridPos % 2 === 1) ? -2.45 : 2.45);
 
     wetness = runCfg.weather_mode === "rain" ? 72 : (runCfg.weather_mode === "dynamic" ? 12 : 0);
     targetWetness = runCfg.weather_mode === "rain" ? 78 : (runCfg.weather_mode === "dynamic" ? 56 : 0);
@@ -207,7 +209,7 @@
 
     if (cockpit3d) cockpit3d.dispose();
     if (world3d && window.F1DriveCockpit3D) {
-      cockpit3d = window.F1DriveCockpit3D.createCockpitAndCamera(world3d.scene, pDrv.color, runCfg.physics_dna);
+      cockpit3d = window.F1DriveCockpit3D.createCockpitAndCamera(world3d.scene, pDrv.color, runCfg.physics_dna, pDrv);
       const startCam = document.getElementById("as-cam")?.value || "cockpit";
       cockpit3d.setCameraMode(startCam);
       document.getElementById("btn-hud-cam").textContent = `${startCam.toUpperCase()} [C]`;
@@ -360,7 +362,7 @@
     if (audioCtrl) audioCtrl.update(car, inp.throttle, paused || finished, wetness);
     if (world3d && car) {
       world3d.updateRacingLine(car);
-      world3d.syncAiCars(aiCtrl ? aiCtrl.aiCars : [], ghostPose, wetness);
+      world3d.syncAiCars(aiCtrl ? aiCtrl.aiCars : [], ghostPose, wetness, car, (sessionCfg && sessionCfg.year) || 2026);
       world3d.updateWeather(car, wetness, rawDt);
       if (cockpit3d) cockpit3d.update(car, world3d.camera, rawDt, deltaS, proxLeft, proxRight);
       world3d.render();
@@ -1213,6 +1215,7 @@
           mode: activeMode,
           weather: document.getElementById("in-weather").value,
           laps: document.getElementById("in-laps").value,
+          ai_difficulty: document.getElementById("as-ai-diff")?.value || "78",
         });
         url = `/api/drive/config?${q.toString()}`;
       }
@@ -1255,6 +1258,7 @@
       mode: "gp",
       weather: ev.weather_mode,
       laps: String(ev.laps || 5),
+      ai_difficulty: document.getElementById("as-ai-diff")?.value || "78",
     });
     const cfg = await api(`/api/drive/config?${q.toString()}`);
     cfg.mode = "career";

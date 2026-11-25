@@ -38,7 +38,7 @@
     return "#22c55e";
   }
 
-  function createCockpitAndCamera(scene, teamColorHex, physicsDna) {
+  function createCockpitAndCamera(scene, teamColorHex, physicsDna, liveryMeta) {
     const THREE = global.THREE;
     const root = new THREE.Group();
     scene.add(root);
@@ -215,21 +215,56 @@
     screenPlane.position.set(0, 0.008, -0.016);
     wheelPivot.add(screenPlane);
 
-    // --- 3. External Full Car Mesh (for Chase Cam!) ---
+    // --- 3. External Full Sculpted F1Car3D Model (for Chase Cam!) ---
     const extGroup = new THREE.Group();
-    let builtExt = false;
+    let extCar = null;
+    let extBrakeMat = null;
+    let extRainLight = null;
     try {
-      if (global.F1Car3D && global.F1Car3D.buildF1Car) {
-        const pal = { main: teamColorHex || "#e10600", secondary: "#0f172a", accent: "#f8fafc", pop: "#facc15", detail: "#1e293b" };
-        const built = global.F1Car3D.buildF1Car(pal, { era: (physicsDna && physicsDna.chassis_era) || "2020s" });
-        if (built && built.root) {
-          built.root.scale.setScalar(1.06);
-          extGroup.add(built.root);
-          builtExt = true;
+      if (global.F1Car3D && global.F1Car3D.createCar) {
+        const liv = liveryMeta || {};
+        const pal = liv.palette || {
+          main: teamColorHex || "#e10600",
+          secondary: "#0f172a",
+          accent: "#f8fafc",
+          pop: "#facc15",
+          detail: "#1e293b",
+        };
+        const style = liv.livery_style || "modern";
+        const eraArg = liv.era_year || (physicsDna && physicsDna.chassis_era) || 2026;
+        extCar = global.F1Car3D.createCar(pal, style, eraArg);
+        if (extCar) {
+          if (extCar.userData && extCar.userData.setPalette) {
+            extCar.userData.setPalette(pal, style, liv.livery_finish || null);
+          }
+          extCar.scale.setScalar(1.06);
+          extCar.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+            }
+          });
+          extGroup.add(extCar);
+
+          // Glowing 4-wheel brake rotors & rear wet rain light on sculpted Chase car
+          extBrakeMat = new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.0 });
+          const rotorGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.05, 14);
+          [[-0.78, 0.34, 1.56], [0.78, 0.34, 1.56], [-0.82, 0.34, -1.44], [0.82, 0.34, -1.44]].forEach(([bx, by, bz]) => {
+            const bm = new THREE.Mesh(rotorGeo, extBrakeMat);
+            bm.rotation.z = Math.PI * 0.5;
+            bm.position.set(bx, by, bz);
+            extGroup.add(bm);
+          });
+          extRainLight = new THREE.Mesh(
+            new THREE.BoxGeometry(0.10, 0.14, 0.05),
+            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+          );
+          extRainLight.position.set(0, 0.38, -2.35);
+          extGroup.add(extRainLight);
         }
       }
     } catch (_) {}
-    if (!builtExt) {
+    if (!extCar) {
       const extBody = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.55, 4.6), paintMat);
       extBody.position.y = 0.42;
       extGroup.add(extBody);
@@ -383,6 +418,30 @@
       const isChase = camMode === "chase";
       fpGroup.visible = !isChase;
       extGroup.visible = isChase;
+      if (isChase && extCar) {
+        const extWheels = extCar.userData && extCar.userData.wheels;
+        if (extWheels && extWheels.length) {
+          for (let wi = 0; wi < extWheels.length; wi++) {
+            const wg = extWheels[wi];
+            wg.rotation.x = car.wheelSpin || 0;
+            if (wg.userData && wg.userData.isFront) {
+              wg.rotation.y = -(car.frontSteerRad || 0);
+            }
+          }
+        }
+        if (extCar.userData && extCar.userData.frontFlap) {
+          const fwTarget = car.xModeActive ? 0.26 : 0.0;
+          extCar.userData.frontFlap.rotation.x += (fwTarget - extCar.userData.frontFlap.rotation.x) * Math.min(1, (dt || 0.016) * 14);
+        }
+        if (extBrakeMat) {
+          if (bNorm > 0.06) {
+            extBrakeMat.color.setRGB(1.0, 0.12 + bNorm * 0.52, Math.max(0, (bNorm - 0.6) * 0.4));
+            extBrakeMat.opacity = Math.min(0.95, bNorm * 1.1);
+          } else {
+            extBrakeMat.opacity = 0.0;
+          }
+        }
+      }
 
       // Camera rig with kerb, gravel, flat-spot & impact vibration!
       const sinY = Math.sin(car.yaw);
@@ -467,6 +526,9 @@
     }
 
     function dispose() {
+      if (extCar && global.F1Car3D && global.F1Car3D.disposeObject) {
+        global.F1Car3D.disposeObject(extCar);
+      }
       scene.remove(root);
       oledTex.dispose();
       carbonTex.dispose();

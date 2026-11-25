@@ -19,9 +19,35 @@ from typing import Any
 
 from .circuits import CIRCUITS, get_circuit
 from .era_rules import ERA_RULES, era_key_for_year
-from .f1_car_palettes import CAR_PNG_DIR, find_car_png_slug, load_png_manifest
+from .f1_car_palettes import CAR_PNG_DIR, find_car_png_slug, load_png_manifest, resolve_livery
 from .rating_engine import compute_fair_attributes
 from .weather_radar import build_weather_radar_and_pit_plan
+
+
+def _resolve_car_livery_meta(team_name: str, year: int = 2026, fallback_color: str = "#e10600") -> dict[str, Any]:
+    try:
+        liv = resolve_livery(team_name, year)
+        if liv and isinstance(liv.get("palette"), dict):
+            return {
+                "palette": liv["palette"],
+                "livery_style": str(liv.get("style") or "modern"),
+                "livery_finish": str(liv.get("finish") or "gloss"),
+                "era_year": int(year),
+            }
+    except Exception:
+        pass
+    return {
+        "palette": {
+            "main": fallback_color,
+            "secondary": "#111622",
+            "accent": "#f8fafc",
+            "pop": "#facc15",
+            "detail": "#1e293b",
+        },
+        "livery_style": "two-tone",
+        "livery_finish": "gloss",
+        "era_year": int(year),
+    }
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _F1_SQLITE = _BASE_DIR / "data" / "f1.sqlite"
@@ -277,13 +303,15 @@ def _load_season_grid_from_db(year: int) -> list[dict[str, Any]]:
             car_rtg = max(72, 94 - idx)
             pace = racecraft = wet = tyre_care = consistency = ovr = max(72, 92 - idx)
 
+        liv_meta = _resolve_car_livery_meta(team, year=year, fallback_color=team_colors[team])
         out.append({
             "driver_id": f"drv_{idx+1}_{code3.lower()}",
             "name": clean_name or raw_name,
             "code3": code3,
             "number": (idx + 1) * 3 % 98 + 1,
             "team": team,
-            "color": team_colors[team],
+            "color": liv_meta["palette"].get("main") or team_colors[team],
+            **liv_meta,
             "car_rating": car_rtg,
             "overall": ovr,
             "pace": pace,
@@ -330,6 +358,7 @@ def _build_default_2026_grid() -> list[dict[str, Any]]:
             except Exception:
                 base = max(76, 94 - t_idx * 2 - d_idx)
                 pace = racecraft = wet = tyre_care = consistency = ovr = base
+            liv_meta = _resolve_car_livery_meta(team, year=2026, fallback_color=col)
             grid.append({
                 "driver_id": f"f1_{code3.lower()}",
                 "name": name,
@@ -337,6 +366,7 @@ def _build_default_2026_grid() -> list[dict[str, Any]]:
                 "number": num,
                 "team": team,
                 "color": col,
+                **liv_meta,
                 "car_rating": car_rtg,
                 "overall": ovr,
                 "pace": pace,
@@ -363,6 +393,7 @@ def build_drive_session_config(
     mode: str = "timetrial",
     weather_mode: str = "dry",
     laps: int | None = None,
+    ai_difficulty: int = 78,
     source: str | None = None,
     ref_id: str | None = None,
 ) -> dict[str, Any]:
@@ -436,6 +467,7 @@ def build_drive_session_config(
         "weather_mode": weather_mode,
         "weather_radar": w_radar,
         "laps": race_laps,
+        "ai_difficulty": int(_clamp(ai_difficulty, 50, 105)),
         "grid": grid,
         "player_driver": p_slot,
         "f1db_target_lap_ms": f1db_target_lap_ms,
