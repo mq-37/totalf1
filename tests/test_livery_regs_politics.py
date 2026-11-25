@@ -88,6 +88,64 @@ class TestLiveryRegistry(unittest.TestCase):
         self.assertEqual(jps79["style"], "lotus_jps")
         self.assertEqual(brawn09["style"], "brawn_neon")
         self.assertEqual(aston26["style"], "aston_wings")
+
+    def test_gold_leaf_lotus_1968_1971_split_from_brg(self):
+        """1968-71 Gold Leaf metallic gold/red era vs 1967 BRG green debut & 1972+ JPS."""
+        gl68 = livery_registry.resolve_team_livery("Lotus Ford", 1968)
+        gl70 = livery_registry.resolve_team_livery("Lotus Ford", 1970)
+        debut67 = livery_registry.resolve_team_livery("Lotus Ford", 1967)
+        brm63 = livery_registry.resolve_team_livery("Lotus BRM", 1963)
+        self.assertEqual(gl68["style"], "lotus_gold_leaf")
+        self.assertEqual(gl68["finish"], "metallic")
+        self.assertEqual(gl68["motif"], "gold_leaf")
+        self.assertEqual(gl68["palette"]["main"].upper(), "#C9A227")
+        self.assertEqual(gl68["palette"]["secondary"].upper(), "#E10600")
+        self.assertEqual(gl70["style"], "lotus_gold_leaf")
+        self.assertEqual(debut67["style"], "classic")
+        self.assertEqual(debut67["palette"]["main"].upper(), "#005936")
+        self.assertEqual(brm63["style"], "classic")
+
+    def test_ferrari_white_deck_126c2_turbo_era_1982_1985(self):
+        """1982-85 Marlboro turbo 126C2/C3: red tub + white upper deck; 1980-81 stay classic."""
+        s82 = livery_registry.resolve_team_livery("Ferrari", 1982)
+        s84 = livery_registry.resolve_team_livery("Ferrari", 1984)
+        s81 = livery_registry.resolve_team_livery("Ferrari", 1981)
+        self.assertEqual(s82["style"], "ferrari_white_deck")
+        self.assertEqual(s82["palette"]["main"].upper(), "#DC0000")
+        self.assertEqual(s82["palette"]["secondary"].upper(), "#FFFFFF")
+        self.assertEqual(s84["style"], "ferrari_white_deck")
+        self.assertEqual(s81["style"], "classic")
+
+    def test_sauber_era_resolution_red_petronas_to_kick_green(self):
+        """Sauber eras: 1994-2000 red/white Petronas, 2001-05 blue/teal Red Bull, 2006-09 BMW,
+        2010-18 graphite, 2024-25 Kick neon green."""
+        red99 = livery_registry.resolve_team_livery("Sauber Petronas", 1999)
+        c12_93 = livery_registry.resolve_team_livery("Sauber", 1993)
+        rb01 = livery_registry.resolve_team_livery("Sauber Petronas", 2001)
+        rb04 = livery_registry.resolve_team_livery("Sauber Petronas", 2004)
+        bmw07 = livery_registry.resolve_team_livery("Sauber BMW", 2007)
+        bmw05 = livery_registry.resolve_team_livery("Sauber BMW", 2005)
+        fer12 = livery_registry.resolve_team_livery("Sauber Ferrari", 2012)
+        fer10 = livery_registry.resolve_team_livery("Sauber Ferrari", 2010)
+        kick24 = livery_registry.resolve_team_livery("Kick Sauber Ferrari", 2024)
+        self.assertEqual(c12_93["style"], "carbon_stealth")
+        self.assertEqual(c12_93["palette"]["main"].upper(), "#0C0D0F")
+        self.assertEqual(red99["style"], "ferrari_white_deck")
+        self.assertEqual(red99["palette"]["main"].upper(), "#C8102E")
+        self.assertEqual(rb01["style"], "sauber_petronas")
+        self.assertEqual(rb01["palette"]["main"].upper(), "#1530B8")
+        self.assertEqual(rb01["palette"]["secondary"].upper(), "#3EC6C0")
+        self.assertEqual(rb04["style"], "sauber_petronas")
+        self.assertEqual(bmw07["style"], "two-tone")
+        self.assertEqual(bmw07["palette"]["main"].upper(), "#F5F7FA")
+        # Team-keyed BMW identity must never bleed into the Petronas era, even at y=2005!
+        self.assertEqual(bmw05["palette"]["main"].upper(), "#F5F7FA")
+        # 2010 C29 kept the BMW white/blue carry-over; 2012 went graphite
+        self.assertEqual(fer10["palette"]["main"].upper(), "#F5F7FA")
+        self.assertEqual(fer12["style"], "two-tone")
+        self.assertEqual(fer12["palette"]["main"].upper(), "#1A2237")
+        self.assertEqual(kick24["style"], "carbon_stealth")
+        self.assertEqual(kick24["palette"]["secondary"].upper(), "#3BFF9E")
         # Engine-suffixed team names must resolve to the constructor, NOT the PU supplier!
         self.assertEqual(livery_registry.resolve_team_livery("McLaren Mercedes", 2026)["style"], "mclaren_papaya")
         self.assertEqual(livery_registry.resolve_team_livery("Aston Martin Aramco Mercedes", 2026)["style"], "aston_wings")

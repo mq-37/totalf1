@@ -89,6 +89,16 @@ def _resolve_ferrari(y: int) -> dict[str, Any]:
             "motif": "scuderia",
             "label": f"{y} Scuderia Ferrari (Scarlet & White Marlboro Era)",
         }
+    if 1982 <= y <= 1985:
+        # 126C2 / 126C3 / 126C4 Marlboro turbo era: Rosso Corsa tub & sidepods + iconic WHITE upper
+        # engine-cover deck, white nose band & white wings with red trim!
+        return {
+            "palette": {"main": "#DC0000", "secondary": "#FFFFFF", "accent": "#14161C", "pop": "#FFEF00", "detail": "#8E0B22"},
+            "style": "ferrari_white_deck",
+            "finish": "gloss",
+            "motif": "scuderia",
+            "label": f"{y} Scuderia Ferrari (Rosso Corsa & White Marlboro Turbo Deck)",
+        }
     if 1975 <= y <= 1995:
         return {
             "palette": {"main": "#D4001A", "secondary": "#FFFFFF", "accent": "#FFEF00", "pop": "#14161C", "detail": "#7A0614"},
@@ -446,6 +456,16 @@ def _resolve_lotus(y: int) -> dict[str, Any]:
             "motif": "jps_gold",
             "label": f"{y} Team Lotus (John Player Special Black & Gold Pinstripe)",
         }
+    if 1968 <= y <= 1971:
+        # Gold Leaf Team Lotus era: Lotus 49B high-stilt wings & early Lotus 72s in rich metallic
+        # GOLD with the red nose band / spine stripe & white "GA·GA" accents (JPS only arrived in 1972!)
+        return {
+            "palette": {"main": "#C9A227", "secondary": "#E10600", "accent": "#FFFFFF", "pop": "#FFFFFF", "detail": "#14100A"},
+            "style": "lotus_gold_leaf",
+            "finish": "metallic",
+            "motif": "gold_leaf",
+            "label": f"{y} Gold Leaf Team Lotus (Metallic Gold & Red Noseband)",
+        }
     if 1987 <= y <= 1990:
         return {
             "palette": {"main": "#FFCC00", "secondary": "#0B2C7A", "accent": "#FFFFFF", "pop": "#111318", "detail": "#A16207"},
@@ -519,6 +539,79 @@ def _resolve_jordan(y: int) -> dict[str, Any]:
     }
 
 
+def _resolve_sauber(y: int) -> dict[str, Any]:
+    if y <= 1993:
+        # C12 debut: all-black carbon chassis with white lower-flank & wing elements
+        return {
+            "palette": {"main": "#0C0D0F", "secondary": "#FFFFFF", "accent": "#D0021B", "pop": "#FFEF00", "detail": "#08090B"},
+            "style": "carbon_stealth",
+            "finish": "gloss",
+            "motif": "c12_black",
+            "label": f"{y} Team Sauber (C12 Black Carbon & White Elements)",
+        }
+    if 2001 <= y <= 2005:
+        # C20-C24 Red Bull era: Royal Blue chassis + Petronas turquoise under-sidepod sweep &
+        # front wing + crisp white Credit Suisse wings & the Red Bull roundel on the airbox!
+        return {
+            "palette": {"main": "#1530B8", "secondary": "#3EC6C0", "accent": "#FFFFFF", "pop": "#E10600", "detail": "#0A1660"},
+            "style": "sauber_petronas",
+            "finish": "gloss",
+            "motif": "petronas_teal",
+            "label": f"{y} Sauber Petronas (Royal Blue, Teal Underline & Red Bull)",
+        }
+    if 1994 <= y <= 2000:
+        # C13-C19 Petronas debut years: deep signal red tub & engine cover + clean white top deck
+        # and wings (Petronas ran red/white before the 2001 blue Red Bull refresh!)
+        return {
+            "palette": {"main": "#C8102E", "secondary": "#FFFFFF", "accent": "#F9C802", "pop": "#111318", "detail": "#7A0614"},
+            "style": "ferrari_white_deck",
+            "finish": "gloss",
+            "motif": "petronas_red",
+            "label": f"{y} Red Bull Sauber Petronas (Signal Red & White Deck)",
+        }
+    if 2006 <= y <= 2010:
+        # Stray "Sauber" 2006-09 seasons + 2010 C29 carry-over keep the BMW-era white/blue look
+        return {
+            "palette": {"main": "#F5F7FA", "secondary": "#1E40C8", "accent": "#0B1F6B", "pop": "#5EB8FF", "detail": "#101423"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "bmw_sweep",
+            "label": f"{y} Sauber F1 Team (Pearl White & Motorsport Blue carry-over)",
+        }
+    if y <= 2018:
+        # C29-C37 years: dark steel-blue graphite bodywork with white & red accents
+        return {
+            "palette": {"main": "#1A2237", "secondary": "#5E6A85", "accent": "#FFFFFF", "pop": "#D0021B", "detail": "#0D1220"},
+            "style": "two-tone",
+            "finish": "matte",
+            "motif": "standard",
+            "label": f"{y} Sauber F1 Team (Steel Blue Graphite & White)",
+        }
+    # 2023+ (incl. 2024-25 Kick Sauber): dark carbon-green chassis with Kick neon green accents
+    return {
+        "palette": {"main": "#0E1F1A", "secondary": "#3BFF9E", "accent": "#FFFFFF", "pop": "#00E073", "detail": "#071310"},
+        "style": "carbon_stealth",
+        "finish": "matte",
+        "motif": "kick_green",
+        "label": f"{y} Stake/Kick Sauber (Dark Carbon & Kick Neon Green)",
+    }
+
+
+def _resolve_sauber_bmw(y: int) -> dict[str, Any]:
+    # BMW-era identity ("Sauber BMW" / "BMW Sauber", 2006-09): crisp pearl white chassis +
+    # BMW Motorsport blue flank sweeps & navy engine cover. Kept team-keyed so a stray
+    # peak-year like 2005 can never bleed into the Petronas blue era branch!
+    if 2004 <= y <= 2010:
+        return {
+            "palette": {"main": "#F5F7FA", "secondary": "#1E40C8", "accent": "#0B1F6B", "pop": "#5EB8FF", "detail": "#101423"},
+            "style": "two-tone",
+            "finish": "gloss",
+            "motif": "bmw_sweep",
+            "label": f"{y} BMW Sauber F1 Team (Pearl White & Motorsport Blue)",
+        }
+    return _resolve_sauber(y)
+
+
 # IMPORTANT: Customer constructors MUST come BEFORE works engine suppliers (ferrari, mercedes, renault)
 # so names like "McLaren Mercedes", "Williams Mercedes", "Aston Martin Aramco Mercedes",
 # "Haas Ferrari", "Brawn Mercedes", and "Alpine Renault" resolve to the constructor, NOT the PU supplier!
@@ -536,6 +629,8 @@ FAMILY_RESOLVERS: list[tuple[tuple[str, ...], Any]] = [
     (("lotus",), _resolve_lotus),
     (("benetton",), _resolve_benetton),
     (("jordan",), _resolve_jordan),
+    (("bmw sauber", "sauber bmw"), _resolve_sauber_bmw),
+    (("sauber",), _resolve_sauber),
 ]
 
 # Works PU constructors ONLY match when they are the actual constructor name

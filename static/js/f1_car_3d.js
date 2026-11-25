@@ -1202,6 +1202,7 @@
     var bullDecalMesh = { visible: false };
     var ferrariBandMesh = { visible: false };
     var duracellCapMesh = { visible: false };
+    var deckPanelMesh = { visible: false };
     var triStripeMesh = { visible: false };
     var pinstripeMesh = { visible: false };
     var chevronCanopyMesh = { visible: false };
@@ -1436,6 +1437,13 @@
         [-1.15, 0.24, 0.16, 0.46, 2.2, 2.4]
       ];
       addMesh(buildLoft(wedge70.map(function (s) { return superRing(s[0], 0, s[1], s[2], s[3], s[4], s[5], 20); }), true, true), mats.bodyMain);
+      /* Signature upper engine-cover white sock (Ferrari 126C2 Marlboro deck via 'ferrari_white_deck'):
+         wraps the body profile from cockpit to tail, cut at mid-height so lower flanks stay red! */
+      deckPanelMesh = addMesh(buildLoft([
+        superRing(-0.60, 0, 0.307, 0.365, 0.557, 2.4, 2.6, 20),
+        superRing(-1.10, 0, 0.251, 0.329, 0.483, 2.2, 2.4, 20)
+      ], true, true), mats.airboxBody);
+      deckPanelMesh.visible = false;
       /* Boxy rectangular ground-effect sidepods with accent pinstripe trim */
       [-1, 1].forEach(function (s) {
         addMesh(new THREE.BoxGeometry(0.42, 0.34, 1.92), mats.sidepodBody, [s * 0.52, 0.30, -0.12]);
@@ -1492,6 +1500,15 @@
         [-1.82, 0.15, 0.17, 0.44, 2.0, 2.2]
       ];
       addMesh(buildLoft(body80.map(function (s) { return superRing(s[0], 0, s[1], s[2], s[3], s[4], s[5], 22); }), true, true), mats.bodyMain);
+      /* Signature upper engine-cover white sock (Ferrari 126C3/C4 Marlboro deck via 'ferrari_white_deck'):
+         wraps the body profile from cockpit to tail, cut at mid-height so lower flanks stay red! */
+      deckPanelMesh = addMesh(buildLoft([
+        superRing(-0.30, 0, 0.325, 0.410, 0.660, 2.3, 2.7, 20),
+        superRing(-0.52, 0, 0.315, 0.455, 0.735, 2.2, 2.6, 20),
+        superRing(-1.15, 0, 0.245, 0.409, 0.635, 2.1, 2.4, 20),
+        superRing(-1.80, 0, 0.152, 0.319, 0.455, 2.0, 2.2, 20)
+      ], true, true), mats.airboxBody);
+      deckPanelMesh.visible = false;
       /* Sculpted low 1980s sidepods with recessed side radiator openings */
       [-1, 1].forEach(function (s) {
         var pod80 = [
@@ -2641,7 +2658,7 @@
 
     /* Apply a 5-colour team palette + signature livery pattern style + paint finish:
        styles: modern | two-tone | racing-stripe | chevron | classic |
-               redbull | ferrari_hp | merc_arrow | williams_duracell | audi_slash | cadillac_split
+               redbull | ferrari_hp | ferrari_white_deck | merc_arrow | williams_duracell | audi_slash | cadillac_split
        finish: gloss | matte | metallic | carbon */
     function setPalette(pal, style, finish) {
       pal = pal || {};
@@ -2678,6 +2695,7 @@
       bullDecalMesh.visible = false;
       ferrariBandMesh.visible = false;
       duracellCapMesh.visible = false;
+      deckPanelMesh.visible = false;
       triStripeMesh.visible = false;
       pinstripeMesh.visible = false;
       chevronCanopyMesh.visible = false;
@@ -3222,6 +3240,88 @@
         mats.rearEndplate.color.copy(cMain);
         mats.rearEndplateCap.color.copy(cSec);
         mats.rimAccent.color.copy(cSec);
+      } else if (st === 'lotus_gold_leaf') {
+        /* Authentic 1968-71 Gold Leaf Team Lotus (49B / early 72): rich metallic GOLD cigar body +
+           red noseband & spine stripe (mats.noseStripe drives the 1960s nose band) + white accents,
+           red high-stilt rear wing with white flap & gold classic rims! */
+        mats.bodyMain.color.copy(cMain);
+        mats.noseStripe.color.copy(cSec);
+        mats.noseTip.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cSec);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.mirrorCap.color.copy(cMain);
+        mats.mirrorAccent.color.copy(cSec);
+        mats.frontWing1.color.copy(cMain);
+        mats.frontWing2.color.copy(cSec);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cSec);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cAcc);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cMain);
+      } else if (st === 'ferrari_white_deck') {
+        /* Authentic 1982-85 Scuderia Ferrari 126C2/C3 Marlboro turbo era (+ 1993-2000 Sauber Petronas):
+           Rosso Corsa tub & sidepods + crisp WHITE upper engine-cover deck, white nose band,
+           white wings with red trim & white rim pinstripe accents! */
+        mats.bodyMain.color.copy(cMain);
+        mats.noseStripe.color.copy(cSec);
+        mats.noseTip.color.copy(cMain);
+        deckPanelMesh.visible = true;
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cSec);
+        mats.airboxRim.color.copy(cMain);
+        mats.sharkFin.color.copy(cSec);
+        mats.sharkFinEdge.color.copy(cMain);
+        mats.halo.color.copy(cMain);
+        mats.mirrorCap.color.copy(cSec);
+        mats.mirrorAccent.color.copy(cMain);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cSec);
+        mats.frontEndplate.color.copy(cSec);
+        mats.frontDiveplane.color.copy(cMain);
+        mats.rearWingMain.color.copy(cSec);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cSec);
+        mats.rearEndplateCap.color.copy(cMain);
+        mats.rimAccent.color.copy(cSec);
+      } else if (st === 'sauber_petronas') {
+        /* Authentic 2001-05 Sauber Petronas C20-C24 Red Bull era: Royal Blue chassis & tall airbox +
+           Petronas turquoise under-sidepod sweep, nose stripe & front wing + crisp white Credit
+           Suisse rear wing & rim accents + the Red Bull roundel red on the mirror caps! */
+        mats.bodyMain.color.copy(cMain);
+        mats.noseStripe.color.copy(cSec);
+        mats.noseTip.color.copy(cMain);
+        mats.sidepodBody.color.copy(cMain);
+        mats.sidepodLower.color.copy(cDet);
+        mats.sidepodSwoosh.color.copy(cSec);
+        mats.airboxBody.color.copy(cMain);
+        mats.airboxRim.color.copy(cAcc);
+        mats.sharkFin.color.copy(cMain);
+        mats.sharkFinEdge.color.copy(cSec);
+        mats.halo.color.copy(cMain);
+        mats.mirrorCap.color.copy(cPop);
+        mats.mirrorAccent.color.copy(cAcc);
+        mats.frontWing1.color.copy(cSec);
+        mats.frontWing2.color.copy(cMain);
+        mats.frontWing3.color.copy(cAcc);
+        mats.frontEndplate.color.copy(cMain);
+        mats.frontDiveplane.color.copy(cSec);
+        mats.rearWingMain.color.copy(cAcc);
+        mats.rearWingFlap.color.copy(cSec);
+        mats.rearEndplate.color.copy(cMain);
+        mats.rearEndplateCap.color.copy(cAcc);
+        mats.rimAccent.color.copy(cAcc);
       } else if (st === 'gulf_heritage') {
         /* Iconic Gulf Racing Heritage: Powder Blue bodywork + Full-length Marigold Orange centre stripe & nose tip */
         noseCapMesh.visible = true;
@@ -3765,7 +3865,8 @@
     LIVERY_STYLES: [
       'modern', 'two-tone', 'racing-stripe', 'chevron', 'classic',
       'redbull', 'vcarb_2026', 'ferrari_hp', 'merc_arrow', 'williams_2026', 'williams_duracell', 'audi_slash', 'cadillac_split',
-      'mclaren_papaya', 'mclaren_marlboro', 'aston_wings', 'alpine_bwt', 'lotus_jps',
+      'mclaren_papaya', 'mclaren_marlboro', 'aston_wings', 'alpine_bwt', 'lotus_jps', 'lotus_gold_leaf',
+      'ferrari_white_deck', 'sauber_petronas',
       'gulf_heritage', 'martini_tri', 'renault_mildseven', 'brawn_neon', 'haas_tgr', 'haas_carbon',
       'jordan_hornet', 'carbon_stealth'
     ],
