@@ -168,6 +168,157 @@ def api_wins(year: int):
         "team_points": [dict(r) for r in db.points_by_team_year(year)],
     }
 
+
+@router.get("/api/analytics/driver-card/{query}")
+def api_analytics_driver_card(query: str):
+    """F1DB bio card + photo + FIA stewarding history in one payload (driver dossier panel)."""
+    from ..f1db import get_driver_f1db_profile
+    profile = get_driver_f1db_profile(query) or {}
+    drv = profile.get("driver") or {}
+    name = drv.get("name") or query.replace("-", " ")
+    db = srv.get_db()
+    image_path = db.get_driver_image(name) or db.get_driver_image(query.replace("-", " "))
+    # FIA stewarding decisions for this driver (2026+ live seasons live in fia_docs.sqlite)
+    decisions = []
+    fia_path = srv.BASE_DIR / "data" / "fia_docs.sqlite"
+    if fia_path.exists():
+        import sqlite3 as _sq
+        try:
+            fcon = _sq.connect(str(fia_path), timeout=5.0)
+            fcon.row_factory = _sq.Row
+            decisions = [
+                {
+                    "year": r["year"], "gp": r["event_slug"], "session": r["session"],
+                    "fact": r["fact"], "offence": r["offence"], "decision": r["decision"],
+                    "penalty": r["penalty"], "penalty_points": r["penalty_points"],
+                    "doc_number": r["doc_number"],
+                }
+                for r in fcon.execute(
+                    "SELECT * FROM fia_decisions_detail WHERE lower(driver) LIKE ? ORDER BY year DESC LIMIT 12",
+                    (f"%{str(name).lower().split()[-1]}%",),
+                ).fetchall()
+            ]
+            fcon.close()
+        except Exception:
+            decisions = []
+    return {
+        "ok": True,
+        "query": query,
+        "driver": drv,
+        "photo": image_path,
+        "constructor_history": profile.get("constructor_history") or profile.get("teams") or [],
+        "season_progression": profile.get("season_progression") or [],
+        "fia_decisions": decisions,
+    }
+
+
+@router.get("/api/analytics/driver-progression/{driver_query}")
+def api_analytics_driver_progression(driver_query: str, limit_years: int = 40):
+    """Per-season points/positions progression from real F1DB race standings."""
+    from ..f1db import _connect_ro, _norm_key
+    con = _connect_ro()
+    if not con:
+        return {"ok": False, "message": "F1DB unavailable"}
+    con.row_factory = __import__("sqlite3").Row
+    q = f"%{driver_query.replace('-', ' ').lower()}%"
+    d = con.execute(
+        "SELECT id, name, fullName FROM drivers WHERE lower(name) LIKE ? OR lower(fullName) LIKE ? OR id LIKE ? LIMIT 1",
+        (q, q, f"%{driver_query.lower()}%"),
+    ).fetchone()
+    if not d:
+        con.close()
+        return {"ok": False, "message": "Driver not found"}
+    rows = con.execute(
+        """
+        SELECT s.year, MAX(s.points) AS pts, MIN(s.positionNumber) AS best_pos,
+               SUM(s.positionsGained) AS gained, COUNT(DISTINCT s.raceId) AS races
+        FROM races_driver_standings s
+        WHERE s.driverId = ? AND s."positionNumber" IS NOT NULL
+        GROUP BY s.year ORDER BY s.year LIMIT ?
+        """,
+        (d["id"], max(1, min(80, int(limit_years)))),
+    ).fetchall()
+    con.close()
+    return {
+        "ok": True,
+        "driver": {"id": d["id"], "name": d["name"]},
+        "seasons": [
+            {"year": int(r["year"]), "points": round(float(r["pts"] or 0), 1), "best_pos": r["best_pos"],
+             "gained": int(r["gained"] or 0), "races": int(r["races"] or 0)}
+            for r in rows
+        ],
+    }
+
+
+@router.get("/api/analytics/team-points-history/{team_query}")
+def api_analytics_team_points_history(team_query: str):
+    """Season-end constructor points per year for one team (championship trajectory)."""
+    from ..f1db import _connect_ro
+    con = _connect_ro()
+    if not con:
+        return {"ok": False, "message": "F1DB unavailable"}
+    con.row_factory = __import__("sqlite3").Row
+    q = f"%{team_query.replace('-', ' ').lower()}%"
+    c = con.execute(
+        "SELECT id, name, fullName FROM constructors WHERE lower(name) LIKE ? OR lower(id) LIKE ? OR lower(fullName) LIKE ? LIMIT 1",
+        (q, q, q),
+    ).fetchone()
+    if not c:
+        con.close()
+        return {"ok": False, "message": "Constructor not found"}
+    rows = con.execute(
+        """
+        SELECT s.year, MAX(s.points) AS pts, MIN(s.positionNumber) AS best_pos
+        FROM races_constructor_standings s
+        WHERE s.constructorId = ? AND s.positionNumber IS NOT NULL
+        GROUP BY s.year ORDER BY s.year
+        """,
+        (c["id"],),
+    ).fetchall()
+    con.close()
+    return {
+        "ok": True,
+        "team": {"id": c["id"], "name": c["name"]},
+        "seasons": [
+            {"year": int(r["year"]), "points": round(float(r["pts"] or 0), 1), "best_pos": r["best_pos"]}
+            for r in rows
+        ],
+    }
+
+
+@router.get("/api/analytics/track-wins")
+def api_analytics_track_wins(limit: int = 16):
+    """All-time race wins per circuit (top N) + races held, for the Per-Track view."""
+    from ..f1db import _connect_ro
+    con = _connect_ro()
+    if not con:
+        return {"ok": False, "message": "F1DB unavailable"}
+    con.row_factory = __import__("sqlite3").Row
+    rows = con.execute(
+        """
+        WITH wins AS (
+            SELECT r.circuitId AS cid, d.name AS driver_name, COUNT(*) AS wins
+            FROM races_race_results rr
+            JOIN races r ON r.id = rr.raceId
+            JOIN drivers d ON d.id = rr.driverId
+            WHERE rr.positionNumber = 1
+            GROUP BY r.circuitId, d.id
+        ),
+        best AS (
+            SELECT cid, MAX(wins) AS mw FROM wins GROUP BY cid
+        )
+        SELECT ci.id, ci.name, ci.countryId, ci.totalRacesHeld,
+               w.driver_name AS top_driver, w.wins AS top_wins
+        FROM circuits ci
+        JOIN best b ON b.cid = ci.id
+        JOIN wins w ON w.cid = ci.id AND w.wins = b.mw
+        ORDER BY ci.totalRacesHeld DESC LIMIT ?
+        """,
+        (max(1, min(30, int(limit))),),
+    ).fetchall()
+    con.close()
+    return {"ok": True, "tracks": [dict(r) for r in rows]}
+
 @router.get("/api/driver/search")
 def api_driver_search(q: str = Query("")):
     db = srv.get_db()

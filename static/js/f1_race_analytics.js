@@ -76,10 +76,12 @@
           </div>
           <div class="ras-tabs" role="tablist">
             <button type="button" class="ras-tab active" data-ras-tab="overview"><i class="fas fa-list-ol"></i> Overview</button>
+            <button type="button" class="ras-tab" data-ras-tab="traces"><i class="fas fa-chart-line"></i> Race Traces</button>
             <button type="button" class="ras-tab" data-ras-tab="engineer"><i class="fas fa-microchip"></i> Engineer Lab</button>
             <button type="button" class="ras-tab" data-ras-tab="positions"><i class="fas fa-project-diagram"></i> Positions</button>
             <button type="button" class="ras-tab" data-ras-tab="pace"><i class="fas fa-tachometer-alt"></i> Gap &amp; Pace</button>
             <button type="button" class="ras-tab" data-ras-tab="tyres"><i class="fas fa-dharmachakra"></i> Tyres</button>
+            <button type="button" class="ras-tab" data-ras-tab="components"><i class="fas fa-screwdriver-wrench"></i> Components</button>
             <button type="button" class="ras-tab" data-ras-tab="psych"><i class="fas fa-brain"></i> Confidence</button>
             <button type="button" class="ras-tab" data-ras-tab="interviews" id="ras-tab-int-btn"><i class="fas fa-microphone-alt"></i> Radio &amp; Interviews</button>
           </div>
@@ -101,10 +103,23 @@
 
         <div class="ras-body">
           <div id="ras-pane-overview" class="ras-pane active"></div>
+          <div id="ras-pane-traces" class="ras-pane">
+            <div id="ras-trace-chips" class="ras-trace-chips"></div>
+            <canvas id="ras-cv-traces" class="ras-canvas" style="height:260px"></canvas>
+            <div id="ras-trace-sector" class="ras-trace-sector"></div>
+          </div>
           <div id="ras-pane-engineer" class="ras-pane"></div>
           <div id="ras-pane-positions" class="ras-pane"><canvas id="ras-cv-positions" class="ras-canvas"></canvas><div id="ras-leg-positions" class="ras-legend"></div></div>
           <div id="ras-pane-pace" class="ras-pane"><canvas id="ras-cv-pace" class="ras-canvas"></canvas><div id="ras-leg-pace" class="ras-legend"></div></div>
-          <div id="ras-pane-tyres" class="ras-pane"></div>
+          <div id="ras-pane-tyres" class="ras-pane">
+            <div id="ras-tyre-gantt" style="margin-bottom:10px"></div>
+            <div id="ras-tyre-wear"></div>
+          </div>
+          <div id="ras-pane-components" class="ras-pane">
+            <div id="ras-comp-chips" class="ras-trace-chips"></div>
+            <canvas id="ras-cv-components" class="ras-canvas" style="height:260px"></canvas>
+            <div id="ras-comp-meta" class="ras-trace-sector"></div>
+          </div>
           <div id="ras-pane-psych" class="ras-pane"><canvas id="ras-cv-psych" class="ras-canvas"></canvas><div id="ras-leg-psych" class="ras-legend"></div></div>
           <div id="ras-pane-interviews" class="ras-pane"></div>
         </div>
@@ -231,11 +246,33 @@
       `;
     }).join("");
 
+    /* Hero stat cards: winner-so-far, biggest climber, fastest lap of the race, tyre states. */
+    const ranked = (fr.cars || []).filter((c) => !c.dnf).slice().sort((a, b) => (a.pos || 99) - (b.pos || 0));
+    const leader = ranked[0] || fr.cars[0];
+    const leadD = drvMap.get(leader.idx) || {};
+    const climber = fr.cars.filter((c) => !c.dnf && (drvMap.get(c.idx) || {}).gridPos).slice()
+      .sort((a, b) => ((drvMap.get(b.idx) || {}).gridPos || b.pos) - b.pos - (((drvMap.get(a.idx) || {}).gridPos || a.pos) - a.pos))[0];
+    const climbD = drvMap.get(climber?.idx) || {};
+    let fast = null;
+    frames.forEach((f) => (f.cars || []).forEach((c) => {
+      if (!c.dnf && Number.isFinite(c.lapTime) && c.lapTime > 0 && (!fast || c.lapTime < fast.lapTime)) fast = { ...c, lap: f.lap };
+    }));
+    const fastD = fast ? (drvMap.get(fast.idx) || {}) : {};
+    const statsHtml = `
+      <div class="ras-overview-grid" style="margin-bottom:10px;">
+        <div class="ras-card" style="padding:10px"><small style="color:#64748b;">LEADER · L${fr.lap}</small><div style="font-weight:800;color:${esc(leadD.color || "#facc15")}">${esc(leadD.code3 || "—")} ${esc(leadD.name || "")}</div></div>
+        <div class="ras-card" style="padding:10px"><small style="color:#64748b;">BIGGEST CLIMBER</small><div style="font-weight:800;color:#4ade80;">${climbD.code3 ? esc(climbD.code3) + " " + (climbD.gridPos - climber.pos >= 0 ? "+" : "") + ((climbD.gridPos || climber.pos) - climber.pos) : "—"}</div></div>
+        <div class="ras-card" style="padding:10px"><small style="color:#64748b;">FASTEST LAP</small><div style="font-weight:800;color:#c084fc;">${fast ? `${esc(fastD.code3 || "")} ${fmtLap(fast.lapTime)} <small class="muted">(L${fast.lap})</small>` : "—"}</div></div>
+        <div class="ras-card" style="padding:10px"><small style="color:#64748b;">TRACK STATE</small><div style="font-weight:800;">${(fr.wetness || 0) >= 25 ? "🌧️ Wet " + Math.round(fr.wetness) + "%" : "☀️ Dry"}${fr.sc ? " · ⚠️ SC" : fr.vsc ? " · VSC" : ""}</div></div>
+      </div>
+    `;
+
     const evHtml = evsUpTo.length
       ? evsUpTo.map((e) => `<div class="ras-ev-row ras-ev-${esc(e.type)}"><b>L${e.lap}</b><span>${esc(e.title)}</span><small>${esc(e.detail)}</small></div>`).join("")
       : `<div class="muted small">No race incidents recorded up to Lap ${fr.lap}.</div>`;
 
     box.innerHTML = `
+      ${statsHtml}
       <div class="ras-overview-grid">
         <div class="ras-card ras-scroll">
           <div class="ras-card-head"><span>CLASSIFICATION AT LAP ${fr.lap}</span><small>${fr.cars.length} Cars</small></div>
@@ -947,6 +984,7 @@
     modalEl.querySelector("#ras-leg-positions").innerHTML = sel.map((d) =>
       `<span class="ras-leg-item"><i style="background:${esc(d.color)}"></i><b>${esc(d.code3)}</b> ${esc(d.name)}</span>`
     ).join("");
+    _attachScrubTooltip(modalEl.querySelector("#ras-cv-positions"), frames);
   }
 
   function renderPaceChart() {
@@ -980,19 +1018,364 @@
       c.ctx.stroke();
     });
     modalEl.querySelector("#ras-leg-pace").innerHTML =
-      `<span class="muted small">Gap to Leader (seconds) · Shaded Yellow = SC · Shaded Blue = Rain</span>` +
+      `<span class="muted small">Gap to Leader (seconds) · Shaded Yellow = SC · Shaded Blue = Rain · Hover for lap detail</span>` +
       sel.map((d) => `<span class="ras-leg-item"><i style="background:${esc(d.color)}"></i><b>${esc(d.code3)}</b></span>`).join("");
+    _attachScrubTooltip(modalEl.querySelector("#ras-cv-pace"), frames);
+  }
+
+  /* ================= DATA EXPLORATION (shared helpers) ================= */
+
+  /* Hover tooltip for the legacy scrub-charts: frame-indexed rows per selected driver. */
+  function _attachScrubTooltip(canvasEl, frames, renderRow) {
+    if (!canvasEl || !frames.length) return;
+    canvasEl.onmousemove = (e) => {
+      const rect = canvasEl.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const padL = 38, padR = 12;
+      const i = Math.round(((mx - padL) / Math.max(1, rect.width - padL - padR)) * (frames.length - 1));
+      const fr = frames[Math.max(0, Math.min(frames.length - 1, i))];
+      if (!fr) return;
+      const rows = [`<b>Lap ${fr.lap}</b>${fr.sc ? " · ⚠️ SC" : ""}${fr.vsc ? " · VSC" : ""}${(fr.wetness || 0) >= 25 ? " · 🌧️ wet" : ""}`];
+      (fr.cars || []).slice().sort((a, b) => (a.pos || 99) - (b.pos || 0)).slice(0, 6).forEach((c) => {
+        rows.push(`P${c.pos} <b>${c.code3 || ""}</b> ${fmtLap(c.lapTime)} · ${esc(String(c.comp || "?").toUpperCase())} ${Math.round(c.tyreLife || 0)}% · conf ${Math.round(c.conf || 0)}`);
+      });
+      showTip(rows.join("<br>"), e.clientX, e.clientY);
+    };
+    canvasEl.onmouseleave = hideTip;
+  }
+
+  const TRACE_COLORS = ["#38bdf8", "#f472b6", "#4ade80"];
+
+  function _traceDrivers() {
+    const p = state.payload;
+    const all = (p.stints && p.stints.length ? p.stints : (p.drivers || [])).map((s, i) => ({
+      idx: s.idx != null ? s.idx : i,
+      code3: s.code3 || "DRV",
+      name: s.name || "Driver",
+      team: s.team || "",
+      color: s.color || "#38bdf8",
+      finishPos: s.finishPos,
+      dnf: s.dnf,
+    }));
+    all.sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : (a.finishPos || 99) - (b.finishPos || 99)));
+    return all;
+  }
+
+  function _ensureTraceSelection() {
+    if (!state.traceSel) {
+      const all = _traceDrivers();
+      state.traceSel = new Set(all.slice(0, 3).map((d) => d.idx));
+    }
+  }
+
+  function _carByLap(idx) {
+    const p = state.payload;
+    const map = new Map();
+    (p.frames || []).forEach((fr) => {
+      const entry = (fr.cars || []).find((x) => x.idx === idx);
+      if (entry) map.set(fr.lap, { frame: fr, car: entry });
+    });
+    return map;
+  }
+
+  function _scBands(frames) {
+    const bands = [];
+    let run = null;
+    frames.forEach((fr) => {
+      if (fr.sc || fr.vsc) {
+        if (!run) run = { x0: fr.lap - 0.5, x1: fr.lap + 0.5, color: "rgba(250,204,21,0.09)", label: "SC" };
+        else run.x1 = fr.lap + 0.5;
+      } else if (run) { bands.push(run); run = null; }
+    });
+    if (run) bands.push(run);
+    return bands;
+  }
+
+  function _pEvents(idxSet) {
+    return (state.payload.events || [])
+      .filter((e) => e.type === "pit" && idxSet.has(e.carIdx))
+      .map((e) => {
+        const drv = _traceDrivers().find((d) => d.idx === e.carIdx);
+        return { x: e.lap, label: `${drv ? drv.code3 : "?"} pit`, color: hexToRgba(drv ? drv.color : "#facc15", 0.6) };
+      });
+  }
+
+  function hexToRgba(hex, a) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || "");
+    if (!m) return `rgba(250,204,21,${a})`;
+    return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
+  }
+
+  function _driverChipRow(containerSel, selSet, maxSel, onToggle) {
+    const host = modalEl.querySelector(containerSel);
+    if (!host) return;
+    const all = _traceDrivers();
+    host.innerHTML = `
+      <span class="ras-r-lbl"><i class="fas fa-sliders-h"></i> PICK UP TO ${maxSel} DRIVERS:</span>
+      ${all.map((d) => {
+        const on = selSet.has(d.idx);
+        return `<button type="button" class="ras-r-chip${on ? " active" : ""}" data-tidx="${d.idx}" style="${on ? `border-color:${d.color};color:${d.color}` : ""}">
+          <i class="fas fa-info-circle" data-dossier="${esc(d.name)}" style="opacity:0.55" title="Driver dossier"></i> ${esc(d.code3)}${d.dnf ? " DNF" : ""}
+        </button>`;
+      }).join("")}
+    `;
+    host.querySelectorAll("[data-tidx]").forEach((chip) => {
+      chip.addEventListener("click", (ev) => {
+        if (ev.target.closest("[data-dossier]")) return;
+        const idx = Number(chip.dataset.tidx);
+        if (selSet.has(idx)) selSet.delete(idx);
+        else if (selSet.size < maxSel) selSet.add(idx);
+        onToggle();
+      });
+    });
+    host.querySelectorAll("[data-dossier]").forEach((ico) => {
+      ico.addEventListener("click", (ev) => { ev.stopPropagation(); showDriverDossier(ico.dataset.dossier); });
+    });
+  }
+
+  /* ================= RACE TRACES (hero view) ================= */
+
+  function renderTracesTab() {
+    _ensureTraceSelection();
+    const sel = _traceDrivers().filter((d) => state.traceSel.has(d.idx));
+    _driverChipRow("#ras-trace-chips", state.traceSel, 3, renderTracesTab);
+    const p = state.payload;
+    const frames = p.frames || [];
+    const cv = modalEl.querySelector("#ras-cv-traces");
+    if (!cv || !frames.length || !sel.length) return;
+
+    const series = sel.map((d, i) => {
+      const byLap = _carByLap(d.idx);
+      const laps = [], vals = [];
+      byLap.forEach(({ car }, lap) => {
+        if (Number.isFinite(car.lapTime) && car.lapTime > 0) { laps.push(lap); vals.push(car.lapTime); }
+      });
+      return { label: d.code3, color: TRACE_COLORS[i % TRACE_COLORS.length] || d.color, bold: i === 0, values: vals, xs: laps, noDots: laps.length > 40 };
+    });
+    const scBands = _scBands(frames);
+    const pitEvents = _pEvents(new Set(sel.map((d) => d.idx)));
+
+    F1Charts.line(cv, {
+      series,
+      bands: scBands,
+      events: pitEvents,
+      yPad: 0.6,
+      fmtY: (v) => `${Math.floor(v / 60)}:${(v % 60).toFixed(1).padStart(4, "0")}`,
+      fmtX: (x) => `L${Math.round(x)}`,
+      tooltipHead: (x) => `Lap ${Math.round(x)} — ${esc(p.circuitName || "")}`,
+      tooltipRows: (x) => {
+        const lap = Math.round(x);
+        const rows = [];
+        sel.forEach((d, i) => {
+          const e = (_carByLap(d.idx).get(lap) || {}).car;
+          if (!e || e.dnf) return;
+          rows.push(`<span style="color:${TRACE_COLORS[i % TRACE_COLORS.length]}">●</span> <b>${esc(d.code3)}</b> ${fmtLap(e.lapTime)} · ${esc(String(e.comp || "?").toUpperCase())} ${Math.round(e.tyreLife || 0)}% · P${e.pos} · gap ${e.gap != null ? "+" + Number(e.gap).toFixed(1) + "s" : "—"}`);
+        });
+        const fr = frames.find((f) => f.lap === lap);
+        if (fr && (fr.sc || fr.vsc)) rows.push(`⚠️ ${fr.vsc && !fr.sc ? "Virtual " : ""}Safety Car active`);
+        return rows;
+      },
+      emptyText: "No lap timing recorded for the selected drivers.",
+    });
+
+    // Sector analysis: best + average per selected driver vs the whole field.
+    const sectorHost = modalEl.querySelector("#ras-trace-sector");
+    if (sectorHost) {
+      const field = { s1: [], s2: [], s3: [] };
+      const per = {};
+      frames.forEach((fr) => {
+        (fr.cars || []).forEach((c) => {
+          if (c.dnf) return;
+          [["s1", "s2", "s3"].forEach((k) => { }, 0)];
+          if (Number.isFinite(c.s1) && c.s1 > 0) field.s1.push(c.s1);
+          if (Number.isFinite(c.s2) && c.s2 > 0) field.s2.push(c.s2);
+          if (Number.isFinite(c.s3) && c.s3 > 0) field.s3.push(c.s3);
+          if (state.traceSel.has(c.idx)) {
+            per[c.idx] = per[c.idx] || { name: (sel.find((d) => d.idx === c.idx) || {}).code3 || "DRV", s1: [], s2: [], s3: [] };
+            if (Number.isFinite(c.s1) && c.s1 > 0) per[c.idx].s1.push(c.s1);
+            if (Number.isFinite(c.s2) && c.s2 > 0) per[c.idx].s2.push(c.s2);
+            if (Number.isFinite(c.s3) && c.s3 > 0) per[c.idx].s3.push(c.s3);
+          }
+        });
+      });
+      const fBest = { s1: Math.min(...field.s1), s2: Math.min(...field.s2), s3: Math.min(...field.s3) };
+      const fmtS = (v) => (Number.isFinite(v) ? v.toFixed(3) : "—");
+      sectorHost.innerHTML = `
+        <div class="ld-item">
+          <div class="ld-item-top"><strong>Best vs Average Sectors</strong><span class="ld-tag">FIELD BENCHMARK</span></div>
+          <table class="ras-table" style="width:100%">
+            <thead><tr><th>DRV</th><th>S1 best / avg</th><th>S2 best / avg</th><th>S3 best / avg</th><th>vs field best</th></tr></thead>
+            <tbody>
+              ${sel.map((d) => {
+                const s = per[d.idx];
+                if (!s) return "";
+                const best = (k) => Math.min(...s[k]);
+                const avg = (k) => s[k].reduce((a, b) => a + b, 0) / Math.max(1, s[k].length);
+                const driverBest = best("s1") + best("s2") + best("s3");
+                const delta = driverBest - (fBest.s1 + fBest.s2 + fBest.s3);
+                return `<tr><td><b style="color:${d.color}">${esc(d.code3)}</b></td>
+                  <td>${fmtS(best("s1"))} / ${fmtS(avg("s1"))}</td>
+                  <td>${fmtS(best("s2"))} / ${fmtS(avg("s2"))}</td>
+                  <td>${fmtS(best("s3"))} / ${fmtS(avg("s3"))}</td>
+                  <td style="color:${delta <= 0.05 ? "#4ade80" : delta <= 0.4 ? "#facc15" : "#f87171"}">${delta >= 0 ? "+" : ""}${delta.toFixed(3)}s</td></tr>`;
+              }).join("")}
+              <tr><td class="muted">FIELD</td><td>${fmtS(fBest.s1)}</td><td>${fmtS(fBest.s2)}</td><td>${fmtS(fBest.s3)}</td><td class="muted">theoretical best</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  }
+
+  /* ================= COMPONENT HEALTH ================= */
+
+  function renderComponentsTab() {
+    const p = state.payload;
+    const frames = p.frames || [];
+    const all = _traceDrivers();
+    if (!state.compDriver) {
+      const focus = all.find((d) => d.idx === state.focusDrvIdx) || all.find((d) => !d.dnf) || all[0];
+      state.compDriver = focus ? focus.idx : null;
+    }
+    const driverChips = new Set([state.compDriver]);
+    const host = modalEl.querySelector("#ras-comp-chips");
+    if (host) {
+      host.innerHTML = `
+        <span class="ras-r-lbl"><i class="fas fa-car-side"></i> COMPONENT HEALTH · DRIVER:</span>
+        ${all.map((d) => `<button type="button" class="ras-r-chip${driverChips.has(d.idx) ? " active" : ""}" data-cidx="${d.idx}">
+          <i class="fas fa-info-circle" data-dossier="${esc(d.name)}" style="opacity:0.55"></i> ${esc(d.code3)}
+        </button>`).join("")}
+      `;
+      host.querySelectorAll("[data-cidx]").forEach((chip) => {
+        chip.addEventListener("click", (ev) => {
+          if (ev.target.closest("[data-dossier]")) return;
+          state.compDriver = Number(chip.dataset.cidx);
+          renderComponentsTab();
+        });
+      });
+      host.querySelectorAll("[data-dossier]").forEach((ico) => {
+        ico.addEventListener("click", (ev) => { ev.stopPropagation(); showDriverDossier(ico.dataset.dossier); });
+      });
+    }
+    const cv = modalEl.querySelector("#ras-cv-components");
+    if (!cv || !frames.length || state.compDriver == null) return;
+
+    const COMPS = [
+      ["ice", "#38bdf8", "ICE"], ["ers", "#4ade80", "ERS"], ["gearbox", "#facc15", "Gearbox"],
+      ["brakes", "#fb923c", "Brakes"], ["floor", "#c084fc", "Floor"],
+    ];
+    const laps = [], seriesMap = Object.fromEntries(COMPS.map(([k]) => [k, { laps: [], vals: [] }]));
+    let lastLoss = null;
+    frames.forEach((fr) => {
+      const c = (fr.cars || []).find((x) => x.idx === state.compDriver);
+      if (!c || c.dnf || !c.components) return;
+      laps.push(fr.lap);
+      COMPS.forEach(([k]) => {
+        const h = c.components[k];
+        if (h && Number.isFinite(h.health)) { seriesMap[k].laps.push(fr.lap); seriesMap[k].vals.push(h.health); }
+      });
+      if (Number.isFinite(c.compLossS)) lastLoss = { lap: fr.lap, loss: c.compLossS };
+    });
+    F1Charts.line(cv, {
+      series: COMPS.map(([k, color, label]) => ({
+        label, color, values: seriesMap[k].vals, xs: seriesMap[k].laps, noDots: laps.length > 30, yZeroBase: false,
+      })),
+      yMin: 0, yMax: 100,
+      fmtY: (v) => `${Math.round(v)}%`,
+      fmtX: (x) => `L${Math.round(x)}`,
+      tooltipHead: (x) => `Lap ${Math.round(x)} component health`,
+      tooltipRows: (x) => {
+        const lap = Math.round(x);
+        const rows = COMPS.map(([k, color, label]) => {
+          const i = seriesMap[k].laps.indexOf(lap);
+          return i >= 0 ? `<span style="color:${color}">●</span> <b>${label}</b> ${seriesMap[k].vals[i].toFixed(1)}%` : null;
+        }).filter(Boolean);
+        const c = (_carByLap(state.compDriver).get(lap) || {}).car;
+        if (c && Number.isFinite(c.compLossS) && c.compLossS > 0) rows.push(`⏱️ Pace loss: +${c.compLossS.toFixed(2)}s/lap`);
+        return rows;
+      },
+      emptyText: "No component telemetry recorded.",
+    });
+    const metaHost = modalEl.querySelector("#ras-comp-meta");
+    if (metaHost) {
+      const st = (p.stints || []).find((s) => s.idx === state.compDriver) || {};
+      const comp = st.components || {};
+      const worst = Object.entries(comp).sort((a, b) => (a[1].health || 100) - (b[1].health || 100))[0];
+      metaHost.innerHTML = `
+        <div class="ld-item">
+          <div class="ld-item-top"><strong>End-of-Race Component Summary</strong><span class="ld-tag">${esc(st.code3 || "")} ${st.dnf ? "· DNF (" + esc(st.dnfReason || "") + ")" : "· P" + (st.finishPos || "?")}</span></div>
+          <p>${COMPS.map(([k, color, label]) => {
+            const h = (comp[k] || {}).health;
+            const col = h == null ? "#64748b" : h < 55 ? "#f87171" : h < 75 ? "#facc15" : "#4ade80";
+            return `<span style="margin-right:14px;color:${col}"><b>${label}</b> ${h != null ? Number(h).toFixed(1) + "%" : "—"}</span>`;
+          }).join("")}</p>
+          ${worst ? `<p class="muted small">Critical item: <b>${esc(worst[0])}</b> at ${Number(worst[1].health).toFixed(1)}%${lastLoss ? ` · latest pace loss +${lastLoss.loss.toFixed(2)}s/lap (L${lastLoss.lap})` : ""}</p>` : ""}
+        </div>
+      `;
+    }
+  }
+
+  /* ================= DRIVER DOSSIER (F1DB + FIA) ================= */
+
+  async function showDriverDossier(name) {
+    let panel = document.getElementById("ras-dossier");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "ras-dossier";
+      panel.style.cssText = "position:fixed;right:18px;top:70px;width:360px;max-height:76vh;overflow:auto;z-index:10060;background:rgba(6,12,24,0.98);border:1px solid #1e3a5f;border-radius:12px;padding:14px;box-shadow:0 16px 48px rgba(0,0,0,0.6);color:#e2e8f0;font-family:'Source Sans 3',system-ui,sans-serif;";
+      document.body.appendChild(panel);
+    }
+    panel.style.display = "block";
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:1rem;">${esc(name)}</b><button type="button" id="ras-dossier-x" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1rem">✕</button></div><p class="muted small" style="color:#94a3b8">Loading F1DB dossier…</p>`;
+    panel.querySelector("#ras-dossier-x").addEventListener("click", () => { panel.style.display = "none"; });
+    let d = null;
+    try {
+      const res = await fetch(`/api/analytics/driver-card/${encodeURIComponent(name)}`);
+      d = await res.json();
+    } catch (e) { /* keep loading state */ }
+    if (!d || !d.ok) { panel.innerHTML = `<div style="display:flex;justify-content:space-between"><b>${esc(name)}</b><button type="button" id="ras-dossier-x">✕</button></div><p style="color:#94a3b8">No F1DB dossier found for this driver.</p>`; panel.querySelector("#ras-dossier-x").addEventListener("click", () => { panel.style.display = "none"; }); return; }
+    const v = d.driver || {};
+    const counters = [
+      ["Titles", v.totalChampionshipWins], ["Wins", v.totalRaceWins], ["Podiums", v.totalPodiums],
+      ["Poles", v.totalPolePositions], ["Fastest laps", v.totalFastestLaps], ["Grand slams", v.totalGrandSlams],
+      ["Starts", v.totalRaceStarts], ["Points", v.totalPoints],
+    ];
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <b style="font-size:1.05rem;">${esc(v.fullName || v.name || name)}</b>
+          <div style="color:#94a3b8;font-size:0.8rem;">${esc(v.abbreviation || "")}${v.permanentNumber ? ` · #${esc(v.permanentNumber)}` : ""} · ${esc(v.dateOfBirth || "")}${v.dateOfDeath ? " †" : ""}<br>${esc(v.placeOfBirth || "")}</div>
+        </div>
+        <button type="button" id="ras-dossier-x" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1rem">✕</button>
+      </div>
+      ${d.photo ? `<img src="/${esc(d.photo)}" alt="" style="width:100%;border-radius:8px;margin-bottom:8px" onerror="this.style.display='none'"/>` : ""}
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0;">
+        ${counters.map(([k, val]) => `<div style="background:#0b1220;border-radius:6px;padding:5px 4px;text-align:center"><small style="color:#64748b;display:block;font-size:0.62rem;">${esc(k).toUpperCase()}</small><b style="color:#facc15;">${val == null ? "—" : val}</b></div>`).join("")}
+      </div>
+      <div style="border-top:1px solid #1e293b;margin:8px 0;padding-top:6px;">
+        <b style="color:#f87171;font-size:0.85rem;">⚖️ FIA Stewarding History</b>
+        ${(d.fia_decisions || []).length ? d.fia_decisions.map((x) => `
+          <div style="margin-top:6px;background:#0b1220;border-radius:6px;padding:6px 8px;font-size:0.78rem;">
+            <span style="color:#64748b;">${esc(String(x.year))} ${esc(String(x.gp || "").replace(/-/g, " "))} · ${esc(x.session || "")}</span><br>
+            <b>${esc(x.offence || x.fact || "Infringement")}</b>
+            ${x.penalty ? ` — <span style="color:#fca5a5;">${esc(x.penalty)}</span>${x.penalty_points ? ` (+${esc(x.penalty_points)} pts)` : ""}` : ""}
+          </div>`).join("") : '<p class="muted small" style="color:#94a3b8">Clean record in the 2026 FIA archive.</p>'}
+      </div>
+    `;
+    panel.querySelector("#ras-dossier-x").addEventListener("click", () => { panel.style.display = "none"; });
   }
 
   function renderTyreStints() {
-    const box = modalEl.querySelector("#ras-pane-tyres");
+    const pane = modalEl.querySelector("#ras-pane-tyres");
     const p = state.payload;
     const tot = Math.max(1, p.totalLaps || 15);
     const stints = (p.stints || []).slice().sort((a, b) => (a.dnf !== b.dnf ? (a.dnf ? 1 : -1) : a.finishPos - b.finishPos));
     const scrubLap = ((p.frames || [])[state.scrubIdx] || {}).lap || 0;
     const curPct = Math.min(100, Math.round((scrubLap / tot) * 100));
 
-    box.innerHTML = `
+    const gantt = modalEl.querySelector("#ras-tyre-gantt");
+    if (gantt) {
+      gantt.innerHTML = `
       <div class="ras-card ras-scroll">
         <div class="ras-card-head"><span>TYRE STRATEGY &amp; STINT GANTT (${tot} LAPS)</span><small>Yellow line = Scrubbed Lap ${scrubLap}</small></div>
         <div class="ras-gantt">
@@ -1013,8 +1396,72 @@
             `;
           }).join("")}
         </div>
+      </div>`;
+    }
+
+    /* Tyre-life decay exploration: pick a driver, see compound-coloured life curves per stint. */
+    const wearHost = modalEl.querySelector("#ras-tyre-wear");
+    if (!wearHost) return;
+    _ensureTraceSelection();
+    const sel = _traceDrivers().filter((d) => state.traceSel.has(d.idx));
+    const chipHost = modalEl.querySelector("#ras-trace-chips");
+    const series = [];
+    const compoundsUsed = new Set();
+    sel.forEach((d) => {
+      const st = (p.stints || []).find((x) => x.idx === d.idx) || {};
+      (st.stints && st.stints.length ? st.stints : [{ compound: "medium", startLap: 1, endLap: tot }]).forEach((seg) => {
+        const comp = COMPOUNDS[seg.compound] || COMPOUNDS.medium;
+        compoundsUsed.add(comp.code);
+        const laps = [], vals = [];
+        for (let lap = seg.startLap; lap <= Math.min(seg.endLap, tot); lap++) {
+          const e = (_carByLap(d.idx).get(lap) || {}).car;
+          if (e && Number.isFinite(e.tyreLife)) { laps.push(lap); vals.push(e.tyreLife); }
+        }
+        if (vals.length) series.push({ label: `${d.code3} ${comp.code} L${seg.startLap}-${seg.endLap}`, color: comp.color, values: vals, xs: laps, noDots: vals.length > 30 });
+      });
+    });
+    wearHost.innerHTML = `
+      <div class="ld-item">
+        <div class="ld-item-top"><strong>Tyre-Life Decay Curves</strong><span class="ld-tag">${sel.map((d) => esc(d.code3)).join(" · ") || "PICK DRIVERS"}</span></div>
+        <div class="ras-trace-chips" id="ras-tyre-chips"></div>
+        <canvas id="ras-cv-tyrewear" class="ras-canvas" style="height:240px"></canvas>
+        <p class="muted small" style="margin:4px 0 0;">100% = fresh rubber. ${compoundsUsed.size ? `Compounds on show: <b>${[...compoundsUsed].join(" · ")}</b>` : ""}</p>
       </div>
     `;
+    const wearChips = wearHost.querySelector("#ras-tyre-chips");
+    if (wearChips && chipHost) {
+      wearChips.innerHTML = chipHost.innerHTML;
+      wearChips.querySelectorAll("[data-tidx]").forEach((chip) => {
+        chip.addEventListener("click", (ev) => {
+          if (ev.target.closest("[data-dossier]")) return;
+          const idx = Number(chip.dataset.tidx);
+          if (state.traceSel.has(idx)) state.traceSel.delete(idx);
+          else if (state.traceSel.size < 3) state.traceSel.add(idx);
+          renderTyreStints();
+        });
+      });
+      wearChips.querySelectorAll("[data-dossier]").forEach((ico) => {
+        ico.addEventListener("click", (ev) => { ev.stopPropagation(); showDriverDossier(ico.dataset.dossier); });
+      });
+    }
+    const wearCv = wearHost.querySelector("#ras-cv-tyrewear");
+    if (wearCv) {
+      F1Charts.line(wearCv, {
+        series,
+        yMin: 0, yMax: 100,
+        fmtY: (v) => `${Math.round(v)}%`,
+        fmtX: (x) => `L${Math.round(x)}`,
+        tooltipHead: (x) => `Lap ${Math.round(x)} tyre life`,
+        tooltipRows: (x) => {
+          const lap = Math.round(x);
+          return series.map((s) => {
+            const i = s.xs.indexOf(lap);
+            return i >= 0 ? `<span style="color:${esc(s.color)}">●</span> <b>${esc(s.label)}</b> ${Math.round(s.values[i])}%` : null;
+          }).filter(Boolean);
+        },
+        emptyText: "Pick up to 3 drivers above to explore tyre-life decay.",
+      });
+    }
   }
 
   function renderPsychChart() {
@@ -1045,8 +1492,9 @@
       c.ctx.stroke();
     });
     modalEl.querySelector("#ras-leg-psych").innerHTML =
-      `<span class="muted small">Driver Confidence (0–100) · Green Band = IN THE ZONE (≥82) · Red Band = SHAKEN (≤28)</span>` +
+      `<span class="muted small">Driver Confidence (0–100) · Green Band = IN THE ZONE (≥82) · Red Band = SHAKEN (≤28) · Hover for lap detail</span>` +
       sel.map((d) => `<span class="ras-leg-item"><i style="background:${esc(d.color)}"></i><b>${esc(d.code3)}</b></span>`).join("");
+    _attachScrubTooltip(modalEl.querySelector("#ras-cv-psych"), frames);
   }
 
   // ---------------------------------------------------------------------------
@@ -1251,10 +1699,12 @@
   function renderActivePane() {
     if (!state.payload || !modalEl) return;
     if (state.activeTab === "overview") renderOverview();
+    else if (state.activeTab === "traces") requestAnimationFrame(renderTracesTab);
     else if (state.activeTab === "engineer") renderEngineerLab();
     else if (state.activeTab === "positions") requestAnimationFrame(renderPositionChart);
     else if (state.activeTab === "pace") requestAnimationFrame(renderPaceChart);
-    else if (state.activeTab === "tyres") renderTyreStints();
+    else if (state.activeTab === "tyres") requestAnimationFrame(renderTyreStints);
+    else if (state.activeTab === "components") requestAnimationFrame(renderComponentsTab);
     else if (state.activeTab === "psych") requestAnimationFrame(renderPsychChart);
     else if (state.activeTab === "interviews") renderInterviews();
   }

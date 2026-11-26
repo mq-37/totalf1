@@ -2352,3 +2352,12 @@ body.sim-cockpit-active #panel-sim.active {
 }
 .fsim-kitem b { display: block; font-size: 0.74rem; color: #f8fafc; }
 .fsim-kitem small { display: block; font-size: 0.65rem; color: #94a3b8; }
+
+/* ===== Telemetry exploration (Race Traces / Components / Paddock chips) ===== */
+.ras-trace-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; align-items: center; }
+.ras-trace-chips .ras-r-chip { cursor: pointer; user-select: none; }
+.ras-trace-chips .ras-r-chip.active { background: rgba(56, 189, 248, 0.14); }
+.ras-trace-sector { margin-top: 10px; }
+.ras-trace-sector table { font-size: 0.8rem; }
+.ras-trace-sector th { text-align: left; color: #94a3b8; padding: 3px 8px; }
+.ras-trace-sector td { padding: 3px 8px; border-top: 1px solid rgba(148,163,184,0.12); }
