@@ -595,7 +595,53 @@
     if (getEl("liv-style")) getEl("liv-style").value = cfg.style;
     if (getEl("liv-era")) getEl("liv-era").value = cfg.era;
   }
+  // ISO factory: R rotates the diorama to the next corner view.
+  window.addEventListener("keydown", (e) => {
+    if (campusMode === "iso" && !e.repeat && e.code === "KeyR") {
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (isoFactory) isoFactory.cycleOrientation(1);
+    }
+  });
+
   let hqCampus3D = null;
+  let campusMode = "3d";   // "3d" (Three.js garage/office/tunnel/factory) | "iso" (2.5D factory)
+  let isoFactory = null;
+  let lastCampusOpts = null;
+  let isoStateFetched = false;
+
+  function enterIsoMode() {
+    campusMode = "iso";
+    const cvEl = getEl("car-dash-3d-canvas");
+    const isoHost = getEl("car-dash-iso-host");
+    const tag = getEl("car-3d-spec-tag");
+    if (cvEl) cvEl.style.display = "none";
+    if (isoHost) isoHost.classList.remove("hidden");
+    if (tag) tag.textContent = "ISO Factory · wheel = zoom · R = rotate · click zones";
+    if (hqCampus3D) hqCampus3D.stop();
+    if (!isoFactory && window.CareerFactoryIsoProcedural) {
+      isoFactory = new window.CareerFactoryIsoProcedural(getEl("car-dash-iso-host"), {});
+    }
+    if (isoFactory && !isoStateFetched) {
+      isoStateFetched = true;
+      fetch("/api/career/factory-state").then((r) => r.json()).then((fs) => {
+        if (fs && fs.ok && isoFactory) isoFactory.setState(fs);
+      }).catch(() => {});
+    }
+  }
+
+  function exitIsoMode() {
+    campusMode = "3d";
+    const cvEl = getEl("car-dash-3d-canvas");
+    const isoHost = getEl("car-dash-iso-host");
+    const tag = getEl("car-3d-spec-tag");
+    if (isoHost) isoHost.classList.add("hidden");
+    if (cvEl) cvEl.style.display = "";
+    if (tag) tag.textContent = "Race Garage · Drag to orbit 3D Campus";
+    if (isoFactory) isoFactory.destroy(), isoFactory = null, isoStateFetched = false;
+    if (hqCampus3D && lastCampusOpts) hqCampus3D.sync(lastCampusOpts);
+  }
+
   function syncDash3DCar(previewOverride) {
     const cv = getEl("car-dash-3d-canvas");
     if (!cv || !window.THREE || !window.F1Car3D || !DATA.player_team) return;
@@ -620,14 +666,22 @@
       `).join("");
     }
 
-    // Phase 6: Interactive 3D Team HQ Campus (Garage, Office, Wind Tunnel, Factory!)
+    // Phase 6: Interactive 3D Team HQ Campus (Garage, Office, Wind Tunnel, Factory + ISO Factory!)
     if (window.CareerHQ3D && activeTab === "dashboard" && !cr.active) {
+      if (campusMode === "iso") {
+        // ISO Factory mode: live 2.5D facility diorama replaces the Three.js canvas.
+        if (!isoFactory && window.CareerFactoryIsoProcedural) {
+          isoFactory = new window.CareerFactoryIsoProcedural(getEl("car-dash-iso-host"), {});
+        }
+        if (hqCampus3D) hqCampus3D.stop();
+        return;
+      }
       if (!hqCampus3D) {
         hqCampus3D = window.CareerHQ3D.createHQ3DCampus(cv, getEl("car-3d-spec-tag"));
       }
       if (hqCampus3D) {
         const dyn = (DATA.state && DATA.state.dynasty) || {};
-        hqCampus3D.sync({
+        lastCampusOpts = {
           palette: pal,
           style,
           era,
@@ -635,7 +689,8 @@
           wins: dyn.wins || 0,
           championships: (dyn.garage_seasons || []).filter((s) => s.wcc_pos === 1).length,
           teamName: pt.name || "F1 Team",
-        });
+        };
+        hqCampus3D.sync(lastCampusOpts);
         return;
       }
     }
@@ -4087,7 +4142,20 @@
         b.classList.toggle("active", on);
         b.classList.toggle("car-btn-red", on);
       });
-      if (hqCampus3D) hqCampus3D.setRoom(rm);
+      if (rm === "iso") {
+        enterIsoMode();
+      } else {
+        if (campusMode === "iso") exitIsoMode();
+        if (hqCampus3D) hqCampus3D.setRoom(rm);
+      }
+      return;
+    }
+    const spinTgl = ev.target.closest("#hq3d-spin-toggle");
+    if (spinTgl && hqCampus3D) {
+      const on = !hqCampus3D.getAutoRotate();
+      hqCampus3D.setAutoRotate(on);
+      spinTgl.textContent = on ? "⟳ Auto" : "⏸ Held";
+      spinTgl.style.color = on ? "#facc15" : "#94a3b8";
       return;
     }
   });

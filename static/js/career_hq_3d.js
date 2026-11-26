@@ -74,6 +74,10 @@
       theta: 0.45,
       drag: false,
       lastX: 0,
+      lastY: 0,
+      autoRotate: false,   // OFF by default — the scene holds still where you park it
+      camY: 3.8,
+      radius: 10.2,
       roomGroup: null,
       workers: [],
       streamlines: [],
@@ -84,15 +88,23 @@
       lastOpts: null,
     };
 
-    // Mouse-drag horizontal orbit so the user can inspect every corner of their 3D HQ!
-    canvasEl.addEventListener("pointerdown", (ev) => { st.drag = true; st.lastX = ev.clientX; });
+    // Mouse-drag orbit (horizontal + vertical) with clamped zoom so the user can inspect
+    // every corner of their 3D HQ — and the auto-spin stays OFF unless explicitly enabled.
+    canvasEl.addEventListener("pointerdown", (ev) => { st.drag = true; st.lastX = ev.clientX; st.lastY = ev.clientY; try { canvasEl.setPointerCapture(ev.pointerId); } catch (_) {} });
     global.addEventListener("pointerup", () => { st.drag = false; });
     canvasEl.addEventListener("pointermove", (ev) => {
       if (!st.drag) return;
       const dx = ev.clientX - st.lastX;
+      const dy = ev.clientY - st.lastY;
       st.lastX = ev.clientX;
+      st.lastY = ev.clientY;
       st.theta += dx * 0.009;
+      st.camY = Math.max(1.6, Math.min(7.5, st.camY + dy * 0.016));
     });
+    canvasEl.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      st.radius = Math.max(5.4, Math.min(14.5, st.radius + (ev.deltaY > 0 ? 0.85 : -0.85)));
+    }, { passive: false });
 
     function disposeRoom() {
       if (!st.roomGroup) return;
@@ -218,6 +230,63 @@
           ty.position.set(-5.8, 0.14 + t * 0.29, -3.5);
           grp.add(ty);
         }
+        // ================= Garage dressing (workplace detail that blends in) =================
+        const dressingGroup = new THREE.Group();
+        grp.add(dressingGroup);
+        // Oil stains & scuff patches on the floor (procedural scatter, deterministic)
+        const stainMat = new THREE.MeshBasicMaterial({ color: 0x05070c, transparent: true, opacity: 0.42, depthWrite: false });
+        [[-4.6, 1.9, 0.85], [-1.2, -2.3, 0.6], [1.7, 2.4, 0.75], [4.4, -1.6, 0.55], [0.4, 3.1, 0.5], [-2.9, -3.3, 0.65]].forEach(([sx, sz, sr]) => {
+          const stain = new THREE.Mesh(new THREE.CircleGeometry(sr, 14), stainMat);
+          stain.rotation.x = -Math.PI / 2;
+          stain.position.set(sx, 0.015, sz);
+          dressingGroup.add(stain);
+        });
+        // Red tool chests against the back wall
+        const chestMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.42, metalness: 0.35 });
+        const chestTop = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.5 });
+        [-6.4, -5.1].forEach((cx) => {
+          const chest = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.05, 0.62), chestMat);
+          chest.position.set(cx, 0.53, -4.3);
+          dressingGroup.add(chest);
+          const lid = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 0.68), chestTop);
+          lid.position.set(cx, 1.1, -4.3);
+          dressingGroup.add(lid);
+          // Silver drawer handles
+          const handleMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1 });
+          [0.38, 0.62, 0.86].forEach((hz) => {
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.045, 0.05), handleMat);
+            handle.position.set(cx, hz, -3.97);
+            dressingGroup.add(handle);
+          });
+        });
+        // Pit-wall style overhead light bars (cool white, subtly emissive)
+        const lightBarMat = new THREE.MeshBasicMaterial({ color: 0xdceafe });
+        [[-4.2, 4.1], [0, 4.1], [4.2, 4.1]].forEach(([lx, lz]) => {
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 0.32), lightBarMat);
+          bar.position.set(lx, 4.55, lz);
+          dressingGroup.add(bar);
+        });
+        // Team banners hanging on the back wall
+        const bannerY = 3.6;
+        [[-5.6, mainCol], [-3.1, accCol], [5.6, mainCol], [3.1, accCol]].forEach(([bx, col], bi) => {
+          const banner = new THREE.Mesh(
+            new THREE.BoxGeometry(1.6, 1.15, 0.05),
+            new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: 0.85 })
+          );
+          banner.position.set(bx, bannerY, -4.62);
+          dressingGroup.add(banner);
+          // White stripe detail so they read as team flags, not colored slabs
+          const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 0.02), new THREE.MeshBasicMaterial({ color: 0xf8fafc }));
+          stripe.position.set(bx, bannerY + 0.32, -4.58);
+          dressingGroup.add(stripe);
+        });
+        // Water-cooler station + crate of spares near the garage entry
+        const cooler = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.15, 0.42), new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.5 }));
+        cooler.position.set(6.35, 0.58, -4.15);
+        dressingGroup.add(cooler);
+        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.42, 10), new THREE.MeshStandardMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.75, roughness: 0.15 }));
+        bottle.position.set(6.35, 1.32, -4.15);
+        dressingGroup.add(bottle);
         // Mechanics working around both cars
         const spots = [[-3.9, 1.2, 1.3], [-0.8, 0.6, -1.4], [0.8, -0.5, 1.5], [3.9, 0.9, -1.3], [-3.8, -1.5, 1.2], [3.8, -1.5, -1.2], [0, -3.2, 0], [-5.2, 0.2, 1.1]];
         for (let w = 0; w < Math.min(workerCount, spots.length); w++) {
@@ -404,7 +473,7 @@
           st.lastH = h;
         }
         st.t += 0.016;
-        if (!st.drag) st.theta += 0.0028;
+        if (st.autoRotate && !st.drag) st.theta += 0.0028;
 
         // Animate staff workers, aero streamlines & ERS dyno pulse
         st.workers.forEach((wk) => {
@@ -422,8 +491,8 @@
           st.dynCore.material.emissiveIntensity = 0.85 + Math.sin(st.t * 4.5) * 0.35;
         }
 
-        const rad = st.room === "garage" ? 10.2 : (st.room === "office" ? 8.8 : 9.4);
-        const camY = st.room === "office" ? 3.2 : 3.8;
+        const rad = st.radius;
+        const camY = st.room === "office" ? Math.max(2.4, st.camY) : st.camY;
         camera.position.set(Math.sin(st.theta) * rad, camY, Math.cos(st.theta) * rad);
         camera.lookAt(0, 1.15, -0.4);
         renderer.render(scene, camera);
@@ -443,6 +512,16 @@
         if (st.lastOpts) buildRoom(st.lastOpts);
       },
       getRoom() { return st.room; },
+      setAutoRotate(on) {
+        st.autoRotate = Boolean(on);
+        if (on) st.theta = 0.45;
+      },
+      getAutoRotate() { return st.autoRotate; },
+      resetView() {
+        st.theta = 0.45;
+        st.camY = st.room === "office" ? 3.2 : 3.8;
+        st.radius = st.room === "office" ? 8.8 : 10.2;
+      },
       sync(opts) {
         st.lastOpts = opts;
         const newKey = `${st.room}|${JSON.stringify(opts.palette)}|${opts.style}|${opts.era}|${JSON.stringify(opts.facilities)}|${opts.wins}|${opts.championships}`;

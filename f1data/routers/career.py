@@ -254,6 +254,54 @@ async def career_page(request: Request):
     )
 
 
+@router.get("/api/career/factory-state")
+def api_career_factory_state():
+    """Live factory-state payload for the 2.5D isometric Career Factory HQ renderer.
+
+    Maps the career save onto the renderer contract:
+      facility_level    = mean of HQ facility levels (1-5) scaled to the 1-6 iso tier ladder
+      active_staff_count = hired technical staff (capped at the 8 animated stations)
+      livery            = team colors
+    """
+    import math as _math
+    from .. import career as _career
+    try:
+        state = _career.load_career(srv._career_base_dir())
+    except Exception:
+        state = None
+    if not state:
+        return {
+            "ok": True, "career_active": False,
+            "facility_level": 3, "active_staff_count": 4,
+            "livery": {"primary": "#e10600", "secondary": "#111622", "accent": "#facc15"},
+            "team_name": "", "season": 1, "round": 1,
+        }
+    pt = state.get("player_team") or {}
+    fac = pt.get("facilities") or {}
+    levels = [int(v) for v in fac.values() if isinstance(v, (int, float))]
+    avg = (sum(levels) / len(levels)) if levels else 2.0
+    facility_level = max(1, min(6, int(_math.ceil(avg))))
+    staff = state.get("staff") or {}
+    active_staff = min(8, len(staff))
+    team_name = pt.get("name") or ""
+    colors = srv.get_team_colors(team_name)
+    accent = colors.get("accent") or colors.get("tertiary") or colors.get("primary", "#facc15")
+    return {
+        "ok": True,
+        "career_active": True,
+        "facility_level": facility_level,
+        "active_staff_count": active_staff,
+        "livery": {
+            "primary": colors.get("primary", "#e10600"),
+            "secondary": colors.get("secondary", "#111622"),
+            "accent": accent if str(accent).startswith("#") else "#facc15",
+        },
+        "team_name": team_name,
+        "season": state.get("season", 1),
+        "round": state.get("round", 1),
+    }
+
+
 @router.get("/api/career/state")
 def api_career_state():
     from .. import career as _career
