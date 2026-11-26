@@ -529,13 +529,13 @@ async def analytics_home(request: Request, year: Optional[int] = None):
     seasons = srv._seasons_with_current(seasons)
     year = year or (seasons[-1] if seasons else None)
     data = {
-        "driver_totals": db.driver_total_points()[:25],
-        "driver_champions": db.driver_champions(),
-        "constructor_champions": db.constructor_champions(),
-        "wins": db.driver_wins_by_year(year) if year else [],
-        "team_wins": db.team_wins_by_year(year) if year else [],
-        "fastest": db.fastest_lap_leaders_by_year(year) if year else [],
-        "team_points": db.points_by_team_year(year) if year else [],
+        "driver_totals": [dict(r) for r in db.driver_total_points()[:25]],
+        "driver_champions": [dict(r) for r in db.driver_champions()],
+        "constructor_champions": [dict(r) for r in db.constructor_champions()],
+        "wins": [dict(r) for r in (db.driver_wins_by_year(year) if year else [])],
+        "team_wins": [dict(r) for r in (db.team_wins_by_year(year) if year else [])],
+        "fastest": [dict(r) for r in (db.fastest_lap_leaders_by_year(year) if year else [])],
+        "team_points": [dict(r) for r in (db.points_by_team_year(year) if year else [])],
     }
     return srv.render_template(request, "analytics.html", { "seasons": seasons, "year": year, **data},
     )
@@ -544,10 +544,10 @@ async def analytics_home(request: Request, year: Optional[int] = None):
 async def analytics_overall(request: Request):
     db = srv.get_db()
     data = {
-        "driver_totals": db.driver_total_points()[:50],
-        "driver_champions": db.driver_champions(),
-        "constructor_champions": db.constructor_champions(),
-        "team_totals": db.team_total_points_overall(),
+        "driver_totals": [dict(r) for r in db.driver_total_points()[:50]],
+        "driver_champions": [dict(r) for r in db.driver_champions()],
+        "constructor_champions": [dict(r) for r in db.constructor_champions()],
+        "team_totals": [dict(r) for r in db.team_total_points_overall()],
     }
     return srv.render_template(request, "analytics_overall.html", { **data})
 
@@ -586,12 +586,12 @@ async def analytics_season(request: Request, year: Optional[int] = None):
     payload = {
         "seasons": seasons,
         "year": year,
-        "wins": db.driver_wins_by_year(year) if year else [],
-        "team_wins": db.team_wins_by_year(year) if year else [],
-        "fastest": db.fastest_lap_leaders_by_year(year) if year else [],
-        "team_points": db.points_by_team_year(year) if year else [],
-        "driver_standings": db.list_driver_standings(year) if year else [],
-        "team_standings": db.list_team_standings(year) if year else [],
+        "wins": [dict(r) for r in (db.driver_wins_by_year(year) if year else [])],
+        "team_wins": [dict(r) for r in (db.team_wins_by_year(year) if year else [])],
+        "fastest": [dict(r) for r in (db.fastest_lap_leaders_by_year(year) if year else [])],
+        "team_points": [dict(r) for r in (db.points_by_team_year(year) if year else [])],
+        "driver_standings": [dict(r) for r in (db.list_driver_standings(year) if year else [])],
+        "team_standings": [dict(r) for r in (db.list_team_standings(year) if year else [])],
         "race_tabs": race_tabs,
     }
     return srv.render_template(request, "analytics_season.html", { **payload})
@@ -615,8 +615,8 @@ async def analytics_tracks(request: Request, track: Optional[str] = None, top: i
     """Per-track championship: normalised points 1st=10, 2nd=9, ..., 10th=1. Highest scorer per track."""
     db = srv.get_db()
     top = max(1, min(20, top))
-    champions = db.per_track_driver_points(top_per_track=1)
-    all_standings = db.per_track_driver_points(top_per_track=top)
+    champions = [dict(r) for r in db.per_track_driver_points(top_per_track=1)]
+    all_standings = [dict(r) for r in db.per_track_driver_points(top_per_track=top)]
     tracks = db.list_tracks()
     # Track championships per driver: one track = 1 (count of tracks where they are champion)
     track_championship_counts: dict[str, int] = {}

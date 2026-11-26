@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Per-Track Championship — APEX GRID{% endblock %}
+{% block title %}Per-Track Championship — APEX GRID
+{% endblock %}
 {% block content %}
   <div class="page-header">
     <h1>Per-Track Championship</h1>
@@ -74,4 +75,11 @@
     </form>
   </div>
   {% endif %}
+
+  <div id="archive-charts"></div>
+  <script type="application/json" id="archive-page-data">{{ { "track_championship_counts": track_championship_counts, "champions": champions, "selected_track": selected_track } | tojson }}</script>
+  <script>window.__ARCHIVE_PAGE__ = "tracks";</script>
+  <script src="/static/js/f1_charts.js?v={{ asset_v }}" defer></script>
+  <script src="/static/js/f1_driver_dossier.js?v={{ asset_v }}" defer></script>
+  <script src="/static/js/f1_archive_analytics.js?v={{ asset_v }}" defer></script>
 {% endblock %}

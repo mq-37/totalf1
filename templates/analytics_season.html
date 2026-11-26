@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Analytics · Season {{ year }} — APEX GRID{% endblock %}
+{% block title %}Analytics · Season {{ year }} — APEX GRID
+{% endblock %}
 {% block content %}
   <div class="page-header">
     <h1>Season Analytics {{ year }}</h1>
@@ -133,4 +134,11 @@
       {% endfor %}
     </div>
   </div>
+
+  <div id="archive-charts"></div>
+  <script type="application/json" id="archive-page-data">{{ { "year": year, "wins": wins, "team_points": team_points, "driver_standings": driver_standings, "team_standings": team_standings } | tojson }}</script>
+  <script>window.__ARCHIVE_PAGE__ = "season";</script>
+  <script src="/static/js/f1_charts.js?v={{ asset_v }}" defer></script>
+  <script src="/static/js/f1_driver_dossier.js?v={{ asset_v }}" defer></script>
+  <script src="/static/js/f1_archive_analytics.js?v={{ asset_v }}" defer></script>
 {% endblock %}
