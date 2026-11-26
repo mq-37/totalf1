@@ -213,6 +213,7 @@
       return true;
     }
 
+    let wkTrackTempC = 28; // updated from the weather-radar timeline by drive.js
     function stepAi(dt, playerCar, wetness, raceTimeS) {
       const stepDt = Math.max(0.001, Math.min(0.05, dt || 0.016));
       if (!startSeq.lightsOut) {
@@ -224,6 +225,15 @@
       const sinceGreen = Math.max(0, (raceTimeS || 0) - startSeq.lightsOutAtS);
       const inLaunchCorridor = sinceGreen < 3.0;
       const coldTyreMult = clamp(0.89 + sinceGreen / 85, 0.89, 1.0);
+      // Track-temperature grip physics: slicks lose bite on cold tarmac and overheat
+      // on burning asphalt. Track temp comes from the weather radar timeline mean.
+      const trackTempC = Number(wkTrackTempC != null ? wkTrackTempC : 28);
+      const tempBandLo = 20, tempBandHi = 38;
+      const trackTempMult = (wetFrac > 0.45)
+        ? 1.0
+        : (trackTempC < tempBandLo
+            ? 1.0 - (tempBandLo - trackTempC) * 0.0065
+            : (trackTempC > tempBandHi ? 1.0 - (trackTempC - tempBandHi) * 0.0045 : 1.0));
 
       const wetFrac = clamp((wetness || 0) / 100, 0, 1);
       const totalLen = Math.max(500, track.totalLen || 3200);
@@ -297,7 +307,7 @@
         const drsBoost = (a.drsOpen || a.xModeActive) ? 1.032 : 1.0;
 
         // Calibrated corner & straight target speed matching real player physics!
-        let targetVx = envTargetV * 0.90 * diffSpeedMult * a.paceFactor * wetSkill * tyreMult * drsBoost * coldTyreMult;
+        let targetVx = envTargetV * 0.90 * diffSpeedMult * a.paceFactor * wetSkill * tyreMult * drsBoost * coldTyreMult * trackTempMult;
         targetVx = Math.min(targetVx, vMaxMps * diffSpeedMult * a.paceFactor * drsBoost);
 
         let desiredLat = inLaunchCorridor ? a.lat : (sp.optLat || 0);
@@ -385,7 +395,7 @@
           : 1.0;
         const cdEff = cdBase * (a.drsOpen ? 0.78 : (a.xModeActive ? 0.82 : 1.0));
         const powerW = (maxPowerKw * 1000) * diffPowerMult * (0.94 + (a.car_rating - 80) * 0.004) * launchThrottle;
-        const maxTractionAccel = tyreMuBase * 0.54 * GRAVITY * wetSkill * coldTyreMult;
+        const maxTractionAccel = tyreMuBase * 0.54 * GRAVITY * wetSkill * coldTyreMult * trackTempMult;
         const driveAccel = Math.min(maxTractionAccel, (powerW / Math.max(13.5, a.vx)) / massKg);
         const dragAccel = (0.5 * AIR_RHO * cdEff * FRONTAL_AREA * a.vx * a.vx + 280) / massKg;
         const netMaxAccel = Math.max(0.45, driveAccel - dragAccel);
@@ -582,6 +592,7 @@
       ghostTargetMs,
       stepStartSequence,
       stepAi,
+    setTrackTempC: (v) => { wkTrackTempC = Number(v); },
       computeGhostPose,
       computeLapDeltaS,
       buildStandings,

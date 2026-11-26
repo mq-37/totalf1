@@ -207,6 +207,7 @@
       car.gear = 4;
     }
 
+
     if (cockpit3d) cockpit3d.dispose();
     if (world3d && window.F1DriveCockpit3D) {
       cockpit3d = window.F1DriveCockpit3D.createCockpitAndCamera(world3d.scene, pDrv.color, runCfg.physics_dna, pDrv);
@@ -222,6 +223,11 @@
     }
 
     aiCtrl = window.F1DriveAI.createAiAndGhostController(track, runCfg);
+    // Track-temperature grip physics: mean radar-timeline tarmac temp feeds the AI + physics.
+    const wtl = ((runCfg.weather_radar || {}).radar || {}).timeline || [];
+    const temps = wtl.map((b) => b.track_temp_c).filter((v) => v != null);
+    const meanTrackTemp = temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : 28;
+    if (aiCtrl && aiCtrl.setTrackTempC) aiCtrl.setTrackTempC(meanTrackTemp);
     if (audioCtrl) audioCtrl.init(runCfg.physics_dna.audio_profile);
 
     document.getElementById("drive-launcher").classList.add("hidden");

@@ -229,6 +229,8 @@
 
   let rdBlueprint3D = null;
   let trackHolo3D = null;
+  let weatherCenterWidget = null;
+  let weatherCenterRound = null;
 
   function syncRdBlueprint3D() {
     const cv = getEl("car-rd-3d-canvas");
@@ -259,6 +261,25 @@
     if ((!cir || !Array.isArray(cir.points) || cir.points.length < 4) && ENG && ENG.fetchCircuit) {
       try { cir = await ENG.fetchCircuit(nextCal.circuit_id); } catch (_) {}
     }
+    // Weather Center: Doppler radar + lap-by-lap timeline + track temps for the next GP
+    try {
+      const wcEl = getEl("car-weather-center");
+      if (wcEl && cir) {
+        wcEl.classList.remove("hidden");
+        if (weatherCenterRound !== `${st.season_num}-${st.current_round}`) {
+          weatherCenterRound = `${st.season_num}-${st.current_round}`;
+          if (weatherCenterWidget?.destroy) weatherCenterWidget.destroy();
+          weatherCenterWidget = window.F1WeatherRadarUI ? window.F1WeatherRadarUI.create(wcEl) : null;
+        }
+        if (weatherCenterWidget) {
+          weatherCenterWidget.load(
+            { id: cir.id, name: nextCal.name || cir.name },
+            { mode: nextCal.weather_forecast || "dynamic", laps: nextCal.laps || 15, intelPct: 70, tyreCare: 75 }
+          );
+        }
+      }
+    } catch (_) {}
+
     if (cir && Array.isArray(cir.points) && cir.points.length >= 4) {
       trackHolo3D.sync(cir.id, cir.points, (DATA.player_team && DATA.player_team.color) || "#38bdf8");
     }

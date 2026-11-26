@@ -6,6 +6,7 @@ Per-year livery system fully committed; era splits landed. AI lore/voice depth e
 Remote: `origin` = https://github.com/mq-37/totalf1.git (private, mq-37's account — NOT the MartinQuinnSOI stored account). Push creds for mq-37 live in `~/.git-credentials`; token is burnable — if revoked, replace that line on next push.
 
 ## Last session
+Added `docs/gameaipro_ch38_research.md` — Game AI Pro Ch.38 racing-AI architecture research + gap audit (persona/biorhythm, utility-FSM battle states with hysteresis, choreographer, rubber-banding) mapped onto `/drive` APEX GRID and the stat-sim engines, with an 8-item drama-per-effort adoption roadmap (§8). Doc only — no code changed.
 Committed the previous session's pending livery audit (e099e53: 1950–2026 registry, 313 renders, vendored audit skill), then executed the era-splits audit (f2357b0): new styles `lotus_gold_leaf`, `ferrari_white_deck` (+ era-scoped `deckPanelMesh` white deck on 1970s/1980s chassis), `sauber_petronas`, new `_resolve_sauber`/`_resolve_sauber_bmw` resolvers, era PNGs + manifest, comparison sheet + report in `docs/audit/`. Verified live in UI screenshots (`/teams/1968`, `/teams/1982`, `/teams/2001` all era-correct).
 
 ## Decisions & why
@@ -20,6 +21,7 @@ Committed the previous session's pending livery audit (e099e53: 1950–2026 regi
 - Port 8000 is a different app (has login); traf1 lives on 8001/8017.
 
 ## Next steps
+0. AI upgrade thread: roadmap in `docs/gameaipro_ch38_research.md` §8 — top items are the skill biorhythm in `f1_race_engine.js` persona init (S) and the utility-FSM battle engine with hysteresis/cooldown replacing `full_sim.js:642-700` threshold ifs (M).
 1. Remaining livery targets from the gap analysis: `shadow-ford` 1977 black split, `mclaren-tag` early-80s, `ferrari--1990s` 1998–05 stretch (lowest priority — mostly consistent red).
 2. Other active threads if user pivots: `/drive` cockpit AI (e273614), `/sim` POV + APEX GRID rebrand (6cd4fa7), `/ladder` career mode (PRs 1–7).
 3. Kill the temp server on :8017 when convenient.

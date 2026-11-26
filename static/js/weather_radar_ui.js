@@ -145,13 +145,31 @@
       metEl.innerHTML =
         '<span>💧 Rain ' + lw.precip_mm_hr + 'mm/h (' + lw.rain_prob_pct + '%)</span>' +
         '<span>💨 ' + lw.wind_kph + ' km/h ' + lw.wind_dir + '</span>' +
-        '<span>💦 Hum ' + lw.humidity_pct + '%</span>';
+        '<span>💦 Hum ' + lw.humidity_pct + '%</span>' +
+        (lw.track_temp_c != null ? '<span>🌡️ Track ' + lw.track_temp_c + '°C</span>' : '');
 
-      /* Lap-by-Lap / Minute Precipitation & Wetness Sparkline */
-      sparkEl.innerHTML = tl.map(function (pt) {
+      /* Lap-by-Lap / Minute Precipitation & Wetness Sparkline + track-temp trajectory */
+      var alertRow = '';
+      var firstWet = null, lastWet = null;
+      tl.forEach(function (pt) {
+        if (pt.mm_hr > 0.4) { if (firstWet == null) firstWet = pt; lastWet = pt; }
+      });
+      if (firstWet && firstWet.lap > 1) {
+        alertRow = '<div class="wr-alert wr-alert-rain">🌧️ Rain arriving ~L' + firstWet.lap + ' (T+' + firstWet.minute + 'm) — plan crossover to Inter around L' + Math.max(1, firstWet.lap - 1) + '</div>';
+      } else if (firstWet) {
+        var dryingFrom = lastWet ? lastWet.lap : null;
+        alertRow = '<div class="wr-alert wr-alert-wet">☔ Wet race' + (dryingFrom && dryingFrom < tl[tl.length - 1].lap ? ' — drying expected from ~L' + dryingFrom : '') + '</div>';
+      } else {
+        alertRow = '<div class="wr-alert wr-alert-dry">☀️ Dry race forecast — no crossover expected</div>';
+      }
+
+      sparkEl.innerHTML =
+        alertRow +
+        tl.map(function (pt) {
         var hPct = Math.max(10, Math.min(100, pt.wetness_pct));
         var col = pt.wetness_pct >= 68 ? '#38bdf8' : (pt.wetness_pct >= 28 ? '#22c55e' : '#475569');
-        return '<div class="wr-bar-col" title="L' + pt.lap + ' (T+' + pt.minute + 'm): ' + pt.wetness_pct + '% wet · ' + pt.mm_hr + 'mm/h · Ideal ' + pt.ideal_tyre + '">' +
+        return '<div class="wr-bar-col" title="L' + pt.lap + ' (T+' + pt.minute + 'm): ' + pt.wetness_pct + '% wet · ' + pt.mm_hr + 'mm/h · Ideal ' + pt.ideal_tyre +
+          (pt.track_temp_c != null ? ' · Track ' + pt.track_temp_c + '°C' : '') + '">' +
           '<i style="height:' + hPct + '%;background:' + col + '"></i>' +
           '<span>L' + pt.lap + '</span>' +
           '</div>';

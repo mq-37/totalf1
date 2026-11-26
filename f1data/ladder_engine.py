@@ -1458,6 +1458,12 @@ def quick_sim_race(state: dict[str, Any]) -> dict[str, Any]:
     tier = state["tier"]
     is_wet = wk["weather_mode"] in ("rain", "showers")
 
+    # Track-temperature grip physics: slicks need warm tarmac (~28-38°C) to switch on.
+    # Cold tarmac starves front-end grip (tyre_care mitigates), heat overcooks the rears.
+    tl = ((wk.get("weather_radar") or {}).get("radar") or {}).get("timeline") or []
+    temps = [float(b["track_temp_c"]) for b in tl if b.get("track_temp_c") is not None]
+    track_temp = (sum(temps) / len(temps)) if temps else 28.0
+
     scored = []
     for g in wk["quali_grid"]:
         d = state["drivers"][g["driver_id"]]
@@ -1470,12 +1476,18 @@ def quick_sim_race(state: dict[str, Any]) -> dict[str, Any]:
         wet_d = (d["stats"]["wet"] - 72) * 0.14 if is_wet else 0.0
         tyre_d = (d["stats"]["tyre_care"] - 72) * 0.09
         setup_d = (wk["setup_confidence"] - 65) * 0.08 if g["is_player"] else 0.0
+        if not is_wet and track_temp < 20.0:
+            temp_d = -(20.0 - track_temp) * (0.34 - (d["stats"]["tyre_care"] - 70) * 0.012)
+        elif not is_wet and track_temp > 38.0:
+            temp_d = -(track_temp - 38.0) * (0.20 - (d["stats"]["tyre_care"] - 70) * 0.008)
+        else:
+            temp_d = 0.0
         sc = (
             g["car_rating"] * (0.48 if tier == "f1" else 0.26)
             + d["stats"]["racecraft"] * 0.34
             + d["stats"]["pace"] * 0.20
             + (len(wk["quali_grid"]) - g["pos"]) * 0.38
-            + wet_d + tyre_d + setup_d
+            + wet_d + tyre_d + setup_d + temp_d
             + rng.uniform(-4.6, 4.6)
         )
         scored.append({"driver_id": g["driver_id"], "name": g["name"], "dnf": dnf, "score": sc})

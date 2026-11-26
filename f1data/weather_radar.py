@@ -273,6 +273,19 @@ def build_weather_radar_and_pit_plan(
     wet = 42.0 if m == "rain" else (min(65.0, float(base_mm[0]) * 18.0))
     dry_rate = 3.2 + (float(live.get("wind_kph") or 12.0) * 0.14) + max(0.0, (float(live.get("track_temp_c") or 28.0) - 20.0) * 0.18)
 
+    # ==================== AIR & TRACK TEMPERATURE PHYSICS ====================
+    # Asphalt lags the air and responds to solar load: clear buckets bake the surface
+    # toward air+~12°C, rain buckets pull it back down to near air temperature.
+    base_air = float(live.get("air_temp_c") or 21.0)
+    if m == "dry":
+        base_air = max(base_air, 24.0)
+    elif m == "rain":
+        base_air = min(base_air, 19.0)
+    elif m == "showers" and base_air > 23.0:
+        base_air = 22.0
+    air_rng = random.Random(hash(("temp", circuit.get("id"), m, total_laps)) % 99991)
+    track_t = base_air + 11.0  # pre-race sunny baseline
+
     for i in range(12):
         mm = base_mm[i]
         if mm > 0.05:
@@ -280,6 +293,10 @@ def build_weather_radar_and_pit_plan(
         else:
             wet = max(0.0, wet - dry_rate)
         lap_num = max(1, min(total_laps, int(round((i / 11.0) * (total_laps - 1))) + 1))
+        air_t = round(base_air + air_rng.uniform(-0.8, 0.8), 1)
+        solar = 11.5 if mm <= 0.05 else (4.0 if mm < 1.5 else 1.0)
+        target_t = air_t + solar
+        track_t = round(track_t + (target_t - track_t) * 0.3, 1)
         timeline.append({
             "step": i,
             "minute": i * 5,
@@ -287,6 +304,8 @@ def build_weather_radar_and_pit_plan(
             "mm_hr": mm,
             "wetness_pct": int(round(wet)),
             "ideal_tyre": "W" if wet >= 68 else ("I" if wet >= 28 else "S/M"),
+            "air_temp_c": air_t,
+            "track_temp_c": track_t,
         })
 
     # Generate Doppler Radar Storm Cells moving along real wind vector!
@@ -433,6 +452,12 @@ def build_weather_radar_and_pit_plan(
             "wind_dir": live["wind_dir"],
             "peak_mm_hr": round(peak_mm, 2),
             "timeline": timeline,
+            "air_temp_c": round(base_air, 1),
+            "track_temp_c": max((b.get("track_temp_c") or 0.0) for b in timeline) if timeline else round(base_air + 11.0, 1),
+            "track_temp_range_c": [
+                min((b.get("track_temp_c") or 0.0) for b in timeline) if timeline else round(base_air + 11.0, 1),
+                max((b.get("track_temp_c") or 0.0) for b in timeline) if timeline else round(base_air + 11.0, 1),
+            ],
         },
         "optimal_pit": {
             "intel_pct": intel,
